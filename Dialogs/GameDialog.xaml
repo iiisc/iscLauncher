@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="iscLauncher.Dialogs.GameDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Add Game"
+    PrimaryButtonText="Save"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClick"
+    CornerRadius="12">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="500">
+        <StackPanel Spacing="16" MinWidth="340" Padding="0,0,12,0">
+            <!-- Game Name with icon -->
+            <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE7FC;" FontSize="14" Opacity="0.7" />
+                    <TextBlock Text="Game Name" Style="{StaticResource CaptionTextBlockStyle}" />
+                </StackPanel>
+                <TextBox x:Name="GameNameTextBox" PlaceholderText="Enter a display name" CornerRadius="6" />
+            </StackPanel>
+
+            <!-- Executable Path -->
+            <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="14" Opacity="0.7" />
+                    <TextBlock Text="Executable" Style="{StaticResource CaptionTextBlockStyle}" />
+                </StackPanel>
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ExecutablePathTextBox" IsReadOnly="True" CornerRadius="6" PlaceholderText="Select game executable..." />
+                    <Button Grid.Column="1" Click="OnBrowseClick" CornerRadius="6" Padding="12,8">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8DA;" FontSize="12" />
+                            <TextBlock Text="Browse" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </StackPanel>
+
+            <!-- Password -->
+            <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE8D7;" FontSize="14" Opacity="0.7" />
+                    <TextBlock Text="Password" Style="{StaticResource CaptionTextBlockStyle}" />
+                </StackPanel>
+                <PasswordBox x:Name="GamePasswordBox" PlaceholderText="Enter game password" CornerRadius="6" />
+            </StackPanel>
+
+        <!-- Input Method -->
+        <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon Glyph="&#xE765;" FontSize="14" Opacity="0.7" />
+                <TextBlock Text="Input Method" Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+            <ComboBox x:Name="InputMethodComboBox" SelectedIndex="0" HorizontalAlignment="Stretch" CornerRadius="6">
+                <ComboBoxItem Content="⌨️ SendKeys (games)" />
+                <ComboBoxItem Content="🖥️ UI Automation (apps)" />
+                <ComboBoxItem Content="📋 Clipboard (manual)" />
+            </ComboBox>
+        </StackPanel>
+
+        <!-- Window Title (collapsible) -->
+        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="6">
+            <Expander.Header>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE70B;" FontSize="14" Opacity="0.7" />
+                    <TextBlock Text="Advanced Options" />
+                </StackPanel>
+            </Expander.Header>
+            <StackPanel Spacing="12" Padding="4">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Window Title (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                    <TextBox x:Name="WindowTitleTextBox" PlaceholderText="e.g., 'Login' or 'World of Warcraft'" CornerRadius="6" />
+                </StackPanel>
+
+                <!-- Realmlist Address -->
+                <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE774;" FontSize="14" Opacity="0.7" />
+                        <TextBlock Text="Realmlist Address (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                    </StackPanel>
+                    <TextBox x:Name="RealmlistAddressTextBox" PlaceholderText="e.g., logon.warmane.com" CornerRadius="6" />
+                </StackPanel>
+
+                <!-- Realm Name -->
+                <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE753;" FontSize="14" Opacity="0.7" />
+                        <TextBlock Text="Realm Name (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                    </StackPanel>
+                    <TextBox x:Name="RealmNameTextBox" PlaceholderText="e.g., ChromieCraft" CornerRadius="6" />
+                </StackPanel>
+
+                <!-- Account Name -->
+                <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE77B;" FontSize="14" Opacity="0.7" />
+                        <TextBlock Text="Account Name (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                    </StackPanel>
+                    <TextBox x:Name="AccountNameTextBox" PlaceholderText="e.g., myaccount" CornerRadius="6" />
+                    <TextBlock Text="Updates WTF\Config.wtf before launch" 
+                               Style="{StaticResource CaptionTextBlockStyle}" 
+                               Opacity="0.5" 
+                               FontSize="11" />
+                </StackPanel>
+            </StackPanel>
+        </Expander>
+
+        <!-- Info/Error Bar -->
+        <InfoBar x:Name="ErrorInfoBar" Severity="Error" IsOpen="False" CornerRadius="6" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

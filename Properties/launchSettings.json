@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "iscLauncher (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "iscLauncher (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
