@@ -60,6 +60,13 @@ public class GameEntry
     [JsonPropertyName("realmName")]
     public string? RealmName { get; set; }
 
+    /// <summary>
+    /// Seconds to wait after the process starts before attempting to type the password.
+    /// Needed for DirectX/OpenGL games whose login screen takes time to render on cold starts.
+    /// </summary>
+    [JsonPropertyName("startupDelay")]
+    public int StartupDelaySeconds { get; set; } = 0;
+
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";
 

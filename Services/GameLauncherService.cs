@@ -70,6 +70,12 @@ public class GameLauncherService
                 return new LaunchResult(false, "Failed to start process");
             }
 
+            // Wait for the game's login UI to be ready before typing.
+            // DirectX/OpenGL games render their login screen after the Win32 window appears,
+            // so on a cold start keystrokes fired too early are silently lost.
+            if (game.StartupDelaySeconds > 0)
+                await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds), cancellationToken);
+
             // Try UI automation to enter password
             var automationResult = await _automationService.AutomatePasswordEntryAsync(
                 process.Id,

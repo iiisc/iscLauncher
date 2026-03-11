@@ -45,8 +45,12 @@ public class PasswordAutomationService
         var diagnosticInfo = new List<string>();
         diagnosticInfo.Add($"Input method: {inputMethod}");
 
+        // Capture process name for dynamic child-process discovery during polling
+        string? processName = null;
+        try { processName = Process.GetProcessById(processId).ProcessName; } catch { }
+
         // Wait for ANY window from the game process
-        var (window, windowInfo) = await WaitForGameWindowAsync(automation, processIds, windowTitlePattern, diagnosticInfo, cancellationToken);
+        var (window, windowInfo) = await WaitForGameWindowAsync(automation, processIds, processName, windowTitlePattern, diagnosticInfo, cancellationToken);
         if (window == null)
         {
             return new AutomationResult(false, $"No game window found. {string.Join("; ", diagnosticInfo)}");
@@ -156,36 +160,15 @@ public class PasswordAutomationService
 
         try
         {
-            // Get the parent process to find its name
             var parentProcess = Process.GetProcessById(parentProcessId);
             var processName = parentProcess.ProcessName;
 
-            // Find all processes with the same name (common for games that restart themselves)
+            // Find all processes with the same executable name.
+            // WaitForGameWindowAsync refreshes this list on every poll, so child processes
+            // that spawn after this snapshot are still discovered in time.
             foreach (var proc in Process.GetProcessesByName(processName))
             {
                 processIds.Add(proc.Id);
-            }
-
-            // Also get child processes
-            foreach (var proc in Process.GetProcesses())
-            {
-                try
-                {
-                    // Check if this process was started around the same time (within 30 seconds)
-                    if (proc.StartTime > parentProcess.StartTime.AddSeconds(-5) &&
-                        proc.StartTime < DateTime.Now)
-                    {
-                        // Add recent processes that might be related
-                        if (proc.MainWindowHandle != IntPtr.Zero)
-                        {
-                            processIds.Add(proc.Id);
-                        }
-                    }
-                }
-                catch
-                {
-                    // Access denied for some system processes
-                }
             }
         }
         catch
@@ -199,6 +182,7 @@ public class PasswordAutomationService
     private async Task<(Window? window, string info)> WaitForGameWindowAsync(
         UIA3Automation automation,
         HashSet<int> processIds,
+        string? processName,
         string? windowTitlePattern,
         List<string> diagnosticInfo,
         CancellationToken cancellationToken)
@@ -210,6 +194,13 @@ public class PasswordAutomationService
         while (DateTime.UtcNow - startTime < _windowTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // Refresh related process IDs to catch child processes that started after the initial snapshot
+            if (!string.IsNullOrEmpty(processName))
+            {
+                foreach (var p in Process.GetProcessesByName(processName))
+                    processIds.Add(p.Id);
+            }
 
             try
             {

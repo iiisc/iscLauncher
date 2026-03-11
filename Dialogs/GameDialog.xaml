@@ -8,31 +8,59 @@
     CloseButtonText="Cancel"
     DefaultButton="Primary"
     PrimaryButtonClick="OnPrimaryButtonClick"
-    CornerRadius="12">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="500">
-        <StackPanel Spacing="16" MinWidth="340" Padding="0,0,12,0">
-            <!-- Game Name with icon -->
+    Background="{StaticResource Surface2Brush}"
+    CornerRadius="8">
+
+    <ContentDialog.Resources>
+        <!-- Override dialog button styles -->
+        <Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}"/>
+    </ContentDialog.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="600">
+        <StackPanel Spacing="16" MinWidth="480" Padding="4,0,16,0">
+
+            <!-- Header -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Add New Game"
+                           FontFamily="{StaticResource DisplayFont}"
+                           FontSize="24"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+
+                <Rectangle Height="1" 
+                           Fill="{StaticResource GoldDarkBrush}"
+                           Opacity="0.3"/>
+            </StackPanel>
+
+            <!-- Game Name -->
             <StackPanel Spacing="6">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE7FC;" FontSize="14" Opacity="0.7" />
-                    <TextBlock Text="Game Name" Style="{StaticResource CaptionTextBlockStyle}" />
-                </StackPanel>
-                <TextBox x:Name="GameNameTextBox" PlaceholderText="Enter a display name" CornerRadius="6" />
+                <TextBlock Text="Game Name *"
+                           FontFamily="{StaticResource BodyFont}"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"/>
+                <TextBox x:Name="GameNameTextBox" 
+                         Style="{StaticResource ThemedTextBoxStyle}"
+                         PlaceholderText="Enter game name..." />
             </StackPanel>
 
             <!-- Executable Path -->
             <StackPanel Spacing="6">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE8E5;" FontSize="14" Opacity="0.7" />
-                    <TextBlock Text="Executable" Style="{StaticResource CaptionTextBlockStyle}" />
-                </StackPanel>
+                <TextBlock Text="Executable *"
+                           FontFamily="{StaticResource BodyFont}"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"/>
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBox x:Name="ExecutablePathTextBox" IsReadOnly="True" CornerRadius="6" PlaceholderText="Select game executable..." />
-                    <Button Grid.Column="1" Click="OnBrowseClick" CornerRadius="6" Padding="12,8">
+                    <TextBox x:Name="ExecutablePathTextBox" 
+                             Style="{StaticResource ThemedTextBoxStyle}"
+                             IsReadOnly="True" 
+                             PlaceholderText="Select game executable..." />
+                    <Button Grid.Column="1" 
+                            Click="OnBrowseClick"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="16,0">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE8DA;" FontSize="12" />
                             <TextBlock Text="Browse" />
@@ -43,75 +71,136 @@
 
             <!-- Password -->
             <StackPanel Spacing="6">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE8D7;" FontSize="14" Opacity="0.7" />
-                    <TextBlock Text="Password" Style="{StaticResource CaptionTextBlockStyle}" />
-                </StackPanel>
-                <PasswordBox x:Name="GamePasswordBox" PlaceholderText="Enter game password" CornerRadius="6" />
+                <TextBlock Text="Password"
+                           FontFamily="{StaticResource BodyFont}"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"/>
+                <PasswordBox x:Name="GamePasswordBox" 
+                             Style="{StaticResource ThemedPasswordBoxStyle}"
+                             PlaceholderText="Enter game password" />
             </StackPanel>
 
-        <!-- Input Method -->
-        <StackPanel Spacing="6">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <FontIcon Glyph="&#xE765;" FontSize="14" Opacity="0.7" />
-                <TextBlock Text="Input Method" Style="{StaticResource CaptionTextBlockStyle}" />
+            <!-- Input Method -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Password Input Method"
+                           FontFamily="{StaticResource BodyFont}"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"/>
+                <ComboBox x:Name="InputMethodComboBox" 
+                          Style="{StaticResource ThemedComboBoxStyle}"
+                          SelectedIndex="0" 
+                          HorizontalAlignment="Stretch">
+                    <ComboBoxItem Content="SendKeys (Best for DirectX games)"/>
+                    <ComboBoxItem Content="UI Automation (Standard apps)"/>
+                    <ComboBoxItem Content="Clipboard (Manual paste)"/>
+                </ComboBox>
             </StackPanel>
-            <ComboBox x:Name="InputMethodComboBox" SelectedIndex="0" HorizontalAlignment="Stretch" CornerRadius="6">
-                <ComboBoxItem Content="⌨️ SendKeys (games)" />
-                <ComboBoxItem Content="🖥️ UI Automation (apps)" />
-                <ComboBoxItem Content="📋 Clipboard (manual)" />
-            </ComboBox>
-        </StackPanel>
 
-        <!-- Window Title (collapsible) -->
-        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" CornerRadius="6">
-            <Expander.Header>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE70B;" FontSize="14" Opacity="0.7" />
-                    <TextBlock Text="Advanced Options" />
-                </StackPanel>
-            </Expander.Header>
-            <StackPanel Spacing="12" Padding="4">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Window Title (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
-                    <TextBox x:Name="WindowTitleTextBox" PlaceholderText="e.g., 'Login' or 'World of Warcraft'" CornerRadius="6" />
-                </StackPanel>
-
-                <!-- Realmlist Address -->
-                <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE774;" FontSize="14" Opacity="0.7" />
-                        <TextBlock Text="Realmlist Address (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+            <!-- Advanced Options -->
+            <Expander HorizontalAlignment="Stretch" 
+                      HorizontalContentAlignment="Stretch"
+                      Background="{StaticResource SurfaceBrush}"
+                      CornerRadius="6">
+                <Expander.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="⚙" FontSize="14" />
+                        <TextBlock Text="Advanced Options" 
+                                   FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
                     </StackPanel>
-                    <TextBox x:Name="RealmlistAddressTextBox" PlaceholderText="e.g., logon.warmane.com" CornerRadius="6" />
-                </StackPanel>
+                </Expander.Header>
 
-                <!-- Realm Name -->
-                <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE753;" FontSize="14" Opacity="0.7" />
-                        <TextBlock Text="Realm Name (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                <StackPanel Spacing="16" Padding="12,12,12,8">
+
+                    <!-- Window Title -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Window Title (optional)"
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBox x:Name="WindowTitleTextBox" 
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., 'Login' or 'World of Warcraft'" />
                     </StackPanel>
-                    <TextBox x:Name="RealmNameTextBox" PlaceholderText="e.g., ChromieCraft" CornerRadius="6" />
-                </StackPanel>
 
-                <!-- Account Name -->
-                <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE77B;" FontSize="14" Opacity="0.7" />
-                        <TextBlock Text="Account Name (optional)" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7" />
+                    <!-- Startup Delay -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Startup Delay (seconds)"
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"/>
+                        <NumberBox x:Name="StartupDelayNumberBox"
+                                   Minimum="0"
+                                   Maximum="30"
+                                   Value="0"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="1" />
+                        <TextBlock Text="Wait this many seconds after launch before typing the password. Increase for slow-starting games (e.g., 3–5 for WoW)."
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextDimBrush}"
+                                   FontStyle="Italic"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,0"/>
                     </StackPanel>
-                    <TextBox x:Name="AccountNameTextBox" PlaceholderText="e.g., myaccount" CornerRadius="6" />
-                    <TextBlock Text="Updates WTF\Config.wtf before launch" 
-                               Style="{StaticResource CaptionTextBlockStyle}" 
-                               Opacity="0.5" 
-                               FontSize="11" />
-                </StackPanel>
-            </StackPanel>
-        </Expander>
 
-        <!-- Info/Error Bar -->
-        <InfoBar x:Name="ErrorInfoBar" Severity="Error" IsOpen="False" CornerRadius="6" />
+                    <!-- Section Header: Connection Settings -->
+                    <TextBlock Text="⚔ CONNECTION"
+                               FontFamily="{StaticResource DisplayFont}"
+                               FontSize="9"
+                               CharacterSpacing="150"
+                               Foreground="{StaticResource GoldDarkBrush}"
+                               Margin="0,8,0,0"/>
+
+                    <!-- Realmlist Address -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Realmlist Address"
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBox x:Name="RealmlistAddressTextBox" 
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., logon.warmane.com" />
+                    </StackPanel>
+
+                    <!-- Realm Name -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Realm Name"
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBox x:Name="RealmNameTextBox" 
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., ChromieCraft" />
+                    </StackPanel>
+
+                    <!-- Account Name -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Account Name"
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBox x:Name="AccountNameTextBox" 
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., myaccount" />
+                        <TextBlock Text="Updates WTF\Config.wtf before launch" 
+                                   FontFamily="{StaticResource BodyFont}"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextDimBrush}"
+                                   FontStyle="Italic"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- Error Display -->
+            <InfoBar x:Name="ErrorInfoBar" 
+                     Severity="Error" 
+                     IsOpen="False" 
+                     Background="{StaticResource CrimsonBrush}"
+                     Opacity="0.15"
+                     CornerRadius="6" />
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>

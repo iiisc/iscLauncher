@@ -8,9 +8,153 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-                <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+
+            <!-- ===== FONT FAMILIES ===== -->
+            <FontFamily x:Key="DisplayFont">Segoe UI</FontFamily>
+            <FontFamily x:Key="DisplayRegularFont">Segoe UI</FontFamily>
+            <FontFamily x:Key="SerifFont">Segoe UI</FontFamily>
+            <FontFamily x:Key="SerifItalicFont">Segoe UI</FontFamily>
+            <FontFamily x:Key="BodyFont">Segoe UI</FontFamily>
+            <FontFamily x:Key="BodyMediumFont">Segoe UI Semibold</FontFamily>
+
+            <!-- ===== FANTASY THEME: DESIGN TOKENS ===== -->
+
+            <!-- Backgrounds -->
+            <Color x:Key="BgColor">#12100E</Color>
+            <Color x:Key="SurfaceColor">#1C1813</Color>
+            <Color x:Key="Surface2Color">#221D17</Color>
+            <Color x:Key="Surface3Color">#2B2419</Color>
+
+            <!-- Accents -->
+            <Color x:Key="GoldColor">#C9A84C</Color>
+            <Color x:Key="GoldLightColor">#E8C97A</Color>
+            <Color x:Key="GoldDarkColor">#8A6E2F</Color>
+            <Color x:Key="EmeraldColor">#3D7A5C</Color>
+            <Color x:Key="EmeraldLightColor">#5AAF85</Color>
+            <Color x:Key="CrimsonColor">#9B3A3A</Color>
+            <Color x:Key="ParchmentColor">#D4B896</Color>
+
+            <!-- Text -->
+            <Color x:Key="TextPrimaryColor">#E8DCC8</Color>
+            <Color x:Key="TextMutedColor">#8A7A65</Color>
+            <Color x:Key="TextDimColor">#4A3F30</Color>
+
+            <!-- Borders -->
+            <Color x:Key="BorderColor">#2D2418</Color>
+            <Color x:Key="BorderHighColor">#4A3820</Color>
+
+            <!-- Brushes -->
+            <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+            <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+            <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
+            <SolidColorBrush x:Key="Surface3Brush" Color="{StaticResource Surface3Color}"/>
+            <SolidColorBrush x:Key="GoldBrush" Color="{StaticResource GoldColor}"/>
+            <SolidColorBrush x:Key="GoldLightBrush" Color="{StaticResource GoldLightColor}"/>
+            <SolidColorBrush x:Key="GoldDarkBrush" Color="{StaticResource GoldDarkColor}"/>
+            <SolidColorBrush x:Key="EmeraldBrush" Color="{StaticResource EmeraldColor}"/>
+            <SolidColorBrush x:Key="EmeraldLightBrush" Color="{StaticResource EmeraldLightColor}"/>
+            <SolidColorBrush x:Key="CrimsonBrush" Color="{StaticResource CrimsonColor}"/>
+            <SolidColorBrush x:Key="ParchmentBrush" Color="{StaticResource ParchmentColor}"/>
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
+            <SolidColorBrush x:Key="TextDimBrush" Color="{StaticResource TextDimColor}"/>
+            <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+            <SolidColorBrush x:Key="BorderHighBrush" Color="{StaticResource BorderHighColor}"/>
+
+            <!-- ===== BUTTON STYLES ===== -->
+
+            <!-- Primary Button (Launch) -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="{StaticResource EmeraldColor}" Offset="0"/>
+                            <GradientStop Color="#2D5A46" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Foreground" Value="#C8F0D8"/>
+                <Setter Property="BorderBrush">
+                    <Setter.Value>
+                        <SolidColorBrush Color="{StaticResource EmeraldLightColor}" Opacity="0.3"/>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Height" Value="50"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            </Style>
+
+            <!-- Secondary Button (Edit, Cancel) -->
+            <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderHighBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Height" Value="40"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+
+            <!-- Danger Button (Delete) -->
+            <Style x:Key="DangerButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource CrimsonBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Height" Value="40"/>
+                <Setter Property="CornerRadius" Value="6"/>
+            </Style>
+
+            <!-- Add Game Button -->
+            <Style x:Key="AddGameButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="2"/>
+                <Setter Property="Height" Value="56"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="FontSize" Value="14"/>
+            </Style>
+
+            <!-- ===== TEXT BOX STYLE ===== -->
+            <Style x:Key="ThemedTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="12,10"/>
+                <Setter Property="Height" Value="40"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+
+            <!-- ===== PASSWORD BOX STYLE ===== -->
+            <Style x:Key="ThemedPasswordBoxStyle" TargetType="PasswordBox">
+                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="12,10"/>
+                <Setter Property="Height" Value="40"/>
+            </Style>
+
+            <!-- ===== COMBO BOX STYLE ===== -->
+            <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
+                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="Height" Value="40"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -8,23 +8,23 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="ISC Game Launcher">
+    Title="Realm Vault">
 
     <Window.SystemBackdrop>
-        <MicaBackdrop />
+        <MicaBackdrop Kind="Base"/>
     </Window.SystemBackdrop>
 
-    <Grid>
+    <Grid Background="{StaticResource BgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Custom Title Bar -->
         <Grid x:Name="AppTitleBar" 
               Grid.Row="0" 
-              Height="48"
+              Height="44"
+              Background="#0F0D0B"
               Padding="16,0,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -34,221 +34,444 @@
 
             <!-- App Icon -->
             <Image Grid.Column="0"
-                   Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
-                   Width="24" Height="24"
+                   Source="/Assets/Square44x44Logo.scale-200.png"
+                   Width="20"
+                   Height="20"
                    VerticalAlignment="Center"
                    Margin="0,0,12,0" />
 
             <!-- App Title -->
             <TextBlock Grid.Column="1"
-                       Text="ISC Game Launcher"
-                       VerticalAlignment="Center"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       FontWeight="SemiBold" />
+                       Text="iscLauncher"
+                       FontFamily="{StaticResource DisplayFont}"
+                       FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       VerticalAlignment="Center" />
 
-            <!-- Drag Region (invisible, allows window dragging) -->
+            <!-- Drag Region -->
             <Border Grid.Column="2" Background="Transparent" />
         </Grid>
 
-        <!-- Game List with cards -->
-        <ListView x:Name="GameListView"
-                  Grid.Row="1"
-                  Padding="16,8,16,16"
-                  SelectionMode="Single"
-                  DoubleTapped="OnGameDoubleTapped">
-            <ListView.ItemContainerStyle>
-                <Style TargetType="ListViewItem">
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <Setter Property="Margin" Value="0,4,0,4" />
-                    <Setter Property="Padding" Value="0" />
-                </Style>
-            </ListView.ItemContainerStyle>
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="models:GameEntry">
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Game Icon with fallback -->
-                            <Border Grid.Column="0"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                                    CornerRadius="6"
-                                    Padding="6"
-                                    Width="48" Height="48">
-                                <Grid>
-                                    <!-- Fallback icon (shown when image fails) -->
-                                    <FontIcon x:Name="FallbackIcon"
-                                              Glyph="&#xE7FC;"
-                                              FontSize="24"
-                                              Opacity="0.5"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                                    <!-- Actual game icon -->
-                                    <Image x:Name="GameIcon"
-                                           Width="36" Height="36"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           Loaded="OnGameIconLoaded" />
-                                </Grid>
-                            </Border>
-
-                            <!-- Game Info -->
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="{x:Bind Name}" 
-                                           Style="{StaticResource BodyStrongTextBlockStyle}"
-                                           FontSize="14" />
-                                <TextBlock Text="{x:Bind ExecutablePath}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           TextWrapping="NoWrap"
-                                           MaxLines="1"
-                                           Opacity="0.7"
-                                           FontSize="11" />
-                                <!-- Server Info (shown if configured) -->
-                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
-                                            Visibility="{x:Bind HasServerInfo}">
-                                    <StackPanel Orientation="Horizontal" Spacing="4" 
-                                                Visibility="{x:Bind HasRealmName}">
-                                        <FontIcon Glyph="&#xE753;" FontSize="10" Opacity="0.6" />
-                                        <TextBlock Text="{x:Bind RealmName}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   Opacity="0.8"
-                                                   FontSize="11" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="4"
-                                                Visibility="{x:Bind HasAccountName}">
-                                        <FontIcon Glyph="&#xE77B;" FontSize="10" Opacity="0.6" />
-                                        <TextBlock Text="{x:Bind AccountName}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   Opacity="0.8"
-                                                   FontSize="11" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- Action Buttons -->
-                            <StackPanel Grid.Column="2" 
-                                        Orientation="Horizontal" 
-                                        Spacing="6"
-                                        VerticalAlignment="Center">
-                                <Button Click="OnLaunchClick"
-                                        Tag="{x:Bind}"
-                                        Style="{StaticResource AccentButtonStyle}"
-                                        CornerRadius="6"
-                                        Padding="16,8">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <FontIcon Glyph="&#xE768;" FontSize="12" />
-                                        <TextBlock Text="Launch" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Click="OnEditClick" 
-                                        Tag="{x:Bind}" 
-                                        ToolTipService.ToolTip="Edit"
-                                        CornerRadius="6"
-                                        Padding="8">
-                                    <FontIcon Glyph="&#xE70F;" FontSize="12" />
-                                </Button>
-                                <Button Click="OnDeleteClick" 
-                                        Tag="{x:Bind}" 
-                                        ToolTipService.ToolTip="Delete"
-                                        CornerRadius="6"
-                                        Padding="8">
-                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
-                                </Button>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
-
-        <!-- Empty State -->
-        <StackPanel x:Name="EmptyStatePanel"
-                    Grid.Row="1"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Visibility="Collapsed"
-                    Spacing="8">
-            <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                    CornerRadius="50"
-                    Padding="16"
-                    HorizontalAlignment="Center">
-                <Image Source="ms-appx:///Assets/Square44x44Logo.scale-200.png"
-                       Width="64" Height="64"
-                       Opacity="0.7" />
-            </Border>
-            <TextBlock Text="No games added yet"
-                       Style="{StaticResource SubtitleTextBlockStyle}"
-                       HorizontalAlignment="Center"
-                       Margin="0,8,0,0" />
-            <TextBlock Text="Click the button below to add your first game"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       HorizontalAlignment="Center"
-                       Opacity="0.7" />
-        </StackPanel>
-
-        <!-- Footer with status and actions -->
-        <Grid Grid.Row="2" 
-              Padding="16,12,16,12">
+        <!-- Two-Column Layout: Game List + Detail Panel -->
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="320"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Subtle Status Text -->
-            <StackPanel x:Name="StatusPanel"
-                        Grid.Column="0"
-                        Orientation="Horizontal"
-                        Spacing="8"
-                        VerticalAlignment="Center"
-                        Visibility="Collapsed">
-                <FontIcon x:Name="StatusIcon" 
-                          Glyph="&#xE73E;" 
-                          FontSize="12"
-                          Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
-                <TextBlock x:Name="StatusText"
-                           Text=""
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           MaxWidth="280" />
-                <Button x:Name="CopyStatusButton"
-                        Click="OnCopyStatusClick"
-                        Padding="4,2"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        ToolTipService.ToolTip="Copy full message">
-                    <FontIcon Glyph="&#xE8C8;" FontSize="10" Opacity="0.6" />
-                </Button>
-            </StackPanel>
+            <!-- Left: Game List -->
+            <Grid Grid.Column="0" Background="{StaticResource SurfaceBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-            <!-- Add Game Button -->
-            <Button Grid.Column="1"
-                    Click="OnAddGameClick"
-                    Style="{StaticResource AccentButtonStyle}"
-                    CornerRadius="8"
-                    Padding="20,10">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE710;" FontSize="14" />
-                    <TextBlock Text="Add Game" FontWeight="SemiBold" />
+                <ScrollViewer Grid.Row="0" Padding="16,8,16,8">
+                    <ListView x:Name="GameListView"
+                              SelectionMode="Single"
+                              SelectionChanged="OnGameSelectionChanged"
+                              DoubleTapped="OnGameDoubleTapped">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Margin" Value="0,0,0,8" />
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:GameEntry">
+                                <Border x:Name="GameCardBorder"
+                                        Background="{StaticResource Surface2Brush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Padding="12">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="48" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Game Icon -->
+                                        <Border Grid.Column="0"
+                                                CornerRadius="4"
+                                                Width="48" Height="48"
+                                                BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="1">
+                                            <Border.Background>
+                                                <SolidColorBrush Color="{StaticResource GoldDarkColor}" Opacity="0.15"/>
+                                            </Border.Background>
+                                            <Grid>
+                                                <!-- Fallback icon -->
+                                                <FontIcon x:Name="FallbackIcon"
+                                                          Glyph="&#xE7FC;"
+                                                          FontSize="20"
+                                                          Foreground="{StaticResource GoldBrush}"
+                                                          Opacity="0.5"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                                <!-- Actual game icon -->
+                                                <Image x:Name="GameIcon"
+                                                       Width="40" Height="40"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Loaded="OnGameIconLoaded" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Game Info -->
+                                        <StackPanel Grid.Column="1"
+                                                    VerticalAlignment="Center" 
+                                                    Spacing="4">
+                                            <TextBlock Text="{x:Bind Name}" 
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="{x:Bind ExecutablePath}"
+                                                       FontFamily="{StaticResource BodyFont}"
+                                                       FontSize="10"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap"
+                                                       MaxLines="1" />
+                                            <!-- Server Info -->
+                                            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
+                                                        Visibility="{x:Bind HasServerInfo}">
+                                                <StackPanel Orientation="Horizontal" Spacing="4" 
+                                                            Visibility="{x:Bind HasRealmName}">
+                                                    <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource EmeraldBrush}" />
+                                                    <TextBlock Text="{x:Bind RealmName}"
+                                                               FontFamily="{StaticResource BodyFont}"
+                                                               FontSize="10"
+                                                               Foreground="{StaticResource EmeraldLightBrush}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="4"
+                                                            Visibility="{x:Bind HasAccountName}">
+                                                    <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                                    <TextBlock Text="{x:Bind AccountName}"
+                                                               FontFamily="{StaticResource BodyFont}"
+                                                               FontSize="10"
+                                                               Foreground="{StaticResource GoldBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Action Buttons -->
+                                        <StackPanel Grid.Column="2"
+                                                    Orientation="Horizontal" 
+                                                    Spacing="6"
+                                                    VerticalAlignment="Center">
+                                            <Button Click="OnDeleteClick" 
+                                                    Tag="{x:Bind}"
+                                                    ToolTipService.ToolTip="Delete"
+                                                    Background="Transparent"
+                                                    BorderBrush="{StaticResource CrimsonBrush}"
+                                                    BorderThickness="1"
+                                                    Width="40"
+                                                    Height="40"
+                                                    CornerRadius="6"
+                                                    Padding="0">
+                                                <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{StaticResource CrimsonBrush}" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </ScrollViewer>
+
+                <!-- Add Game Button -->
+                <Button Grid.Row="1"
+                        Click="OnAddGameClick"
+                        Style="{StaticResource AddGameButtonStyle}"
+                        Height="56"
+                        Margin="16">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="+" FontSize="18" />
+                        <TextBlock Text="Add Game" 
+                                   FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="13" />
+                    </StackPanel>
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="N" Modifiers="Control" />
+                    </Button.KeyboardAccelerators>
+                </Button>
+            </Grid>
+
+            <!-- Right: Detail Panel -->
+            <Grid Grid.Column="1" Background="{StaticResource BgBrush}">
+
+                <!-- Unified View/Edit Mode -->
+                <Grid x:Name="DetailPanel" 
+                      Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ScrollViewer Grid.Row="0" Padding="32,18,32,14">
+                        <StackPanel Spacing="14" MaxWidth="600">
+
+                        <!-- Header -->
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Name="DetailGameName"
+                                       FontFamily="{StaticResource DisplayFont}"
+                                       FontSize="22"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+
+                            <!-- Game Name Editor (shown only in edit mode) -->
+                            <StackPanel x:Name="GameNameEditSection" Spacing="4" Visibility="Collapsed">
+                                <TextBlock Text="Game Name *"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBox x:Name="EditGameNameTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         FontSize="13"
+                                         Height="34"/>
+                            </StackPanel>
+
+                            <Rectangle Height="1.5" 
+                                       Fill="{StaticResource GoldDarkBrush}"
+                                       Opacity="0.3"
+                                       HorizontalAlignment="Left"
+                                       Width="90"/>
+                        </StackPanel>
+
+                        <!-- Status InfoBar -->
+                        <InfoBar x:Name="StatusInfoBar"
+                                 IsOpen="False"
+                                 IsClosable="False"
+                                 Severity="Success"
+                                 Margin="0,0,0,8">
+                            <InfoBar.Content>
+                                <TextBlock x:Name="StatusText"
+                                           TextWrapping="Wrap"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="12"/>
+                            </InfoBar.Content>
+                        </InfoBar>
+
+                        <!-- Executable Section -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="🗡 EXECUTABLE"
+                                       FontFamily="{StaticResource DisplayFont}"
+                                       FontSize="9"
+                                       CharacterSpacing="150"
+                                       Foreground="{StaticResource GoldDarkBrush}"/>
+                            <Grid x:Name="ExecutableViewSection" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="EditExecutableTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         FontSize="12"
+                                         Height="34"
+                                         IsReadOnly="True" />
+                                <Button x:Name="BrowseButton"
+                                        Grid.Column="1" 
+                                        Click="OnBrowseExecutableClick"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="10,0"
+                                        Height="34"
+                                        Visibility="Collapsed">
+                                    <FontIcon Glyph="&#xE8DA;" FontSize="11" />
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Connection Settings -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="⚔ CONNECTION" 
+                                       FontFamily="{StaticResource DisplayFont}"
+                                       FontSize="9"
+                                       CharacterSpacing="150"
+                                       Foreground="{StaticResource GoldDarkBrush}"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Realmlist Address"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBox x:Name="EditRealmlistTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         PlaceholderText="e.g., logon.warmane.com"
+                                         FontSize="12"
+                                         Height="34"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Account Name"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBox x:Name="EditAccountTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         PlaceholderText="e.g., myaccount"
+                                         FontSize="12"
+                                         Height="34"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Realm Name"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBox x:Name="EditRealmTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         PlaceholderText="e.g., ChromieCraft"
+                                         FontSize="12"
+                                         Height="34"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Automation Settings -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="⚙ AUTOMATION" 
+                                       FontFamily="{StaticResource DisplayFont}"
+                                       FontSize="9"
+                                       CharacterSpacing="150"
+                                       Foreground="{StaticResource GoldDarkBrush}"/>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Password"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <PasswordBox x:Name="EditPasswordBox" 
+                                             Style="{StaticResource ThemedPasswordBoxStyle}"
+                                             PlaceholderText="Enter password to update"
+                                             Height="34"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Password Input Method"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <ComboBox x:Name="EditInputMethodComboBox" 
+                                          Style="{StaticResource ThemedComboBoxStyle}"
+                                          HorizontalAlignment="Stretch"
+                                          Height="34"
+                                          FontSize="12">
+                                    <ComboBoxItem Content="SendKeys (Best for DirectX)"/>
+                                    <ComboBoxItem Content="UI Automation (Standard)"/>
+                                    <ComboBoxItem Content="Clipboard (Manual)"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Window Title (optional)"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBox x:Name="EditWindowTitleTextBox" 
+                                         Style="{StaticResource ThemedTextBoxStyle}"
+                                         PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
+                                         FontSize="12"
+                                         Height="34"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- View Mode Action Bar (Pinned at Bottom) -->
+                    <Border Grid.Row="1"
+                            x:Name="ViewActionBar"
+                            Background="{StaticResource BgBrush}"
+                            Padding="32,16">
+                        <StackPanel MaxWidth="600" HorizontalAlignment="Left" Orientation="Horizontal" Spacing="12">
+                            <!-- View Mode Buttons -->
+                            <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="12">
+                                <Button x:Name="DetailEditButton"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Height="44"
+                                        Padding="24,0"
+                                        Click="OnDetailEditClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE70F;" FontSize="14"/>
+                                        <TextBlock Text="Edit Settings"
+                                                   FontFamily="{StaticResource DisplayFont}"
+                                                   FontSize="13"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <Button x:Name="DetailLaunchButton"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Height="56"
+                                        Padding="40,0"
+                                        Click="OnDetailLaunchClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="⚔" FontSize="18" />
+                                        <TextBlock Text="Launch" 
+                                                   FontFamily="{StaticResource DisplayFont}"
+                                                   FontSize="15" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- Edit Mode Buttons -->
+                            <StackPanel x:Name="EditModeButtons" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
+                                <Button x:Name="CancelEditButton"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Height="44"
+                                        Padding="24,0"
+                                        Click="OnCancelEditClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                                        <TextBlock Text="Cancel"
+                                                   FontFamily="{StaticResource DisplayFont}"
+                                                   FontSize="13"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <Button x:Name="SaveEditButton"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Height="56"
+                                        Padding="40,0"
+                                        Click="OnSaveEditClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="16" Foreground="#C8F0D8"/>
+                                        <TextBlock Text="Save Changes" 
+                                                   FontFamily="{StaticResource DisplayFont}"
+                                                   FontSize="15" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Empty State (when no game selected) -->
+                <StackPanel x:Name="EmptyStatePanel"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Visibility="Visible"
+                            Spacing="24">
+                    <TextBlock Text="⚔" 
+                               FontSize="64"
+                               Foreground="{StaticResource GoldDarkBrush}"
+                               Opacity="0.3"
+                               HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Select a game to view details"
+                               FontFamily="{StaticResource DisplayFont}"
+                               FontSize="18"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Or add your first game to begin"
+                               FontFamily="{StaticResource SerifFont}"
+                               FontStyle="Italic"
+                               FontSize="12"
+                               Foreground="{StaticResource TextDimBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,-12,0,0"/>
                 </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Key="N" Modifiers="Control" />
-                </Button.KeyboardAccelerators>
-            </Button>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
