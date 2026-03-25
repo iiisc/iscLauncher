@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace iscLauncher.Services;
 
@@ -11,13 +10,11 @@ public class CredentialService
 
     public bool SaveCredential(string target, string password)
     {
-        var passwordBytes = Encoding.Unicode.GetBytes(password);
-
         var credential = new CREDENTIAL
         {
             Type = CRED_TYPE_GENERIC,
             TargetName = target,
-            CredentialBlobSize = passwordBytes.Length,
+            CredentialBlobSize = password.Length * sizeof(char),
             CredentialBlob = Marshal.StringToCoTaskMemUni(password),
             Persist = CRED_PERSIST_LOCAL_MACHINE,
             UserName = "IscLauncher"

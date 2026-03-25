@@ -1,152 +1,82 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using FlaUI.Core;
-using FlaUI.Core.AutomationElements;
-using FlaUI.Core.Conditions;
-using FlaUI.Core.Definitions;
-using FlaUI.UIA3;
-using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
 public class PasswordAutomationService
 {
-    private readonly TimeSpan _windowTimeout = TimeSpan.FromSeconds(3);
-    private readonly TimeSpan _pollInterval = TimeSpan.FromMilliseconds(100);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
+    private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    private const uint ResponsivenessProbeTimeoutMs = 1000;
 
     public async Task<AutomationResult> AutomatePasswordEntryAsync(
         int processId,
         string password,
-        PasswordInputMethod inputMethod,
         string? windowTitlePattern = null,
         CancellationToken cancellationToken = default)
     {
-        // If clipboard method, just return immediately - handled by caller
-        if (inputMethod == PasswordInputMethod.Clipboard)
-        {
-            return new AutomationResult(false, "Clipboard method selected - password will be copied to clipboard.");
-        }
-
-        using var automation = new UIA3Automation();
-
-        // Get all related process IDs (parent + children)
-        var processIds = GetRelatedProcessIds(processId);
-        var diagnosticInfo = new List<string>();
-        diagnosticInfo.Add($"Input method: {inputMethod}");
-
-        // Capture process name for dynamic child-process discovery during polling
         string? processName = null;
+        DateTime launchTime = DateTime.UtcNow;
         try { processName = Process.GetProcessById(processId).ProcessName; } catch { }
 
-        // Wait for ANY window from the game process
-        var (window, windowInfo) = await WaitForGameWindowAsync(automation, processIds, processName, windowTitlePattern, diagnosticInfo, cancellationToken);
-        if (window == null)
+        var (windowHandle, info) = await WaitForGameWindowAsync(
+            processId, processName, launchTime, windowTitlePattern, cancellationToken);
+
+        if (windowHandle == IntPtr.Zero)
         {
-            return new AutomationResult(false, $"No game window found. {string.Join("; ", diagnosticInfo)}");
+            return new AutomationResult(false, $"No game window found. {info}");
         }
 
-        diagnosticInfo.Add($"Found window: '{window.Title}'");
-
-        // Use the specified input method
-        if (inputMethod == PasswordInputMethod.SendKeys)
-        {
-            // SendKeys: Focus window and type password directly
-            return await TypePasswordWithSendKeysAsync(window, password, diagnosticInfo, cancellationToken);
-        }
-        else // UIAutomation
-        {
-            // Try to find a standard password field
-            var (passwordBox, fieldInfo) = FindPasswordField(window);
-
-            if (passwordBox != null)
-            {
-                diagnosticInfo.Add($"Found password field: {fieldInfo}");
-
-                // Enter the password using UI Automation
-                try
-                {
-                    window.Focus();
-                    await Task.Delay(100, cancellationToken);
-
-                    passwordBox.Focus();
-                    await Task.Delay(100, cancellationToken);
-
-                    if (passwordBox.Patterns.Value.IsSupported)
-                    {
-                        passwordBox.Patterns.Value.Pattern.SetValue(password);
-                    }
-                    else
-                    {
-                        passwordBox.Click();
-                        await Task.Delay(50, cancellationToken);
-
-                        FlaUI.Core.Input.Keyboard.TypeSimultaneously(
-                            FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL,
-                            FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_A);
-                        await Task.Delay(50, cancellationToken);
-
-                        FlaUI.Core.Input.Keyboard.Type(password);
-                    }
-
-                    // Press Enter to submit
-                    await Task.Delay(100, cancellationToken);
-                    FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
-
-                    return new AutomationResult(true, "Password entered and Enter pressed.");
-                }
-                catch (Exception ex)
-                {
-                    return new AutomationResult(false, $"UI Automation failed: {ex.Message}");
-                }
-            }
-            else
-            {
-                return new AutomationResult(false, $"No password field found. {fieldInfo}. Try using SendKeys method instead.");
-            }
-        }
+        return await TypePasswordAndSubmitAsync(windowHandle, password);
     }
 
-    private async Task<AutomationResult> TypePasswordWithSendKeysAsync(
-        Window window,
-        string password,
-        List<string> diagnosticInfo,
-        CancellationToken cancellationToken)
+    private static async Task<AutomationResult> TypePasswordAndSubmitAsync(IntPtr windowHandle, string password)
     {
         try
         {
-            var windowHandle = window.Properties.NativeWindowHandle.ValueOrDefault;
-            if (windowHandle == IntPtr.Zero)
+            // Run the entire focus + type sequence on a single thread to maintain
+            // OS thread affinity required by AttachThreadInput and SendInput.
+            return await Task.Run(() =>
             {
-                return new AutomationResult(false, "Could not get window handle.");
-            }
+                if (!ForceForegroundWindow(windowHandle))
+                {
+                    return new AutomationResult(false, "Could not bring game window to foreground.");
+                }
 
-            SetForegroundWindow(windowHandle);
-            await Task.Delay(50, cancellationToken); // Brief delay to ensure focus
+                // Re-verify focus immediately before typing to prevent password
+                // from leaking to a different window that stole focus.
+                if (GetForegroundWindow() != windowHandle)
+                {
+                    return new AutomationResult(false, "Window lost focus before typing could begin.");
+                }
 
-            if (GetForegroundWindow() != windowHandle)
-            {
-                return new AutomationResult(false, "Could not bring game window to foreground.");
-            }
+                if (!SendKeystrokesForString(password))
+                {
+                    return new AutomationResult(false,
+                        "SendInput failed to insert all key events. "
+                        + "The target window may be running elevated.");
+                }
 
-            // Type the password
-            FlaUI.Core.Input.Keyboard.Type(password);
+                Thread.Sleep(30);
 
-            // Brief delay then press Enter to submit
-            await Task.Delay(50, cancellationToken);
-            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ENTER);
+                // Verify focus is still on the target before pressing Enter
+                if (GetForegroundWindow() != windowHandle)
+                {
+                    return new AutomationResult(false, "Window lost focus after typing password.");
+                }
 
-            return new AutomationResult(true, "Password typed and Enter pressed.");
+                if (SendVirtualKey(VK_RETURN) != 2)
+                {
+                    return new AutomationResult(false, "Failed to send Enter key.");
+                }
+
+                return new AutomationResult(true, "Password typed and Enter pressed.");
+            });
         }
         catch (Exception ex)
         {
@@ -154,202 +84,319 @@ public class PasswordAutomationService
         }
     }
 
-    private HashSet<int> GetRelatedProcessIds(int parentProcessId)
-    {
-        var processIds = new HashSet<int> { parentProcessId };
-
-        try
-        {
-            var parentProcess = Process.GetProcessById(parentProcessId);
-            var processName = parentProcess.ProcessName;
-
-            // Find all processes with the same executable name.
-            // WaitForGameWindowAsync refreshes this list on every poll, so child processes
-            // that spawn after this snapshot are still discovered in time.
-            foreach (var proc in Process.GetProcessesByName(processName))
-            {
-                processIds.Add(proc.Id);
-            }
-        }
-        catch
-        {
-            // Process might have exited
-        }
-
-        return processIds;
-    }
-
-    private async Task<(Window? window, string info)> WaitForGameWindowAsync(
-        UIA3Automation automation,
-        HashSet<int> processIds,
+    private static async Task<(IntPtr handle, string info)> WaitForGameWindowAsync(
+        int processId,
         string? processName,
+        DateTime launchTime,
         string? windowTitlePattern,
-        List<string> diagnosticInfo,
         CancellationToken cancellationToken)
     {
-        var startTime = DateTime.UtcNow;
-        var windowsChecked = new HashSet<string>();
-        Window? bestWindow = null;
+        var sw = Stopwatch.StartNew();
+        var currentPid = (uint)Environment.ProcessId;
+        var checkedWindows = new HashSet<string>();
+        var diagnostics = new List<string>();
+        IntPtr bestWindow = IntPtr.Zero;
 
-        while (DateTime.UtcNow - startTime < _windowTimeout)
+        while (sw.Elapsed < WindowTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Refresh related process IDs to catch child processes that started after the initial snapshot
+            // Collect target PIDs: the launched process + same-name processes that
+            // started around or after the launch to avoid matching unrelated instances.
+            var targetPids = new HashSet<uint> { (uint)processId };
             if (!string.IsNullOrEmpty(processName))
             {
                 foreach (var p in Process.GetProcessesByName(processName))
-                    processIds.Add(p.Id);
-            }
-
-            try
-            {
-                var desktop = automation.GetDesktop();
-                var windows = desktop.FindAllChildren(cf => cf.ByControlType(ControlType.Window));
-
-                foreach (var windowElement in windows)
                 {
-                    var window = windowElement.AsWindow();
-                    if (window == null) continue;
-
-                    int windowProcessId;
                     try
                     {
-                        windowProcessId = window.Properties.ProcessId.ValueOrDefault;
+                        if (p.Id != processId
+                            && p.StartTime.ToUniversalTime() >= launchTime.AddSeconds(-2))
+                        {
+                            targetPids.Add((uint)p.Id);
+                        }
                     }
                     catch
                     {
-                        continue;
+                        // Process may have exited before we could read its StartTime
                     }
-
-                    // Check if window belongs to any of our related processes
-                    if (!processIds.Contains(windowProcessId))
-                        continue;
-
-                    // Skip our own launcher window
-                    var title = window.Title ?? string.Empty;
-                    if (title.Contains("ISC Game Launcher", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var windowKey = $"{windowProcessId}:{title}";
-
-                    if (!windowsChecked.Contains(windowKey))
-                    {
-                        windowsChecked.Add(windowKey);
-                        diagnosticInfo.Add($"Found window: '{title}' (PID: {windowProcessId})");
-                    }
-
-                    // If we have a window title pattern, check it
-                    if (!string.IsNullOrEmpty(windowTitlePattern))
-                    {
-                        if (!title.Contains(windowTitlePattern, StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
-
-                    // Check if window has a password field - if so, return immediately
-                    var (passwordField, _) = FindPasswordField(window);
-                    if (passwordField != null)
-                    {
-                        return (window, $"Found password field in window '{title}'");
-                    }
-
-                    // Keep track of the best candidate window (main game window)
-                    // Prefer windows with actual content (larger size, visible)
-                    if (bestWindow == null && !string.IsNullOrEmpty(title))
-                    {
-                        bestWindow = window;
-                    }
-                }
-
-                // If we found a game window (even without password field), return it after a short delay
-                // This allows for DirectX/OpenGL games that don't have standard UI controls
-                if (bestWindow != null && DateTime.UtcNow - startTime > TimeSpan.FromMilliseconds(500))
-                {
-                    return (bestWindow, $"Game window found (no standard password field): '{bestWindow.Title}'");
                 }
             }
-            catch (Exception ex)
+
+            foreach (var hWnd in EnumerateVisibleWindows())
             {
-                diagnosticInfo.Add($"Enumeration error: {ex.Message}");
+                GetWindowThreadProcessId(hWnd, out uint windowPid);
+
+                if (!targetPids.Contains(windowPid) || windowPid == currentPid)
+                    continue;
+
+                var title = GetWindowTitle(hWnd);
+                if (string.IsNullOrEmpty(title))
+                    continue;
+
+                var key = $"{windowPid}:{title}";
+                if (checkedWindows.Add(key))
+                {
+                    diagnostics.Add($"Window: '{title}' (PID {windowPid})");
+                }
+
+                if (!string.IsNullOrEmpty(windowTitlePattern)
+                    && !title.Contains(windowTitlePattern, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (bestWindow == IntPtr.Zero)
+                    bestWindow = hWnd;
             }
 
-            await Task.Delay(_pollInterval, cancellationToken);
+            // Instead of waiting an arbitrary time, verify the window is
+            // actually processing messages before returning it.
+            if (bestWindow != IntPtr.Zero && IsWindowResponding(bestWindow))
+            {
+                return (bestWindow, $"Game window found and responding: '{GetWindowTitle(bestWindow)}'");
+            }
+
+            await Task.Delay(PollInterval, cancellationToken);
         }
 
-        // Return best window if we have one, even at timeout
-        if (bestWindow != null)
-        {
-            return (bestWindow, $"Returning game window at timeout: '{bestWindow.Title}'");
-        }
+        if (bestWindow != IntPtr.Zero)
+            return (bestWindow, $"Returning window at timeout: '{GetWindowTitle(bestWindow)}'");
 
-        return (null, $"Timeout after {_windowTimeout.TotalSeconds}s. Windows checked: {windowsChecked.Count}");
+        return (IntPtr.Zero,
+            $"Timeout ({WindowTimeout.TotalSeconds}s). Checked {checkedWindows.Count} window(s). "
+            + string.Join("; ", diagnostics));
     }
 
-    private (AutomationElement? element, string info) FindPasswordField(Window window)
+    private static bool ForceForegroundWindow(IntPtr targetWindow)
     {
+        if (GetForegroundWindow() == targetWindow)
+            return true;
+
+        var currentThreadId = GetCurrentThreadId();
+        var foregroundThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+
+        // Attach to the foreground window's thread to bypass SetForegroundWindow restrictions.
+        // This must be synchronous so attach/detach happen on the same OS thread.
+        bool attached = foregroundThreadId != currentThreadId
+            && AttachThreadInput(currentThreadId, foregroundThreadId, true);
         try
         {
-            var editElements = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit));
-            var fieldInfo = new List<string>();
-            fieldInfo.Add($"Found {editElements.Length} Edit control(s)");
-
-            foreach (var element in editElements)
-            {
-                try
-                {
-                    var name = element.Name ?? "(no name)";
-                    var automationId = element.AutomationId ?? "(no id)";
-                    var isPassword = element.Properties.IsPassword.ValueOrDefault;
-                    var className = element.ClassName ?? "(no class)";
-
-                    // Check if it's a password field by checking the IsPassword property
-                    if (isPassword)
-                    {
-                        return (element, $"IsPassword=true, Name='{name}'");
-                    }
-
-                    // Some apps use custom password fields - check by name patterns
-                    var nameLower = name.ToLowerInvariant();
-                    var automationIdLower = automationId.ToLowerInvariant();
-
-                    if (nameLower.Contains("password") || nameLower.Contains("pwd") || nameLower.Contains("pass") ||
-                        automationIdLower.Contains("password") || automationIdLower.Contains("pwd") || automationIdLower.Contains("pass"))
-                    {
-                        return (element, $"Name/ID match, Name='{name}', AutomationId='{automationId}'");
-                    }
-                }
-                catch
-                {
-                    // Property access can fail
-                }
-            }
-
-            // Also check for PasswordBox control type (WPF/UWP apps)
-            var passwordBoxes = window.FindAllDescendants(cf => cf.ByClassName("PasswordBox"));
-            if (passwordBoxes.Length > 0)
-            {
-                return (passwordBoxes[0], "PasswordBox class found");
-            }
-
-            // Last resort: if there's only one or two edit fields, the second one is often password
-            if (editElements.Length == 2)
-            {
-                fieldInfo.Add("Trying second Edit field as password (username/password pattern)");
-                return (editElements[1], "Second Edit field (assumed password)");
-            }
-            if (editElements.Length == 1)
-            {
-                fieldInfo.Add("Trying only Edit field as password");
-                return (editElements[0], "Only Edit field found");
-            }
-
-            return (null, string.Join("; ", fieldInfo));
+            SetForegroundWindow(targetWindow);
+            BringWindowToTop(targetWindow);
         }
-        catch (Exception ex)
+        finally
         {
-            return (null, $"Error: {ex.Message}");
+            if (attached)
+                AttachThreadInput(currentThreadId, foregroundThreadId, false);
         }
+
+        // Brief wait for the window manager to process the focus change
+        Thread.Sleep(50);
+        return GetForegroundWindow() == targetWindow;
     }
+
+    /// <summary>
+    /// Sends each character as virtual key events (WM_KEYDOWN/WM_KEYUP) so that
+    /// DirectX/OpenGL games that read input via GetAsyncKeyState, DirectInput, or
+    /// Raw Input will actually see the keystrokes. Falls back to Unicode input for
+    /// characters that have no virtual key mapping on the current keyboard layout.
+    /// </summary>
+    private static bool SendKeystrokesForString(string text)
+    {
+        var inputList = new List<INPUT>();
+
+        foreach (char c in text)
+        {
+            short vkResult = VkKeyScanW(c);
+
+            if (vkResult == -1)
+            {
+                // Character has no virtual key mapping; use Unicode fallback
+                inputList.Add(CreateUnicodeKeyInput(c, keyUp: false));
+                inputList.Add(CreateUnicodeKeyInput(c, keyUp: true));
+                continue;
+            }
+
+            ushort vk = (ushort)(vkResult & 0xFF);
+            int modifiers = (vkResult >> 8) & 0xFF;
+
+            bool needShift = (modifiers & 1) != 0;
+            bool needCtrl = (modifiers & 2) != 0;
+            bool needAlt = (modifiers & 4) != 0;
+
+            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: false));
+            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: false));
+            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: false));
+
+            inputList.Add(CreateVirtualKeyInput(vk, keyUp: false));
+            inputList.Add(CreateVirtualKeyInput(vk, keyUp: true));
+
+            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: true));
+            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: true));
+            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: true));
+        }
+
+        if (inputList.Count == 0)
+            return true;
+
+        var inputs = inputList.ToArray();
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        return sent == inputs.Length;
+    }
+
+    private static uint SendVirtualKey(ushort vk)
+    {
+        var inputs = new INPUT[]
+        {
+            CreateVirtualKeyInput(vk, keyUp: false),
+            CreateVirtualKeyInput(vk, keyUp: true)
+        };
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    }
+
+    private static INPUT CreateUnicodeKeyInput(char c, bool keyUp) => new()
+    {
+        type = INPUT_KEYBOARD,
+        U = { ki = new KEYBDINPUT
+        {
+            wScan = c,
+            dwFlags = KEYEVENTF_UNICODE | (keyUp ? KEYEVENTF_KEYUP : 0u)
+        }}
+    };
+
+    private static INPUT CreateVirtualKeyInput(ushort vk, bool keyUp) => new()
+    {
+        type = INPUT_KEYBOARD,
+        U = { ki = new KEYBDINPUT
+        {
+            wVk = vk,
+            dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u
+        }}
+    };
+
+    private static List<IntPtr> EnumerateVisibleWindows()
+    {
+        var windows = new List<IntPtr>();
+        EnumWindows((hWnd, _) =>
+        {
+            if (IsWindowVisible(hWnd))
+                windows.Add(hWnd);
+            return true;
+        }, IntPtr.Zero);
+        return windows;
+    }
+
+    /// <summary>
+    /// Probes whether a window is processing messages by sending a no-op
+    /// message with a timeout. Returns false if the window is hung or still
+    /// loading (not pumping its message queue).
+    /// </summary>
+    private static bool IsWindowResponding(IntPtr hWnd)
+    {
+        var result = SendMessageTimeoutW(
+            hWnd, WM_NULL, IntPtr.Zero, IntPtr.Zero,
+            SMTO_ABORTIFHUNG, ResponsivenessProbeTimeoutMs, out _);
+        return result != IntPtr.Zero;
+    }
+
+    private static string GetWindowTitle(IntPtr hWnd)
+    {
+        var sb = new StringBuilder(256);
+        GetWindowText(hWnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
+    #region Win32 P/Invoke
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeoutW(
+        IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam,
+        uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+    private const uint WM_NULL = 0x0000;
+    private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+    [DllImport("user32.dll")]
+    private static extern uint SendInput(uint count, INPUT[] inputs, int size);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern short VkKeyScanW(char ch);
+
+    private const uint INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint KEYEVENTF_UNICODE = 0x0004;
+    private const ushort VK_RETURN = 0x0D;
+    private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_CONTROL = 0x11;
+    private const ushort VK_MENU = 0x12;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx, dy;
+        public uint mouseData, dwFlags, time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk, wScan;
+        public uint dwFlags, time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL, wParamH;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct INPUTUNION
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public INPUTUNION U;
+    }
+
+    #endregion
 }
 
 public record AutomationResult(bool Success, string Message);

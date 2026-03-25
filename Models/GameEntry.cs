@@ -1,6 +1,5 @@
 using System;
 using System.Text.Json.Serialization;
-using Microsoft.UI.Xaml;
 
 namespace iscLauncher.Models;
 
@@ -12,14 +11,9 @@ public enum PasswordInputMethod
     SendKeys = 0,
 
     /// <summary>
-    /// Use UI Automation to find and fill the password field (for standard Windows apps)
-    /// </summary>
-    UIAutomation = 1,
-
-    /// <summary>
     /// Just copy the password to clipboard (manual paste)
     /// </summary>
-    Clipboard = 2
+    Clipboard = 1
 }
 
 public class GameEntry
@@ -70,21 +64,12 @@ public class GameEntry
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";
 
-    /// <summary>
-    /// Returns Visible if RealmName is set, otherwise Collapsed.
-    /// </summary>
     [JsonIgnore]
-    public Visibility HasRealmName => string.IsNullOrWhiteSpace(RealmName) ? Visibility.Collapsed : Visibility.Visible;
+    public bool HasRealmName => !string.IsNullOrWhiteSpace(RealmName);
 
-    /// <summary>
-    /// Returns Visible if AccountName is set, otherwise Collapsed.
-    /// </summary>
     [JsonIgnore]
-    public Visibility HasAccountName => string.IsNullOrWhiteSpace(AccountName) ? Visibility.Collapsed : Visibility.Visible;
+    public bool HasAccountName => !string.IsNullOrWhiteSpace(AccountName);
 
-    /// <summary>
-    /// Returns true if any server info (realm name or account name) is configured.
-    /// </summary>
     [JsonIgnore]
-    public Visibility HasServerInfo => (HasRealmName == Visibility.Visible || HasAccountName == Visibility.Visible) ? Visibility.Visible : Visibility.Collapsed;
+    public bool HasServerInfo => HasRealmName || HasAccountName;
 }

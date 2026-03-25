@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
 
@@ -18,6 +19,8 @@ public class GameRepository
     {
         WriteIndented = true
     };
+
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
 
     public async Task<GameLibrary> LoadAsync()
     {
@@ -46,26 +49,50 @@ public class GameRepository
 
     public async Task AddGameAsync(GameEntry game)
     {
-        var library = await LoadAsync();
-        library.Games.Add(game);
-        await SaveAsync(library);
+        await _fileLock.WaitAsync();
+        try
+        {
+            var library = await LoadAsync();
+            library.Games.Add(game);
+            await SaveAsync(library);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public async Task UpdateGameAsync(GameEntry game)
     {
-        var library = await LoadAsync();
-        var index = library.Games.FindIndex(g => g.Id == game.Id);
-        if (index >= 0)
+        await _fileLock.WaitAsync();
+        try
         {
-            library.Games[index] = game;
-            await SaveAsync(library);
+            var library = await LoadAsync();
+            var index = library.Games.FindIndex(g => g.Id == game.Id);
+            if (index >= 0)
+            {
+                library.Games[index] = game;
+                await SaveAsync(library);
+            }
+        }
+        finally
+        {
+            _fileLock.Release();
         }
     }
 
     public async Task RemoveGameAsync(Guid gameId)
     {
-        var library = await LoadAsync();
-        library.Games.RemoveAll(g => g.Id == gameId);
-        await SaveAsync(library);
+        await _fileLock.WaitAsync();
+        try
+        {
+            var library = await LoadAsync();
+            library.Games.RemoveAll(g => g.Id == gameId);
+            await SaveAsync(library);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 }

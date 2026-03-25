@@ -28,7 +28,12 @@ public sealed partial class GameDialog : ContentDialog
             GameNameTextBox.Text = existingGame.Name;
             ExecutablePathTextBox.Text = existingGame.ExecutablePath;
             WindowTitleTextBox.Text = existingGame.WindowTitle ?? string.Empty;
-            InputMethodComboBox.SelectedIndex = (int)existingGame.InputMethod;
+            InputMethodComboBox.SelectedIndex = existingGame.InputMethod switch
+            {
+                Models.PasswordInputMethod.SendKeys => 0,
+                Models.PasswordInputMethod.Clipboard => 1,
+                _ => 0
+            };
             StartupDelayNumberBox.Value = existingGame.StartupDelaySeconds;
             RealmlistAddressTextBox.Text = existingGame.RealmlistAddress ?? string.Empty;
             RealmNameTextBox.Text = existingGame.RealmName ?? string.Empty;
@@ -95,8 +100,14 @@ public sealed partial class GameDialog : ContentDialog
         GameEntry.WindowTitle = string.IsNullOrWhiteSpace(WindowTitleTextBox.Text) 
             ? null 
             : WindowTitleTextBox.Text.Trim();
-        GameEntry.InputMethod = (PasswordInputMethod)InputMethodComboBox.SelectedIndex;
-        GameEntry.StartupDelaySeconds = (int)StartupDelayNumberBox.Value;
+        GameEntry.InputMethod = InputMethodComboBox.SelectedIndex switch
+        {
+            0 => PasswordInputMethod.SendKeys,
+            1 => PasswordInputMethod.Clipboard,
+            _ => PasswordInputMethod.SendKeys
+        };
+        GameEntry.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
+            ? 0 : (int)StartupDelayNumberBox.Value;
         GameEntry.RealmlistAddress = string.IsNullOrWhiteSpace(RealmlistAddressTextBox.Text)
             ? null
             : RealmlistAddressTextBox.Text.Trim();

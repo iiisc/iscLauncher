@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Streams;
 
@@ -20,23 +21,32 @@ public static class IconExtractor
     private static extern bool DestroyIcon(IntPtr hIcon);
 
     /// <summary>
-    /// Gets the icon from an executable, with caching for performance.
+    /// Gets the icon from an executable asynchronously, with caching for performance.
+    /// The P/Invoke and bitmap work runs on a background thread; the BitmapImage is
+    /// created on the calling (UI) thread.
     /// </summary>
-    public static BitmapImage? GetIconFromExecutable(string executablePath)
+    public static async Task<BitmapImage?> GetIconFromExecutableAsync(string executablePath)
     {
         if (string.IsNullOrEmpty(executablePath))
             return null;
 
-        // Check cache first
         if (_iconCache.TryGetValue(executablePath, out var cachedIcon))
-        {
             return cachedIcon;
+
+        var bytes = await Task.Run(() => ExtractIconBytes(executablePath));
+        if (bytes == null)
+        {
+            _iconCache.TryAdd(executablePath, null);
+            return null;
         }
 
-        // Extract and cache
-        var icon = ExtractIconInternal(executablePath);
-        _iconCache.TryAdd(executablePath, icon);
-        return icon;
+        var bitmapImage = new BitmapImage();
+        using var memoryStream = new MemoryStream(bytes);
+        var randomAccessStream = memoryStream.AsRandomAccessStream();
+        bitmapImage.SetSource(randomAccessStream);
+
+        _iconCache.TryAdd(executablePath, bitmapImage);
+        return bitmapImage;
     }
 
     /// <summary>
@@ -55,7 +65,7 @@ public static class IconExtractor
         _iconCache.TryRemove(executablePath, out _);
     }
 
-    private static BitmapImage? ExtractIconInternal(string executablePath)
+    private static byte[]? ExtractIconBytes(string executablePath)
     {
         if (!File.Exists(executablePath))
             return null;
@@ -72,13 +82,7 @@ public static class IconExtractor
             using var memoryStream = new MemoryStream();
 
             bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
-            memoryStream.Position = 0;
-
-            var bitmapImage = new BitmapImage();
-            var randomAccessStream = memoryStream.AsRandomAccessStream();
-            bitmapImage.SetSource(randomAccessStream);
-
-            return bitmapImage;
+            return memoryStream.ToArray();
         }
         catch
         {

@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
 using iscLauncher.Models;
@@ -22,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly CredentialService _credentialService = new();
     private readonly GameLauncherService _gameLauncherService;
     private readonly ObservableCollection<GameEntry> _games = new();
+    private readonly HashSet<Guid> _runningGames = new();
     private GameEntry? _currentEditingGame;
 
     public MainWindow()
@@ -29,6 +33,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         _gameLauncherService = new GameLauncherService(_credentialService);
         GameListView.ItemsSource = _games;
+
+        Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
 
         // Hook into ListView loaded event to update selection visuals
         GameListView.Loaded += (s, e) =>
@@ -40,7 +46,7 @@ public sealed partial class MainWindow : Window
         };
 
         // Set window size and custom title bar
-        SetWindowSize(500, 600);
+        SetWindowSize(900, 650);
         SetupCustomTitleBar();
 
         _ = LoadGamesAsync();
@@ -54,9 +60,25 @@ public sealed partial class MainWindow : Window
         // Guard against null AppWindow (can happen in some host scenarios)
         if (appWindow != null)
         {
-            appWindow.Resize(new Windows.Graphics.SizeInt32(900, 600)); // Wider for two-column layout
+            // Scale to current DPI so the window looks the same on high-DPI laptops
+            var dpi = GetDpiForWindow(hwnd);
+            var scalingFactor = dpi / 96.0;
+            var scaledWidth = (int)(width * scalingFactor);
+            var scaledHeight = (int)(height * scalingFactor);
+
+            appWindow.Resize(new Windows.Graphics.SizeInt32(scaledWidth, scaledHeight));
+
+            // Set a minimum size so the Launch button is always visible
+            if (appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                // OverlappedPresenter doesn't expose MinWidth directly;
+                // we enforce via the Win32 minimum tracking size below.
+            }
         }
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     private void SetupCustomTitleBar()
     {
@@ -71,13 +93,20 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadGamesAsync()
     {
-        var library = await _gameRepository.LoadAsync();
-        _games.Clear();
-        foreach (var game in library.Games)
+        try
         {
-            _games.Add(game);
+            var library = await _gameRepository.LoadAsync();
+            _games.Clear();
+            foreach (var game in library.Games)
+            {
+                _games.Add(game);
+            }
+            UpdateEmptyState();
         }
-        UpdateEmptyState();
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to load games: {ex.Message}", false);
+        }
     }
 
     private void UpdateEmptyState()
@@ -172,11 +201,6 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    private FrameworkElement? FindElement(string name)
-    {
-        return FindVisualChild<FrameworkElement>(Content, name);
-    }
-
     private void ShowGameDetails(GameEntry game)
     {
         // Show detail panel, hide empty state
@@ -195,13 +219,13 @@ public sealed partial class MainWindow : Window
         EditAccountTextBox.Text = game.AccountName ?? string.Empty;
         EditRealmTextBox.Text = game.RealmName ?? string.Empty;
         EditWindowTitleTextBox.Text = game.WindowTitle ?? string.Empty;
+        EditStartupDelayNumberBox.Value = game.StartupDelaySeconds;
         EditPasswordBox.Password = string.Empty;
 
         EditInputMethodComboBox.SelectedIndex = game.InputMethod switch
         {
             PasswordInputMethod.SendKeys => 0,
-            PasswordInputMethod.UIAutomation => 1,
-            PasswordInputMethod.Clipboard => 2,
+            PasswordInputMethod.Clipboard => 1,
             _ => 0
         };
 
@@ -209,6 +233,9 @@ public sealed partial class MainWindow : Window
         DetailEditButton.Tag = game;
         DetailLaunchButton.Tag = game;
         SaveEditButton.Tag = game;
+
+        // Reflect running state on the launch button
+        UpdateLaunchButtonState(game);
     }
 
     private void HideGameDetails()
@@ -227,40 +254,24 @@ public sealed partial class MainWindow : Window
         EditWindowTitleTextBox.IsEnabled = isEditing;
         EditPasswordBox.IsEnabled = isEditing;
         EditInputMethodComboBox.IsEnabled = isEditing;
+        EditStartupDelayNumberBox.IsEnabled = isEditing;
 
         // Executable: enabled but readonly, use browse button to change
         EditExecutableTextBox.IsEnabled = isEditing;
         EditExecutableTextBox.IsReadOnly = true;
 
         // Toggle browse button
-        var browseButton = FindElement("BrowseButton") as Button;
-        if (browseButton != null)
-        {
-            browseButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        }
+        BrowseButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
 
         // Toggle Game Name edit section
-        var gameNameEditSection = FindElement("GameNameEditSection") as StackPanel;
-        if (gameNameEditSection != null)
-        {
-            gameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        }
+        GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
 
         // Update header text visibility
-        if (DetailGameName != null)
-        {
-            DetailGameName.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        }
+        DetailGameName.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
 
         // Toggle button groups
-        var viewButtons = FindElement("ViewModeButtons") as StackPanel;
-        var editButtons = FindElement("EditModeButtons") as StackPanel;
-
-        if (viewButtons != null && editButtons != null)
-        {
-            viewButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-            editButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        }
+        ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
+        EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnAddGameClick(object sender, RoutedEventArgs e)
@@ -319,7 +330,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnDetailEditClick(object sender, RoutedEventArgs e)
+    private void OnDetailEditClick(object sender, RoutedEventArgs e)
     {
         if (GameListView.SelectedItem is GameEntry game)
         {
@@ -365,12 +376,13 @@ public sealed partial class MainWindow : Window
         _currentEditingGame.AccountName = EditAccountTextBox.Text.Trim();
         _currentEditingGame.RealmName = EditRealmTextBox.Text.Trim();
         _currentEditingGame.WindowTitle = EditWindowTitleTextBox.Text.Trim();
+        _currentEditingGame.StartupDelaySeconds = double.IsNaN(EditStartupDelayNumberBox.Value)
+            ? 0 : (int)EditStartupDelayNumberBox.Value;
 
         _currentEditingGame.InputMethod = EditInputMethodComboBox.SelectedIndex switch
         {
             0 => PasswordInputMethod.SendKeys,
-            1 => PasswordInputMethod.UIAutomation,
-            2 => PasswordInputMethod.Clipboard,
+            1 => PasswordInputMethod.Clipboard,
             _ => PasswordInputMethod.SendKeys
         };
 
@@ -443,58 +455,97 @@ public sealed partial class MainWindow : Window
 
     private async Task LaunchGameAsync(GameEntry game)
     {
+        // Prevent launching the same game entry twice
+        if (_runningGames.Contains(game.Id))
+        {
+            ShowStatus($"{game.Name} is already running.", false);
+            return;
+        }
+
         // Show immediate feedback
         ShowStatus($"Launching {game.Name}...", true);
 
         var result = await _gameLauncherService.LaunchGameAsync(game);
         ShowStatus(result.Message, result.Success);
 
-        // Auto-hide success messages after 5 seconds
-        if (result.Success)
+        // Track the launched process so this entry can't be launched again until it exits
+        if (result.Success && result.ProcessId is int pid)
         {
-            _ = HideStatusAfterDelay(5000);
+            try
+            {
+                var process = Process.GetProcessById(pid);
+                _runningGames.Add(game.Id);
+                UpdateLaunchButtonState(game);
+
+                process.EnableRaisingEvents = true;
+                process.Exited += (s, e) =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        _runningGames.Remove(game.Id);
+                        // Update button if this game is still selected
+                        if (GameListView.SelectedItem is GameEntry selected && selected.Id == game.Id)
+                        {
+                            UpdateLaunchButtonState(selected);
+                        }
+                    });
+                };
+            }
+            catch
+            {
+                // Process already exited before we could attach; don't track it
+            }
         }
     }
 
+    private void UpdateLaunchButtonState(GameEntry game)
+    {
+        var isRunning = _runningGames.Contains(game.Id);
+        DetailLaunchButton.IsEnabled = !isRunning;
+        LaunchButtonText.Text = isRunning ? "Running" : "Launch";
+    }
+
     private string _lastStatusMessage = string.Empty;
+    private CancellationTokenSource? _statusHideCts;
 
     private void ShowStatus(string message, bool isSuccess)
     {
         _lastStatusMessage = message;
 
-        var infoBar = FindElement("StatusInfoBar") as InfoBar;
-        var statusText = FindElement("StatusText") as TextBlock;
+        // Cancel any previous auto-hide timer
+        _statusHideCts?.Cancel();
 
-        if (infoBar != null && statusText != null)
+        StatusText.Text = message;
+        StatusInfoBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+        StatusInfoBar.IsOpen = true;
+
+        if (isSuccess)
         {
-            statusText.Text = message;
-            infoBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
-            infoBar.IsOpen = true;
-
-            // Auto-hide success messages after 5 seconds
-            if (isSuccess)
-            {
-                _ = HideStatusAfterDelay(5000);
-            }
+            var cts = new CancellationTokenSource();
+            _statusHideCts = cts;
+            _ = HideStatusAfterDelay(5000, cts.Token);
         }
     }
 
-    private async Task HideStatusAfterDelay(int delayMs)
+    private async Task HideStatusAfterDelay(int delayMs, CancellationToken token)
     {
-        await Task.Delay(delayMs);
-        var infoBar = FindElement("StatusInfoBar") as InfoBar;
-        if (infoBar != null)
+        try
         {
-            infoBar.IsOpen = false;
+            await Task.Delay(delayMs, token);
+            StatusInfoBar.IsOpen = false;
+        }
+        catch (OperationCanceledException)
+        {
+            // Timer was cancelled by a newer status message
         }
     }
 
-    private void OnGameIconLoaded(object sender, RoutedEventArgs e)
+    private async void OnGameIconLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is Microsoft.UI.Xaml.Controls.Image image && 
             image.DataContext is GameEntry game)
         {
-            var icon = Services.IconExtractor.GetIconFromExecutable(game.ExecutablePath);
+            var icon = await Services.IconExtractor.GetIconFromExecutableAsync(game.ExecutablePath);
             if (icon != null)
             {
                 image.Source = icon;

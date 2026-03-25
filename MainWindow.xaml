@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:iscLauncher"
     xmlns:models="using:iscLauncher.Models"
+    xmlns:converters="using:iscLauncher.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -137,9 +138,9 @@
                                                        MaxLines="1" />
                                             <!-- Server Info -->
                                             <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
-                                                        Visibility="{x:Bind HasServerInfo}">
+                                                        Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasServerInfo)}">
                                                 <StackPanel Orientation="Horizontal" Spacing="4" 
-                                                            Visibility="{x:Bind HasRealmName}">
+                                                            Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasRealmName)}">
                                                     <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource EmeraldBrush}" />
                                                     <TextBlock Text="{x:Bind RealmName}"
                                                                FontFamily="{StaticResource BodyFont}"
@@ -147,7 +148,7 @@
                                                                Foreground="{StaticResource EmeraldLightBrush}" />
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Spacing="4"
-                                                            Visibility="{x:Bind HasAccountName}">
+                                                            Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasAccountName)}">
                                                     <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
                                                     <TextBlock Text="{x:Bind AccountName}"
                                                                FontFamily="{StaticResource BodyFont}"
@@ -188,11 +189,12 @@
                         Style="{StaticResource AddGameButtonStyle}"
                         Height="56"
                         Margin="16">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="+" FontSize="18" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="+" FontSize="18" VerticalAlignment="Center" />
                         <TextBlock Text="Add Game" 
                                    FontFamily="{StaticResource DisplayFont}"
-                                   FontSize="13" />
+                                   FontSize="13"
+                                   VerticalAlignment="Center" />
                     </StackPanel>
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="N" Modifiers="Control" />
@@ -228,9 +230,8 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <TextBox x:Name="EditGameNameTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         FontSize="13"
-                                         Height="34"/>
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          FontSize="13"/>
                             </StackPanel>
 
                             <Rectangle Height="1.5" 
@@ -267,17 +268,16 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBox x:Name="EditExecutableTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         FontSize="12"
-                                         Height="34"
-                                         IsReadOnly="True" />
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          FontSize="12"
+                                          IsReadOnly="True" />
                                 <Button x:Name="BrowseButton"
-                                        Grid.Column="1" 
-                                        Click="OnBrowseExecutableClick"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Padding="10,0"
-                                        Height="34"
-                                        Visibility="Collapsed">
+                                         Grid.Column="1" 
+                                         Click="OnBrowseExecutableClick"
+                                         Style="{StaticResource SecondaryButtonStyle}"
+                                         Padding="10,0"
+                                         Height="40"
+                                         Visibility="Collapsed">
                                     <FontIcon Glyph="&#xE8DA;" FontSize="11" />
                                 </Button>
                             </Grid>
@@ -297,10 +297,9 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <TextBox x:Name="EditRealmlistTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="e.g., logon.warmane.com"
-                                         FontSize="12"
-                                         Height="34"/>
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          PlaceholderText="e.g., logon.warmane.com"
+                                          FontSize="12"/>
                             </StackPanel>
 
                             <StackPanel Spacing="4">
@@ -309,10 +308,9 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <TextBox x:Name="EditAccountTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="e.g., myaccount"
-                                         FontSize="12"
-                                         Height="34"/>
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          PlaceholderText="e.g., myaccount"
+                                          FontSize="12"/>
                             </StackPanel>
 
                             <StackPanel Spacing="4">
@@ -321,10 +319,9 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <TextBox x:Name="EditRealmTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="e.g., ChromieCraft"
-                                         FontSize="12"
-                                         Height="34"/>
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          PlaceholderText="e.g., ChromieCraft"
+                                          FontSize="12"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -342,9 +339,8 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <PasswordBox x:Name="EditPasswordBox" 
-                                             Style="{StaticResource ThemedPasswordBoxStyle}"
-                                             PlaceholderText="Enter password to update"
-                                             Height="34"/>
+                                              Style="{StaticResource ThemedPasswordBoxStyle}"
+                                              PlaceholderText="Enter password to update"/>
                             </StackPanel>
 
                             <StackPanel Spacing="4">
@@ -353,12 +349,10 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <ComboBox x:Name="EditInputMethodComboBox" 
-                                          Style="{StaticResource ThemedComboBoxStyle}"
-                                          HorizontalAlignment="Stretch"
-                                          Height="34"
-                                          FontSize="12">
+                                           Style="{StaticResource ThemedComboBoxStyle}"
+                                           HorizontalAlignment="Stretch"
+                                           FontSize="12">
                                     <ComboBoxItem Content="SendKeys (Best for DirectX)"/>
-                                    <ComboBoxItem Content="UI Automation (Standard)"/>
                                     <ComboBoxItem Content="Clipboard (Manual)"/>
                                 </ComboBox>
                             </StackPanel>
@@ -369,10 +363,29 @@
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
                                 <TextBox x:Name="EditWindowTitleTextBox" 
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
-                                         FontSize="12"
-                                         Height="34"/>
+                                          Style="{StaticResource ThemedTextBoxStyle}"
+                                          PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
+                                          FontSize="12"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Startup Delay (seconds)"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <NumberBox x:Name="EditStartupDelayNumberBox"
+                                           Minimum="0"
+                                           Maximum="30"
+                                           Value="0"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="1" />
+                                <TextBlock Text="Wait before typing the password. Increase for slow-starting games."
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextDimBrush}"
+                                           FontStyle="Italic"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,0,0"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
@@ -400,13 +413,13 @@
                                 </Button>
 
                                 <Button x:Name="DetailLaunchButton"
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Height="56"
-                                        Padding="40,0"
-                                        Click="OnDetailLaunchClick">
+                                         Style="{StaticResource PrimaryButtonStyle}"
+                                         Height="56"
+                                         Padding="40,0"
+                                         Click="OnDetailLaunchClick">
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <TextBlock Text="⚔" FontSize="18" />
-                                        <TextBlock Text="Launch" 
+                                        <TextBlock x:Name="LaunchButtonIcon" Text="⚔" FontSize="18" />
+                                        <TextBlock x:Name="LaunchButtonText" Text="Launch" 
                                                    FontFamily="{StaticResource DisplayFont}"
                                                    FontSize="15" />
                                     </StackPanel>

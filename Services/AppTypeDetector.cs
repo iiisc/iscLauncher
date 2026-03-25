@@ -69,7 +69,7 @@ public class AppTypeDetector
                     return new DetectionResult(
                         AppType.WindowsApp, 
                         $"Found Windows framework: {indicator}", 
-                        Models.PasswordInputMethod.UIAutomation);
+                        Models.PasswordInputMethod.SendKeys);
                 }
             }
 
@@ -104,7 +104,7 @@ public class AppTypeDetector
                 return new DetectionResult(
                     AppType.WindowsApp, 
                     "Detected .NET application", 
-                    Models.PasswordInputMethod.UIAutomation);
+                    Models.PasswordInputMethod.SendKeys);
             }
 
             // Default to SendKeys as it works for most games
@@ -135,7 +135,7 @@ public class AppTypeDetector
                 return new DetectionResult(
                     AppType.WindowsApp, 
                     "Detected .NET managed executable", 
-                    Models.PasswordInputMethod.UIAutomation);
+                    Models.PasswordInputMethod.SendKeys);
             }
 
             // Check imported DLLs from PE headers

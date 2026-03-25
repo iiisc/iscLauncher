@@ -12,8 +12,9 @@ namespace iscLauncher.Services;
 public class RealmlistService
 {
     /// <summary>
-    /// Updates the realmlist.wtf file for the given game executable.
-    /// The file is expected at: {executableDirectory}\Data\enUS\realmlist.wtf
+    /// Updates realmlist.wtf files for the given game executable.
+    /// Scans all locale subdirectories under {executableDirectory}\Data\ for existing files.
+    /// Falls back to creating Data\enUS\realmlist.wtf if none are found.
     /// </summary>
     /// <param name="executablePath">Full path to the game executable</param>
     /// <param name="realmlistAddress">The server address (e.g., "logon.warmane.com")</param>
@@ -33,18 +34,31 @@ public class RealmlistService
                 return new RealmlistResult(false, "Could not determine executable directory.");
             }
 
-            var realmlistPath = Path.Combine(executableDirectory, "Data", "enUS", "realmlist.wtf");
+            var dataDir = Path.Combine(executableDirectory, "Data");
+            var content = $"set realmlist {realmlistAddress}";
+            var filesUpdated = 0;
 
-            // Create directory if it doesn't exist
-            var realmlistDirectory = Path.GetDirectoryName(realmlistPath);
-            if (!string.IsNullOrEmpty(realmlistDirectory) && !Directory.Exists(realmlistDirectory))
+            // Scan all locale subdirectories for existing realmlist.wtf files
+            if (Directory.Exists(dataDir))
             {
-                Directory.CreateDirectory(realmlistDirectory);
+                foreach (var localeDir in Directory.GetDirectories(dataDir))
+                {
+                    var realmlistPath = Path.Combine(localeDir, "realmlist.wtf");
+                    if (File.Exists(realmlistPath))
+                    {
+                        await File.WriteAllTextAsync(realmlistPath, content);
+                        filesUpdated++;
+                    }
+                }
             }
 
-            // Write the realmlist content
-            var content = $"set realmlist {realmlistAddress}";
-            await File.WriteAllTextAsync(realmlistPath, content);
+            // Fallback: create in Data\enUS if no existing file was found
+            if (filesUpdated == 0)
+            {
+                var fallbackDir = Path.Combine(executableDirectory, "Data", "enUS");
+                Directory.CreateDirectory(fallbackDir);
+                await File.WriteAllTextAsync(Path.Combine(fallbackDir, "realmlist.wtf"), content);
+            }
 
             return new RealmlistResult(true, $"Realmlist updated to {realmlistAddress}");
         }
@@ -103,43 +117,42 @@ public class RealmlistService
             if (!string.IsNullOrWhiteSpace(accountName))
             {
                 var accountPattern = new Regex(@"^SET accountName ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                if (accountPattern.IsMatch(content))
+                var replaced = accountPattern.Replace(content, $@"SET accountName ""{accountName}""", 1);
+                if (replaced != content)
                 {
-                    content = accountPattern.Replace(content, $@"SET accountName ""{accountName}""");
-                    updated = true;
+                    content = replaced;
                 }
                 else
                 {
-                    // Add the setting if it doesn't exist
                     content += $@"{Environment.NewLine}SET accountName ""{accountName}""";
-                    updated = true;
                 }
+                updated = true;
             }
 
             // Update realmName in config.txt if provided
             if (!string.IsNullOrWhiteSpace(realmName))
             {
                 var realmNamePattern = new Regex(@"^SET realmName ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                if (realmNamePattern.IsMatch(content))
+                var replaced = realmNamePattern.Replace(content, $@"SET realmName ""{realmName}""", 1);
+                if (replaced != content)
                 {
-                    content = realmNamePattern.Replace(content, $@"SET realmName ""{realmName}""");
-                    updated = true;
+                    content = replaced;
                 }
                 else
                 {
-                    // Add the setting if it doesn't exist
                     content += $@"{Environment.NewLine}SET realmName ""{realmName}""";
-                    updated = true;
                 }
+                updated = true;
             }
 
             // Update realmList in config.txt if provided
             if (!string.IsNullOrWhiteSpace(realmlistAddress))
             {
                 var realmPattern = new Regex(@"^SET realmList ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                if (realmPattern.IsMatch(content))
+                var replaced = realmPattern.Replace(content, $@"SET realmList ""{realmlistAddress}""", 1);
+                if (replaced != content)
                 {
-                    content = realmPattern.Replace(content, $@"SET realmList ""{realmlistAddress}""");
+                    content = replaced;
                     updated = true;
                 }
             }
