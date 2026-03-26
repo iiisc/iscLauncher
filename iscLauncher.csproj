@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -44,9 +44,6 @@
 		<ProjectCapability Include="Msix" />
 	</ItemGroup>
 	<ItemGroup>
-	  <None Include=".github\workflows\release.yml" />
-	</ItemGroup>
-	<ItemGroup>
 		<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
 		<PackageReference Include="System.Drawing.Common" Version="8.0.10" />
@@ -59,13 +56,9 @@
 		  <Generator>MSBuild:Compile</Generator>
 		</None>
 	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Assets\Instructions\" />
-	  <Folder Include="docs\" />
-	</ItemGroup>
 
 	<!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+		Defining the "HasPackageAndPublishMenuAddedByProject"
     Explorer "Package and Publish" context menu entry to be enabled for this project even if
     the Windows App SDK Nuget package has not yet been restored.
   -->
