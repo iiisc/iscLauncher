@@ -56,9 +56,13 @@ jobs:
 
       - name: Create tag (manual dispatch only)
         if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          git tag v${{ inputs.version }}
-          git push origin v${{ inputs.version }}
+          gh api "repos/${{ github.repository }}/git/refs" `
+            -f ref="refs/tags/v${{ inputs.version }}" `
+            -f sha="${{ github.sha }}"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
