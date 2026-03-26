@@ -295,6 +295,7 @@ public sealed partial class MainWindow : Window
         // Addon sync controls
         EditSyncRepoUrlTextBox.IsEnabled = isEditing;
         EditSyncBranchTextBox.IsEnabled = isEditing;
+        ComputerNameTextBox.IsEnabled = isEditing;
         SyncAddonsButton.IsEnabled = !isEditing;
         UploadAddonsButton.IsEnabled = !isEditing;
         RollbackButton.IsEnabled = !isEditing;
