@@ -12,6 +12,7 @@ public class PasswordAutomationService
 {
     private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan StabilizationDelay = TimeSpan.FromMilliseconds(1500);
     private const uint ResponsivenessProbeTimeoutMs = 1000;
 
     public async Task<AutomationResult> AutomatePasswordEntryAsync(
@@ -20,12 +21,8 @@ public class PasswordAutomationService
         string? windowTitlePattern = null,
         CancellationToken cancellationToken = default)
     {
-        string? processName = null;
-        DateTime launchTime = DateTime.UtcNow;
-        try { processName = Process.GetProcessById(processId).ProcessName; } catch { }
-
         var (windowHandle, info) = await WaitForGameWindowAsync(
-            processId, processName, launchTime, windowTitlePattern, cancellationToken);
+            processId, windowTitlePattern, cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
         {
@@ -86,8 +83,6 @@ public class PasswordAutomationService
 
     private static async Task<(IntPtr handle, string info)> WaitForGameWindowAsync(
         int processId,
-        string? processName,
-        DateTime launchTime,
         string? windowTitlePattern,
         CancellationToken cancellationToken)
     {
@@ -96,38 +91,44 @@ public class PasswordAutomationService
         var checkedWindows = new HashSet<string>();
         var diagnostics = new List<string>();
         IntPtr bestWindow = IntPtr.Zero;
+        Stopwatch? respondingSince = null;
+
+        // Track PIDs alongside their creation times so we can detect PID reuse
+        // and avoid typing a password into an unrelated process that inherited
+        // a recycled PID.
+        var knownProcesses = new Dictionary<uint, long>();
+        long rootCreation = GetProcessCreationTime((uint)processId);
+        knownProcesses[(uint)processId] = rootCreation;
 
         while (sw.Elapsed < WindowTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Collect target PIDs: the launched process + same-name processes that
-            // started around or after the launch to avoid matching unrelated instances.
-            var targetPids = new HashSet<uint> { (uint)processId };
-            if (!string.IsNullOrEmpty(processName))
+            // If the window we picked earlier is no longer visible (e.g. a
+            // splash screen that closed), forget it so we can latch onto the
+            // real login window that replaces it.
+            if (bestWindow != IntPtr.Zero && !IsWindowVisible(bestWindow))
             {
-                foreach (var p in Process.GetProcessesByName(processName))
-                {
-                    try
-                    {
-                        if (p.Id != processId
-                            && p.StartTime.ToUniversalTime() >= launchTime.AddSeconds(-2))
-                        {
-                            targetPids.Add((uint)p.Id);
-                        }
-                    }
-                    catch
-                    {
-                        // Process may have exited before we could read its StartTime
-                    }
-                }
+                bestWindow = IntPtr.Zero;
+                respondingSince = null;
             }
+
+            // Walk the process tree rooted at the launched PID to discover
+            // child processes that may own the game window (e.g. a launcher
+            // that spawns the real game executable). Unlike name+time matching
+            // this cannot accidentally target a different instance of the game.
+            ExpandProcessTree(knownProcesses);
 
             foreach (var hWnd in EnumerateVisibleWindows())
             {
                 GetWindowThreadProcessId(hWnd, out uint windowPid);
 
-                if (!targetPids.Contains(windowPid) || windowPid == currentPid)
+                if (!knownProcesses.ContainsKey(windowPid) || windowPid == currentPid)
+                    continue;
+
+                // Guard against PID reuse: verify the process behind this window
+                // is still the one we originally discovered in the tree.
+                if (!ValidateProcessIdentity(knownProcesses, windowPid))
                     continue;
 
                 var title = GetWindowTitle(hWnd);
@@ -148,11 +149,20 @@ public class PasswordAutomationService
                     bestWindow = hWnd;
             }
 
-            // Instead of waiting an arbitrary time, verify the window is
-            // actually processing messages before returning it.
+            // Verify the window is processing messages and wait for a
+            // stabilization period so the game's login UI has time to
+            // fully render before we start typing.
             if (bestWindow != IntPtr.Zero && IsWindowResponding(bestWindow))
             {
-                return (bestWindow, $"Game window found and responding: '{GetWindowTitle(bestWindow)}'");
+                respondingSince ??= Stopwatch.StartNew();
+                if (respondingSince.Elapsed >= StabilizationDelay)
+                {
+                    return (bestWindow, $"Game window found and stable: '{GetWindowTitle(bestWindow)}'");
+                }
+            }
+            else
+            {
+                respondingSince = null;
             }
 
             await Task.Delay(PollInterval, cancellationToken);
@@ -161,37 +171,151 @@ public class PasswordAutomationService
         if (bestWindow != IntPtr.Zero)
             return (bestWindow, $"Returning window at timeout: '{GetWindowTitle(bestWindow)}'");
 
+        var treeInfo = string.Join(", ", knownProcesses.Keys);
         return (IntPtr.Zero,
-            $"Timeout ({WindowTimeout.TotalSeconds}s). Checked {checkedWindows.Count} window(s). "
+            $"Timeout ({WindowTimeout.TotalSeconds}s). Process tree: [{treeInfo}]. "
+            + $"Checked {checkedWindows.Count} window(s). "
             + string.Join("; ", diagnostics));
+    }
+
+    /// <summary>
+    /// Walks the system process list and adds any process whose parent is
+    /// already in <paramref name="knownProcesses"/> (i.e. descendants of the
+    /// launched process). Records each child's creation time so PID reuse
+    /// can be detected later.
+    /// </summary>
+    private static void ExpandProcessTree(Dictionary<uint, long> knownProcesses)
+    {
+        IntPtr snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snapshot == INVALID_HANDLE_VALUE)
+            return;
+
+        try
+        {
+            var entry = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
+            if (!Process32First(snapshot, ref entry))
+                return;
+
+            // Multiple passes handle nested children (launcher → updater → game).
+            bool added;
+            do
+            {
+                added = false;
+                entry.dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>();
+                if (!Process32First(snapshot, ref entry))
+                    break;
+                do
+                {
+                    if (knownProcesses.ContainsKey(entry.th32ParentProcessID)
+                        && !knownProcesses.ContainsKey(entry.th32ProcessID))
+                    {
+                        long creation = GetProcessCreationTime(entry.th32ProcessID);
+                        knownProcesses[entry.th32ProcessID] = creation;
+                        added = true;
+                    }
+                } while (Process32Next(snapshot, ref entry));
+            } while (added);
+        }
+        finally
+        {
+            CloseHandle(snapshot);
+        }
+    }
+
+    /// <summary>
+    /// Checks that a tracked PID still refers to the same process we originally
+    /// discovered. Returns false (and removes the entry) if the PID has been
+    /// reused by an unrelated process — preventing the password from being
+    /// typed into the wrong application.
+    /// </summary>
+    private static bool ValidateProcessIdentity(Dictionary<uint, long> knownProcesses, uint pid)
+    {
+        if (!knownProcesses.TryGetValue(pid, out long expectedCreation))
+            return false;
+
+        // Creation time of 0 means we couldn't query it initially (e.g. elevated
+        // process). Accept it — the window-title and PID-tree checks still apply.
+        if (expectedCreation == 0)
+            return true;
+
+        long currentCreation = GetProcessCreationTime(pid);
+
+        // Process has exited (OpenProcess failed). A dead process can't own
+        // windows, so this PID appearing in EnumerateVisibleWindows means
+        // it was reused.
+        if (currentCreation == 0)
+        {
+            knownProcesses.Remove(pid);
+            return false;
+        }
+
+        if (currentCreation != expectedCreation)
+        {
+            knownProcesses.Remove(pid);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the creation time (as a FILETIME long) for the given PID,
+    /// or 0 if the process cannot be opened (e.g. it has already exited
+    /// or requires elevated privileges).
+    /// </summary>
+    private static long GetProcessCreationTime(uint pid)
+    {
+        IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (hProcess == IntPtr.Zero)
+            return 0;
+
+        try
+        {
+            return GetProcessTimes(hProcess, out long creation, out _, out _, out _)
+                ? creation
+                : 0;
+        }
+        finally
+        {
+            CloseHandle(hProcess);
+        }
     }
 
     private static bool ForceForegroundWindow(IntPtr targetWindow)
     {
-        if (GetForegroundWindow() == targetWindow)
-            return true;
+        const int maxAttempts = 3;
 
-        var currentThreadId = GetCurrentThreadId();
-        var foregroundThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out _);
-
-        // Attach to the foreground window's thread to bypass SetForegroundWindow restrictions.
-        // This must be synchronous so attach/detach happen on the same OS thread.
-        bool attached = foregroundThreadId != currentThreadId
-            && AttachThreadInput(currentThreadId, foregroundThreadId, true);
-        try
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            SetForegroundWindow(targetWindow);
-            BringWindowToTop(targetWindow);
-        }
-        finally
-        {
-            if (attached)
-                AttachThreadInput(currentThreadId, foregroundThreadId, false);
+            if (GetForegroundWindow() == targetWindow)
+                return true;
+
+            var currentThreadId = GetCurrentThreadId();
+            var foregroundThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+
+            // Attach to the foreground window's thread to bypass SetForegroundWindow restrictions.
+            // This must be synchronous so attach/detach happen on the same OS thread.
+            bool attached = foregroundThreadId != currentThreadId
+                && AttachThreadInput(currentThreadId, foregroundThreadId, true);
+            try
+            {
+                SetForegroundWindow(targetWindow);
+                BringWindowToTop(targetWindow);
+            }
+            finally
+            {
+                if (attached)
+                    AttachThreadInput(currentThreadId, foregroundThreadId, false);
+            }
+
+            // Brief wait for the window manager to process the focus change
+            Thread.Sleep(50);
+
+            if (GetForegroundWindow() == targetWindow)
+                return true;
         }
 
-        // Brief wait for the window manager to process the focus change
-        Thread.Sleep(50);
-        return GetForegroundWindow() == targetWindow;
+        return false;
     }
 
     /// <summary>
@@ -269,6 +393,7 @@ public class PasswordAutomationService
         U = { ki = new KEYBDINPUT
         {
             wVk = vk,
+            wScan = (ushort)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC),
             dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u
         }}
     };
@@ -336,6 +461,47 @@ public class PasswordAutomationService
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "Process32FirstW")]
+    private static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "Process32NextW")]
+    private static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GetProcessTimes(
+        IntPtr hProcess, out long lpCreationTime, out long lpExitTime,
+        out long lpKernelTime, out long lpUserTime);
+
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+    private static readonly IntPtr INVALID_HANDLE_VALUE = new(-1);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct PROCESSENTRY32
+    {
+        public uint dwSize;
+        public uint cntUsage;
+        public uint th32ProcessID;
+        public IntPtr th32DefaultHeapID;
+        public uint th32ModuleID;
+        public uint cntThreads;
+        public uint th32ParentProcessID;
+        public int pcPriClassBase;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szExeFile;
+    }
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessageTimeoutW(
         IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam,
@@ -350,6 +516,10 @@ public class PasswordAutomationService
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern short VkKeyScanW(char ch);
 
+    [DllImport("user32.dll")]
+    private static extern uint MapVirtualKeyW(uint uCode, uint uMapType);
+
+    private const uint MAPVK_VK_TO_VSC = 0;
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_UNICODE = 0x0004;

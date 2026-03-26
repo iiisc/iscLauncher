@@ -113,7 +113,7 @@ public class GameLauncherService
                 process.Id,
                 password,
                 game.WindowTitle,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (automationResult.Success)
             {
