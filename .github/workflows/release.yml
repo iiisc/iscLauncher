@@ -69,7 +69,7 @@ jobs:
             Get-ChildItem publish -Include *.exe,*.dll -Recurse | ForEach-Object {
               & $signtool sign /f $certPath `
                                /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" `
-                               /tr https://timestamp.digicert.com `
+                               /tr http://timestamp.digicert.com `
                                /td sha256 `
                                /fd sha256 `
                                /v $_.FullName
