@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,9 +25,11 @@ public sealed partial class MainWindow : Window
     private readonly GameRepository _gameRepository = new();
     private readonly CredentialService _credentialService = new();
     private readonly GameLauncherService _gameLauncherService;
+    private readonly AddonSyncService _addonSyncService = new(new GitService());
     private readonly ObservableCollection<GameEntry> _games = new();
     private readonly HashSet<Guid> _runningGames = new();
     private GameEntry? _currentEditingGame;
+    private CancellationTokenSource? _syncCts;
 
     public MainWindow()
     {
@@ -234,6 +237,13 @@ public sealed partial class MainWindow : Window
         DetailLaunchButton.Tag = game;
         SaveEditButton.Tag = game;
 
+        // Populate sync fields
+        EditSyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
+        EditSyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
+        AddonSyncSection.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
+        OpenRepoLink.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
+        UpdateLastSyncedText(game);
+
         // Reflect running state on the launch button
         UpdateLaunchButtonState(game);
     }
@@ -272,6 +282,18 @@ public sealed partial class MainWindow : Window
         // Toggle button groups
         ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
+
+        // Addon sync controls
+        EditSyncRepoUrlTextBox.IsEnabled = isEditing;
+        EditSyncBranchTextBox.IsEnabled = isEditing;
+        SyncAddonsButton.IsEnabled = !isEditing;
+        UploadAddonsButton.IsEnabled = !isEditing;
+        RollbackButton.IsEnabled = !isEditing;
+        AddonSyncSection.Visibility = isEditing ? Visibility.Visible :
+            (GameListView.SelectedItem is GameEntry g && g.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
+        SyncButtonsPanel.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
+        OpenRepoLink.Visibility = isEditing ? Visibility.Collapsed :
+            (GameListView.SelectedItem is GameEntry g2 && g2.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
     }
 
     private async void OnAddGameClick(object sender, RoutedEventArgs e)
@@ -307,9 +329,15 @@ public sealed partial class MainWindow : Window
                 Content = $"Are you sure you want to delete '{game.Name}'? This will also remove the stored password.",
                 PrimaryButtonText = "Delete",
                 CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = Content.XamlRoot
+                DefaultButton = ContentDialogButton.None,
+                XamlRoot = Content.XamlRoot,
+                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface2Brush"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderHighBrush"],
+                CornerRadius = new CornerRadius(8),
+                RequestedTheme = ElementTheme.Dark
             };
+            ApplyDialogTheme(confirmDialog);
 
             var result = await confirmDialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
@@ -385,6 +413,12 @@ public sealed partial class MainWindow : Window
             1 => PasswordInputMethod.Clipboard,
             _ => PasswordInputMethod.SendKeys
         };
+
+        // Update sync fields
+        _currentEditingGame.SyncRepoUrl = string.IsNullOrWhiteSpace(EditSyncRepoUrlTextBox.Text)
+            ? null : EditSyncRepoUrlTextBox.Text.Trim();
+        _currentEditingGame.SyncBranch = string.IsNullOrWhiteSpace(EditSyncBranchTextBox.Text)
+            ? null : EditSyncBranchTextBox.Text.Trim();
 
         // Update password if provided
         if (!string.IsNullOrEmpty(EditPasswordBox.Password))
@@ -564,5 +598,601 @@ public sealed partial class MainWindow : Window
                 }
             }
         }
+    }
+
+    private void UpdateLastSyncedText(GameEntry game)
+    {
+        if (game.LastSynced is DateTime lastSynced)
+        {
+            var elapsed = DateTime.UtcNow - lastSynced;
+            var text = elapsed.TotalMinutes < 1 ? "just now" :
+                       elapsed.TotalMinutes < 60 ? $"{(int)elapsed.TotalMinutes} min ago" :
+                       elapsed.TotalHours < 24 ? $"{(int)elapsed.TotalHours}h ago" :
+                       $"{(int)elapsed.TotalDays}d ago";
+            LastSyncedText.Text = $"Last synced: {text}";
+            LastSyncedText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            LastSyncedText.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void SetSyncUiBusy(bool busy)
+    {
+        SyncAddonsButton.IsEnabled = !busy;
+        UploadAddonsButton.IsEnabled = !busy;
+        RollbackButton.IsEnabled = !busy;
+        SyncProgressRing.IsActive = busy;
+        SyncProgressRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        CancelSyncButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
+    {
+        if (GameListView.SelectedItem is not GameEntry game) return;
+
+        // Fetch repo addon list (this also ensures the cache is up to date)
+        ShowStatus("Fetching addon list from repo...", true);
+        List<string> repoAddons;
+        try
+        {
+            var fetchProgress = new Progress<string>(msg => ShowStatus(msg, true));
+            repoAddons = await _addonSyncService.GetRepoAddonListAsync(game, fetchProgress);
+        }
+        catch
+        {
+            repoAddons = [];
+        }
+
+        // Count characters that will be overwritten
+        var gameDir = System.IO.Path.GetDirectoryName(game.ExecutablePath);
+        var charCount = 0;
+        if (!string.IsNullOrEmpty(gameDir))
+        {
+            var wtfAccountDir = System.IO.Path.Combine(gameDir, "WTF", "Account");
+            charCount = AddonSyncService.EnumerateCharacterFolders(wtfAccountDir).Count();
+        }
+
+        var warningText = charCount > 0
+            ? $"This will overwrite addon and WTF settings for {charCount} character(s). Continue?"
+            : "This will sync addons from the repo. Continue?";
+
+        var contentPanel = new StackPanel { Spacing = 12 };
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = warningText,
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 13,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        if (charCount > 0)
+        {
+            contentPanel.Children.Add(new TextBlock
+            {
+                Text = "⚠ Local character settings will be replaced with the repo template.",
+                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                FontSize = 11,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        // Show addon list
+        if (repoAddons.Count > 0)
+        {
+            contentPanel.Children.Add(new TextBlock
+            {
+                Text = $"📦 INCLUDED ADDONS ({repoAddons.Count})",
+                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["DisplayFont"],
+                FontSize = 10,
+                CharacterSpacing = 100,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldDarkBrush"],
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+
+            var addonListText = new TextBlock
+            {
+                Text = string.Join(",  ", repoAddons),
+                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                FontSize = 11,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"],
+                TextWrapping = TextWrapping.Wrap
+            };
+
+            contentPanel.Children.Add(new ScrollViewer
+            {
+                MaxHeight = 120,
+                Content = addonListText
+            });
+        }
+
+        var confirmDialog = new ContentDialog
+        {
+            Title = "⚔ Pull from Repo",
+            Content = contentPanel,
+            PrimaryButtonText = "Pull",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.None,
+            XamlRoot = Content.XamlRoot,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface2Brush"],
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderHighBrush"],
+            CornerRadius = new CornerRadius(8),
+            RequestedTheme = ElementTheme.Dark,
+            MinWidth = 500,
+            MaxWidth = 600
+        };
+        confirmDialog.Resources["ContentDialogMaxWidth"] = 600.0;
+        confirmDialog.Resources["ContentDialogMinWidth"] = 500.0;
+        ApplyDialogTheme(confirmDialog);
+
+        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        _syncCts?.Cancel();
+        _syncCts = new CancellationTokenSource();
+        var ct = _syncCts.Token;
+
+        SetSyncUiBusy(true);
+        ShowStatus("Syncing addons...", true);
+
+        try
+        {
+            var progress = new Progress<string>(msg => ShowStatus(msg, true));
+            var result = await _addonSyncService.SyncAsync(game, progress, ct);
+            ShowStatus(result.Message, result.Success);
+            UpdateLastSyncedText(game);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus("Sync cancelled.", false);
+        }
+        finally
+        {
+            SetSyncUiBusy(false);
+        }
+    }
+
+    private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
+    {
+        if (GameListView.SelectedItem is not GameEntry game) return;
+
+        var gameDir = System.IO.Path.GetDirectoryName(game.ExecutablePath);
+        if (string.IsNullOrEmpty(gameDir)) return;
+
+        var wtfAccountDir = System.IO.Path.Combine(gameDir, "WTF", "Account");
+        var characters = AddonSyncService.EnumerateCharacterFolders(wtfAccountDir).ToList();
+
+        if (characters.Count == 0)
+        {
+            ShowStatus("No character folders found under WTF/Account/.", false);
+            return;
+        }
+
+        // Build character picker ComboBox for the dialog
+        var charComboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SurfaceBrush"],
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 8, 12, 8),
+            Height = 40,
+            FontSize = 12
+        };
+        foreach (var charPath in characters)
+        {
+            var relativePath = System.IO.Path.GetRelativePath(wtfAccountDir, charPath);
+            charComboBox.Items.Add(new ComboBoxItem
+            {
+                Content = relativePath.Replace(System.IO.Path.DirectorySeparatorChar, '/'),
+                Tag = charPath
+            });
+        }
+        charComboBox.SelectedIndex = 0;
+
+        // Build styled dialog content
+        var contentPanel = new StackPanel { Spacing = 12 };
+
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = "Select the character whose settings will become the template for all characters.",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 13,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        // Character picker section
+        var pickerSection = new StackPanel { Spacing = 4 };
+        pickerSection.Children.Add(new TextBlock
+        {
+            Text = "Source Character",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 10,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"]
+        });
+        pickerSection.Children.Add(charComboBox);
+        contentPanel.Children.Add(pickerSection);
+
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = "⚠ This will overwrite the repo with your current local addons and the selected character's settings.",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 11,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        var confirmDialog = new ContentDialog
+        {
+            Title = "⚔ Push to Repo",
+            Content = contentPanel,
+            PrimaryButtonText = "Push",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.None,
+            XamlRoot = Content.XamlRoot,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface2Brush"],
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderHighBrush"],
+            CornerRadius = new CornerRadius(8),
+            RequestedTheme = ElementTheme.Dark
+        };
+        ApplyDialogTheme(confirmDialog);
+
+        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        if (charComboBox.SelectedItem is not ComboBoxItem selected)
+            return;
+        var characterPath = selected.Tag as string;
+        if (string.IsNullOrEmpty(characterPath))
+            return;
+
+        _syncCts?.Cancel();
+        _syncCts = new CancellationTokenSource();
+        var ct = _syncCts.Token;
+
+        SetSyncUiBusy(true);
+        ShowStatus("Uploading to repo...", true);
+
+        try
+        {
+            var progress = new Progress<string>(msg => ShowStatus(msg, true));
+            var result = await _addonSyncService.UploadAsync(game, characterPath, progress, ct);
+            ShowStatus(result.Message, result.Success);
+            UpdateLastSyncedText(game);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus("Upload cancelled.", false);
+        }
+        finally
+        {
+            SetSyncUiBusy(false);
+        }
+    }
+
+    private async void OnRollbackClick(object sender, RoutedEventArgs e)
+    {
+        if (GameListView.SelectedItem is not GameEntry game) return;
+
+        ShowStatus("Loading commit history...", true);
+
+        List<GitCommitEntry> commits;
+        try
+        {
+            commits = await _addonSyncService.GetCommitLogAsync(game);
+        }
+        catch
+        {
+            ShowStatus("Failed to load commit history.", false);
+            return;
+        }
+
+        if (commits.Count == 0)
+        {
+            ShowStatus("No commits found in the repo.", false);
+            return;
+        }
+
+        // Build commit list
+        var commitListView = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.Single,
+            MaxHeight = 250,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SurfaceBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(4)
+        };
+
+        foreach (var commit in commits)
+        {
+            // Format the date for display
+            var dateDisplay = "";
+            if (DateTimeOffset.TryParse(commit.DateString, out var dto))
+                dateDisplay = dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm");
+            else if (!string.IsNullOrEmpty(commit.DateString))
+                dateDisplay = commit.DateString;
+
+            var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            headerPanel.Children.Add(new TextBlock
+            {
+                Text = commit.Hash,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                FontSize = 11,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (!string.IsNullOrEmpty(dateDisplay))
+            {
+                headerPanel.Children.Add(new TextBlock
+                {
+                    Text = dateDisplay,
+                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                    FontSize = 10,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextDimBrush"],
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            var item = new ListViewItem
+            {
+                Tag = commit,
+                Padding = new Thickness(8, 6, 8, 6),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Spacing = 2,
+                    Children =
+                    {
+                        headerPanel,
+                        new TextBlock
+                        {
+                            Text = commit.Message,
+                            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                            FontSize = 12,
+                            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+                            TextWrapping = TextWrapping.Wrap
+                        }
+                    }
+                }
+            };
+            commitListView.Items.Add(item);
+        }
+        commitListView.SelectedIndex = 0;
+
+        // Addon detail panel — shown below the list when a commit is selected
+        var addonDetailHeader = new TextBlock
+        {
+            Text = "📦 Included Addons",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["DisplayFont"],
+            FontSize = 10,
+            CharacterSpacing = 100,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldDarkBrush"],
+            Visibility = Visibility.Collapsed
+        };
+
+        var addonDetailText = new TextBlock
+        {
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 11,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"],
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed
+        };
+
+        var addonDetailScroller = new ScrollViewer
+        {
+            MaxHeight = 120,
+            Content = addonDetailText,
+            Visibility = Visibility.Collapsed
+        };
+
+        void UpdateAddonDetail(GitCommitEntry commit)
+        {
+            var addons = ParseAddonListFromBody(commit.Body);
+            if (addons.Count > 0)
+            {
+                addonDetailHeader.Visibility = Visibility.Visible;
+                addonDetailScroller.Visibility = Visibility.Visible;
+                addonDetailText.Visibility = Visibility.Visible;
+                addonDetailText.Text = string.Join(",  ", addons);
+            }
+            else
+            {
+                addonDetailHeader.Visibility = Visibility.Collapsed;
+                addonDetailScroller.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // Show detail for the initially selected commit
+        UpdateAddonDetail(commits[0]);
+
+        commitListView.SelectionChanged += (_, _) =>
+        {
+            if (commitListView.SelectedItem is ListViewItem sel && sel.Tag is GitCommitEntry c)
+                UpdateAddonDetail(c);
+        };
+
+        var contentPanel = new StackPanel { Spacing = 12 };
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = "Select the commit to restore. This will reset the repo to that snapshot and push.",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 13,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            TextWrapping = TextWrapping.Wrap
+        });
+        contentPanel.Children.Add(commitListView);
+        contentPanel.Children.Add(addonDetailHeader);
+        contentPanel.Children.Add(addonDetailScroller);
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = "⚠ The repo will be overwritten. Run Pull afterwards to apply the restored state locally.",
+            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+            FontSize = 11,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        var confirmDialog = new ContentDialog
+        {
+            Title = "⚔ Rollback to Previous Sync",
+            Content = contentPanel,
+            PrimaryButtonText = "Rollback",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.None,
+            XamlRoot = Content.XamlRoot,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface2Brush"],
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderHighBrush"],
+            CornerRadius = new CornerRadius(8),
+            RequestedTheme = ElementTheme.Dark,
+            MinWidth = 600,
+            MaxWidth = 700
+        };
+        confirmDialog.Resources["ContentDialogMaxWidth"] = 700.0;
+        confirmDialog.Resources["ContentDialogMinWidth"] = 600.0;
+        ApplyDialogTheme(confirmDialog);
+
+        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            return;
+
+        if (commitListView.SelectedItem is not ListViewItem selectedItem ||
+            selectedItem.Tag is not GitCommitEntry selectedCommit)
+            return;
+
+        _syncCts?.Cancel();
+        _syncCts = new CancellationTokenSource();
+        var ct = _syncCts.Token;
+
+        SetSyncUiBusy(true);
+        ShowStatus("Rolling back...", true);
+
+        try
+        {
+            var progress = new Progress<string>(msg => ShowStatus(msg, true));
+            var result = await _addonSyncService.RollbackAsync(game, selectedCommit.Hash, selectedCommit.Message, selectedCommit.Body, progress, ct);
+            ShowStatus(result.Message, result.Success);
+            UpdateLastSyncedText(game);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus("Rollback cancelled.", false);
+        }
+        finally
+        {
+            SetSyncUiBusy(false);
+        }
+    }
+
+    private void OnCancelSyncClick(object sender, RoutedEventArgs e)
+    {
+        _syncCts?.Cancel();
+    }
+
+    private void OnOpenRepoClick(object sender, RoutedEventArgs e)
+    {
+        if (GameListView.SelectedItem is not GameEntry game || !game.HasSyncRepo) return;
+
+        var url = game.SyncRepoUrl!.TrimEnd('/');
+        if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            url = url[..^4];
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            ShowStatus("Could not open browser.", false);
+        }
+    }
+
+    private static void ApplyDialogTheme(ContentDialog dialog)
+    {
+        // Primary button — emerald green gradient matching PrimaryButtonStyle
+        var primaryStyle = new Style(typeof(Button));
+        primaryStyle.Setters.Add(new Setter(Button.BackgroundProperty,
+            new Microsoft.UI.Xaml.Media.LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
+                {
+                    new Microsoft.UI.Xaml.Media.GradientStop { Color = (Windows.UI.Color)Application.Current.Resources["EmeraldColor"], Offset = 0 },
+                    new Microsoft.UI.Xaml.Media.GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 45, 90, 70), Offset = 1 }
+                }
+            }));
+        primaryStyle.Setters.Add(new Setter(Button.ForegroundProperty,
+            new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 200, 240, 216))));
+        primaryStyle.Setters.Add(new Setter(Button.BorderBrushProperty,
+            new Microsoft.UI.Xaml.Media.SolidColorBrush { Color = (Windows.UI.Color)Application.Current.Resources["EmeraldLightColor"], Opacity = 0.3 }));
+        primaryStyle.Setters.Add(new Setter(Button.CornerRadiusProperty, new CornerRadius(6)));
+        primaryStyle.Setters.Add(new Setter(Button.FontWeightProperty, new Windows.UI.Text.FontWeight(700)));
+        dialog.PrimaryButtonStyle = primaryStyle;
+
+        // Default implicit button style — matches SecondaryButtonStyle for close/cancel buttons.
+        // The PrimaryButtonStyle set above overrides this for the confirm button.
+        var secondaryBase = (Style)Application.Current.Resources["SecondaryButtonStyle"];
+        dialog.Resources[typeof(Button)] = new Style(typeof(Button)) { BasedOn = secondaryBase };
+
+        // Dialog chrome
+        dialog.Resources["ContentDialogBackground"] = Application.Current.Resources["Surface2Brush"];
+        dialog.Resources["ContentDialogTopOverlay"] = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        dialog.Resources["ContentDialogBorderWidth"] = new Thickness(1);
+        dialog.Resources["ContentDialogSeparatorBorderBrush"] = Application.Current.Resources["BorderBrush"];
+
+        // Title
+        dialog.Resources["ContentDialogTitleForeground"] = Application.Current.Resources["TextPrimaryBrush"];
+
+        // ComboBox dropdown
+        dialog.Resources["ComboBoxDropDownBackground"] = Application.Current.Resources["Surface2Brush"];
+        dialog.Resources["ComboBoxDropDownBorderBrush"] = Application.Current.Resources["BorderHighBrush"];
+        dialog.Resources["ComboBoxItemForeground"] = Application.Current.Resources["TextPrimaryBrush"];
+        dialog.Resources["ComboBoxItemForegroundSelected"] = Application.Current.Resources["TextPrimaryBrush"];
+        dialog.Resources["ComboBoxItemForegroundPointerOver"] = Application.Current.Resources["GoldLightBrush"];
+        dialog.Resources["ComboBoxItemBackgroundPointerOver"] = Application.Current.Resources["Surface3Brush"];
+        dialog.Resources["ComboBoxItemBackgroundSelected"] = Application.Current.Resources["Surface3Brush"];
+        dialog.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = Application.Current.Resources["Surface3Brush"];
+    }
+
+    private static List<string> ParseAddonListFromBody(string body)
+    {
+        var addons = new List<string>();
+        if (string.IsNullOrWhiteSpace(body))
+            return addons;
+
+        var inAddonSection = false;
+        foreach (var rawLine in body.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Equals("Addons:", StringComparison.OrdinalIgnoreCase))
+            {
+                inAddonSection = true;
+                continue;
+            }
+
+            if (inAddonSection)
+            {
+                if (line.StartsWith("- "))
+                    addons.Add(line[2..].Trim());
+                else if (line.Length == 0 && addons.Count > 0)
+                    break;
+            }
+        }
+        return addons;
     }
 }

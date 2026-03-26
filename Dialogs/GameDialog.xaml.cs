@@ -38,6 +38,8 @@ public sealed partial class GameDialog : ContentDialog
             RealmlistAddressTextBox.Text = existingGame.RealmlistAddress ?? string.Empty;
             RealmNameTextBox.Text = existingGame.RealmName ?? string.Empty;
             AccountNameTextBox.Text = existingGame.AccountName ?? string.Empty;
+            SyncRepoUrlTextBox.Text = existingGame.SyncRepoUrl ?? string.Empty;
+            SyncBranchTextBox.Text = existingGame.SyncBranch ?? string.Empty;
         }
     }
 
@@ -117,8 +119,14 @@ public sealed partial class GameDialog : ContentDialog
         GameEntry.AccountName = string.IsNullOrWhiteSpace(AccountNameTextBox.Text)
             ? null
             : AccountNameTextBox.Text.Trim();
+        GameEntry.SyncRepoUrl = string.IsNullOrWhiteSpace(SyncRepoUrlTextBox.Text)
+            ? null
+            : SyncRepoUrlTextBox.Text.Trim();
+        GameEntry.SyncBranch = string.IsNullOrWhiteSpace(SyncBranchTextBox.Text)
+            ? null
+            : SyncBranchTextBox.Text.Trim();
 
-        Password = string.IsNullOrWhiteSpace(GamePasswordBox.Password) 
+        Password = string.IsNullOrWhiteSpace(GamePasswordBox.Password)
             ? null 
             : GamePasswordBox.Password;
     }

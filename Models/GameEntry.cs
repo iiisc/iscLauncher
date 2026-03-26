@@ -61,6 +61,24 @@ public class GameEntry
     [JsonPropertyName("startupDelay")]
     public int StartupDelaySeconds { get; set; } = 0;
 
+    /// <summary>
+    /// HTTPS URL of the GitHub repo used for addon/WTF sync.
+    /// </summary>
+    [JsonPropertyName("syncRepoUrl")]
+    public string? SyncRepoUrl { get; set; }
+
+    /// <summary>
+    /// Branch to clone/pull (defaults to "main" in service logic when null).
+    /// </summary>
+    [JsonPropertyName("syncBranch")]
+    public string? SyncBranch { get; set; }
+
+    /// <summary>
+    /// UTC timestamp of the last successful pull or push.
+    /// </summary>
+    [JsonPropertyName("lastSynced")]
+    public DateTime? LastSynced { get; set; }
+
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";
 
@@ -72,4 +90,7 @@ public class GameEntry
 
     [JsonIgnore]
     public bool HasServerInfo => HasRealmName || HasAccountName;
+
+    [JsonIgnore]
+    public bool HasSyncRepo => !string.IsNullOrWhiteSpace(SyncRepoUrl);
 }

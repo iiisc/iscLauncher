@@ -210,6 +210,40 @@
                                TextWrapping="Wrap"
                                Margin="0,2,0,0"/>
                 </StackPanel>
+
+                <!-- Separator -->
+                <Rectangle Height="1" 
+                           Fill="{StaticResource BorderBrush}"
+                           Opacity="0.5"
+                           Margin="0,4,0,0"/>
+
+                <TextBlock Text="🔄 ADDON SYNC"
+                           FontFamily="{StaticResource DisplayFont}"
+                           FontSize="9"
+                           CharacterSpacing="150"
+                           Foreground="{StaticResource GoldDarkBrush}"/>
+
+                <!-- Sync Repo URL -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="GitHub Repo URL"
+                               FontFamily="{StaticResource BodyFont}"
+                               FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBox x:Name="SyncRepoUrlTextBox" 
+                             Style="{StaticResource ThemedTextBoxStyle}"
+                             PlaceholderText="e.g., https://github.com/user/wow-sync.git" />
+                </StackPanel>
+
+                <!-- Sync Branch -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Branch"
+                               FontFamily="{StaticResource BodyFont}"
+                               FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBox x:Name="SyncBranchTextBox" 
+                             Style="{StaticResource ThemedTextBoxStyle}"
+                             PlaceholderText="main" />
+                </StackPanel>
             </StackPanel>
         </Grid>
 

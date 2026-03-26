@@ -156,6 +156,15 @@
                                                                Foreground="{StaticResource GoldBrush}" />
                                                 </StackPanel>
                                             </StackPanel>
+                                            <!-- Sync Badge -->
+                                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0"
+                                                        Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasSyncRepo)}">
+                                                <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                                <TextBlock Text="Sync"
+                                                           FontFamily="{StaticResource BodyFont}"
+                                                           FontSize="10"
+                                                           Foreground="{StaticResource GoldBrush}" />
+                                            </StackPanel>
                                         </StackPanel>
 
                                         <!-- Action Buttons -->
@@ -216,179 +225,290 @@
                     <ScrollViewer Grid.Row="0" Padding="32,18,32,14">
                         <StackPanel Spacing="14" MaxWidth="600">
 
-                        <!-- Header -->
-                        <StackPanel Spacing="8">
-                            <TextBlock x:Name="DetailGameName"
+                            <!-- Header -->
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="DetailGameName"
                                        FontFamily="{StaticResource DisplayFont}"
                                        FontSize="22"
                                        Foreground="{StaticResource TextPrimaryBrush}"/>
 
-                            <!-- Game Name Editor (shown only in edit mode) -->
-                            <StackPanel x:Name="GameNameEditSection" Spacing="4" Visibility="Collapsed">
-                                <TextBlock Text="Game Name *"
+                                <!-- Game Name Editor (shown only in edit mode) -->
+                                <StackPanel x:Name="GameNameEditSection" Spacing="4" Visibility="Collapsed">
+                                    <TextBlock Text="Game Name *"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBox x:Name="EditGameNameTextBox" 
+                                    <TextBox x:Name="EditGameNameTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           FontSize="13"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <Rectangle Height="1.5" 
+                                <Rectangle Height="1.5" 
                                        Fill="{StaticResource GoldDarkBrush}"
                                        Opacity="0.3"
                                        HorizontalAlignment="Left"
                                        Width="90"/>
-                        </StackPanel>
+                            </StackPanel>
 
-                        <!-- Status InfoBar -->
-                        <InfoBar x:Name="StatusInfoBar"
+                            <!-- Status InfoBar -->
+                            <InfoBar x:Name="StatusInfoBar"
                                  IsOpen="False"
                                  IsClosable="False"
                                  Severity="Success"
                                  Margin="0,0,0,8">
-                            <InfoBar.Content>
-                                <TextBlock x:Name="StatusText"
+                                <InfoBar.Content>
+                                    <TextBlock x:Name="StatusText"
                                            TextWrapping="Wrap"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="12"/>
-                            </InfoBar.Content>
-                        </InfoBar>
+                                </InfoBar.Content>
+                            </InfoBar>
 
-                        <!-- Executable Section -->
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="🗡 EXECUTABLE"
+                            <!-- Executable Section -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="🗡 EXECUTABLE"
                                        FontFamily="{StaticResource DisplayFont}"
                                        FontSize="9"
                                        CharacterSpacing="150"
                                        Foreground="{StaticResource GoldDarkBrush}"/>
-                            <Grid x:Name="ExecutableViewSection" ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="EditExecutableTextBox" 
+                                <Grid x:Name="ExecutableViewSection" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="EditExecutableTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           FontSize="12"
                                           IsReadOnly="True" />
-                                <Button x:Name="BrowseButton"
+                                    <Button x:Name="BrowseButton"
                                          Grid.Column="1" 
                                          Click="OnBrowseExecutableClick"
                                          Style="{StaticResource SecondaryButtonStyle}"
                                          Padding="10,0"
                                          Height="40"
                                          Visibility="Collapsed">
-                                    <FontIcon Glyph="&#xE8DA;" FontSize="11" />
-                                </Button>
-                            </Grid>
-                        </StackPanel>
+                                        <FontIcon Glyph="&#xE8DA;" FontSize="11" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
 
-                        <!-- Connection Settings -->
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="⚔ CONNECTION" 
+                            <!-- Connection Settings -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="⚔ CONNECTION" 
                                        FontFamily="{StaticResource DisplayFont}"
                                        FontSize="9"
                                        CharacterSpacing="150"
                                        Foreground="{StaticResource GoldDarkBrush}"/>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Realmlist Address"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Realmlist Address"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBox x:Name="EditRealmlistTextBox" 
+                                    <TextBox x:Name="EditRealmlistTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           PlaceholderText="e.g., logon.warmane.com"
                                           FontSize="12"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Account Name"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Account Name"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBox x:Name="EditAccountTextBox" 
+                                    <TextBox x:Name="EditAccountTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           PlaceholderText="e.g., myaccount"
                                           FontSize="12"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Realm Name"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Realm Name"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBox x:Name="EditRealmTextBox" 
+                                    <TextBox x:Name="EditRealmTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           PlaceholderText="e.g., ChromieCraft"
                                           FontSize="12"/>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
 
-                        <!-- Automation Settings -->
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="⚙ AUTOMATION" 
+                            <!-- Automation Settings -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="⚙ AUTOMATION" 
                                        FontFamily="{StaticResource DisplayFont}"
                                        FontSize="9"
                                        CharacterSpacing="150"
                                        Foreground="{StaticResource GoldDarkBrush}"/>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Password"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Password"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <PasswordBox x:Name="EditPasswordBox" 
+                                    <PasswordBox x:Name="EditPasswordBox" 
                                               Style="{StaticResource ThemedPasswordBoxStyle}"
                                               PlaceholderText="Enter password to update"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Password Input Method"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Password Input Method"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <ComboBox x:Name="EditInputMethodComboBox" 
+                                    <ComboBox x:Name="EditInputMethodComboBox" 
                                            Style="{StaticResource ThemedComboBoxStyle}"
                                            HorizontalAlignment="Stretch"
                                            FontSize="12">
-                                    <ComboBoxItem Content="SendKeys (Best for DirectX)"/>
-                                    <ComboBoxItem Content="Clipboard (Manual)"/>
-                                </ComboBox>
-                            </StackPanel>
+                                        <ComboBoxItem Content="SendKeys (Best for DirectX)"/>
+                                        <ComboBoxItem Content="Clipboard (Manual)"/>
+                                    </ComboBox>
+                                </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Window Title (optional)"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Window Title (optional)"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBox x:Name="EditWindowTitleTextBox" 
+                                    <TextBox x:Name="EditWindowTitleTextBox" 
                                           Style="{StaticResource ThemedTextBoxStyle}"
                                           PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
                                           FontSize="12"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Startup Delay (seconds)"
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Startup Delay (seconds)"
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"/>
-                                <NumberBox x:Name="EditStartupDelayNumberBox"
+                                    <NumberBox x:Name="EditStartupDelayNumberBox"
                                            Minimum="0"
                                            Maximum="30"
                                            Value="0"
                                            SpinButtonPlacementMode="Inline"
                                            SmallChange="1" />
-                                <TextBlock Text="Wait before typing the password. Increase for slow-starting games."
+                                    <TextBlock Text="Wait before typing the password. Increase for slow-starting games."
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="10"
                                            Foreground="{StaticResource TextDimBrush}"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"
                                            Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Addon Sync Section -->
+                            <StackPanel x:Name="AddonSyncSection" Spacing="8" Visibility="Collapsed">
+                                <TextBlock Text="🔄 ADDON SYNC"
+                                           FontFamily="{StaticResource DisplayFont}"
+                                           FontSize="9"
+                                           CharacterSpacing="150"
+                                           Foreground="{StaticResource GoldDarkBrush}"/>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="GitHub Repo URL"
+                                               FontFamily="{StaticResource BodyFont}"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBox x:Name="EditSyncRepoUrlTextBox"
+                                             Style="{StaticResource ThemedTextBoxStyle}"
+                                             PlaceholderText="e.g., https://github.com/user/wow-sync.git"
+                                             FontSize="12"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Branch"
+                                               FontFamily="{StaticResource BodyFont}"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBox x:Name="EditSyncBranchTextBox"
+                                             Style="{StaticResource ThemedTextBoxStyle}"
+                                             PlaceholderText="main"
+                                             FontSize="12"/>
+                                </StackPanel>
+
+                                <TextBlock x:Name="LastSyncedText"
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="10"
+                                           Foreground="{StaticResource TextDimBrush}"
+                                           FontStyle="Italic"
+                                           Visibility="Collapsed"/>
+
+                                <HyperlinkButton x:Name="OpenRepoLink"
+                                                 Click="OnOpenRepoClick"
+                                                 Padding="0"
+                                                 Margin="0,-4,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE774;" FontSize="11" Foreground="{StaticResource GoldBrush}"/>
+                                        <TextBlock Text="Open repo in browser"
+                                                   FontFamily="{StaticResource BodyFont}"
+                                                   FontSize="10"
+                                                   Foreground="{StaticResource GoldBrush}"/>
+                                    </StackPanel>
+                                </HyperlinkButton>
+
+                                <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="SyncAddonsButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40"
+                                            Padding="16,0"
+                                            Click="OnSyncAddonsClick">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE896;" FontSize="14"/>
+                                            <TextBlock Text="Pull"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="UploadAddonsButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40"
+                                            Padding="16,0"
+                                            Click="OnUploadAddonsClick">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE898;" FontSize="14"/>
+                                            <TextBlock Text="Push"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="RollbackButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40"
+                                            Padding="16,0"
+                                            Click="OnRollbackClick">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
+                                            <TextBlock Text="Rollback"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <ProgressRing x:Name="SyncProgressRing"
+                                                  IsActive="False"
+                                                  Width="24" Height="24"
+                                                  Visibility="Collapsed"/>
+
+                                    <Button x:Name="CancelSyncButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40"
+                                            Padding="12,0"
+                                            Click="OnCancelSyncClick"
+                                            Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                            <TextBlock Text="Cancel"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
-                    </StackPanel>
                     </ScrollViewer>
 
                     <!-- View Mode Action Bar (Pinned at Bottom) -->
