@@ -86,6 +86,7 @@ jobs:
         if: env.HAS_SIGNING_CERT == 'true'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $certBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
           $certPath  = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, $certBytes)
@@ -98,15 +99,44 @@ jobs:
                         Sort-Object FullName -Descending |
                         Select-Object -First 1 -ExpandProperty FullName
 
+            if (-not $signtool) {
+              Write-Error "signtool.exe not found in Windows SDK"
+              exit 1
+            }
+
+            Write-Host "Using signtool: $signtool"
+
             # Sign all .exe and .dll files in the publish folder
-            Get-ChildItem publish -Include *.exe,*.dll -Recurse | ForEach-Object {
+            $files = Get-ChildItem publish -Include *.exe,*.dll -Recurse
+            if ($files.Count -eq 0) {
+              Write-Error "No .exe or .dll files found in publish folder"
+              exit 1
+            }
+
+            foreach ($file in $files) {
+              Write-Host "Signing $($file.FullName)..."
               & $signtool sign /f $certPath `
                                /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" `
                                /tr http://timestamp.digicert.com `
                                /td sha256 `
                                /fd sha256 `
-                               /v $_.FullName
+                               /v $file.FullName
+              if ($LASTEXITCODE -ne 0) {
+                Write-Error "Failed to sign $($file.FullName) (exit code $LASTEXITCODE)"
+                exit 1
+              }
             }
+
+            # Verify signatures
+            foreach ($file in $files) {
+              & $signtool verify /pa /v $file.FullName
+              if ($LASTEXITCODE -ne 0) {
+                Write-Error "Signature verification failed for $($file.FullName)"
+                exit 1
+              }
+            }
+
+            Write-Host "All files signed and verified successfully."
           }
           finally {
             Remove-Item $certPath -Force -ErrorAction SilentlyContinue
