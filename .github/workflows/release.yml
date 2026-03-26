@@ -11,6 +11,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,6 +46,36 @@ jobs:
           -p:DebugSymbols=false
           -p:Version=${{ steps.version.outputs.VERSION }}
           -o publish
+
+      - name: Sign executable with Authenticode
+        if: env.HAS_SIGNING_CERT == 'true'
+        shell: pwsh
+        run: |
+          $certBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
+          $certPath  = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+
+          try {
+            # Locate signtool.exe from the Windows SDK
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" `
+                          -Recurse -Filter "signtool.exe" |
+                        Where-Object { $_.FullName -match "x64" } |
+                        Sort-Object FullName -Descending |
+                        Select-Object -First 1 -ExpandProperty FullName
+
+            # Sign all .exe and .dll files in the publish folder
+            Get-ChildItem publish -Include *.exe,*.dll -Recurse | ForEach-Object {
+              & $signtool sign /f $certPath `
+                               /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" `
+                               /tr https://timestamp.digicert.com `
+                               /td sha256 `
+                               /fd sha256 `
+                               /v $_.FullName
+            }
+          }
+          finally {
+            Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Create release zip
         shell: pwsh
