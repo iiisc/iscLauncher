@@ -18,11 +18,11 @@
 ---
 
 <p align="center">
-  <img src="Assets/image.jpg" alt="iscLauncher main view" width="800" />
+  <img src="Assets/screenshot-main.jpg" alt="iscLauncher main view" width="800" />
 </p>
 
 <p align="center">
-  <img src="Assets/image%20(1).jpg" alt="iscLauncher detail view" width="800" />
+  <img src="Assets/screenshot-detail.jpg" alt="iscLauncher detail view" width="800" />
 </p>
 
 ---
