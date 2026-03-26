@@ -49,7 +49,7 @@
 
             <!-- Left Column: Essentials -->
             <StackPanel Grid.Column="0" Spacing="16">
-                <TextBlock Text="🗡 ESSENTIALS"
+                <TextBlock Text="ESSENTIALS"
                            FontFamily="{StaticResource DisplayFont}"
                            FontSize="9"
                            CharacterSpacing="150"
@@ -122,7 +122,7 @@
 
             <!-- Right Column: Connection & Advanced -->
             <StackPanel Grid.Column="1" Spacing="16">
-                <TextBlock Text="⚔ CONNECTION"
+                <TextBlock Text="CONNECTION"
                            FontFamily="{StaticResource DisplayFont}"
                            FontSize="9"
                            CharacterSpacing="150"
@@ -173,7 +173,7 @@
                            Opacity="0.5"
                            Margin="0,4,0,0"/>
 
-                <TextBlock Text="⚙ ADVANCED"
+                <TextBlock Text="ADVANCED"
                            FontFamily="{StaticResource DisplayFont}"
                            FontSize="9"
                            CharacterSpacing="150"
@@ -217,7 +217,7 @@
                            Opacity="0.5"
                            Margin="0,4,0,0"/>
 
-                <TextBlock Text="🔄 ADDON SYNC"
+                <TextBlock Text="ADDON SYNC"
                            FontFamily="{StaticResource DisplayFont}"
                            FontSize="9"
                            CharacterSpacing="150"

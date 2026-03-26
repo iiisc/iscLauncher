@@ -16,6 +16,15 @@
     </Window.SystemBackdrop>
 
     <Grid Background="{StaticResource BgBrush}">
+        <Grid.Resources>
+            <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource GoldColor}"/>
+            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource GoldLightColor}"/>
+            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource GoldDarkColor}"/>
+            <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource TextDimColor}"/>
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource Surface3Color}"/>
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource Surface2Color}"/>
+            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource BorderHighColor}"/>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -107,7 +116,7 @@
                                             <Grid>
                                                 <!-- Fallback icon -->
                                                 <FontIcon x:Name="FallbackIcon"
-                                                          Glyph="&#xE7FC;"
+                                                          Glyph="&#xE72E;"
                                                           FontSize="20"
                                                           Foreground="{StaticResource GoldBrush}"
                                                           Opacity="0.5"
@@ -142,29 +151,29 @@
                                                         Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasServerInfo)}">
                                                 <StackPanel Orientation="Horizontal" Spacing="4" 
                                                             Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasRealmName)}">
-                                                    <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource EmeraldBrush}" />
+                                                    <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
                                                     <TextBlock Text="{x:Bind RealmName}"
                                                                FontFamily="{StaticResource BodyFont}"
                                                                FontSize="10"
-                                                               Foreground="{StaticResource EmeraldLightBrush}" />
+                                                               Foreground="{StaticResource TextMutedBrush}" />
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Spacing="4"
                                                             Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasAccountName)}">
-                                                    <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                                    <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
                                                     <TextBlock Text="{x:Bind AccountName}"
                                                                FontFamily="{StaticResource BodyFont}"
                                                                FontSize="10"
-                                                               Foreground="{StaticResource GoldBrush}" />
+                                                               Foreground="{StaticResource TextMutedBrush}" />
                                                 </StackPanel>
                                             </StackPanel>
                                             <!-- Sync Badge -->
                                             <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0"
                                                         Visibility="{x:Bind converters:BoolToVisibilityConverter.ToVisibility(HasSyncRepo)}">
-                                                <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                                <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
                                                 <TextBlock Text="Sync"
                                                            FontFamily="{StaticResource BodyFont}"
                                                            FontSize="10"
-                                                           Foreground="{StaticResource GoldBrush}" />
+                                                           Foreground="{StaticResource TextMutedBrush}" />
                                             </StackPanel>
                                         </StackPanel>
 
@@ -213,7 +222,7 @@
 
                 <!-- Computer Name -->
                 <StackPanel Grid.Row="2" Spacing="4" Margin="16,0,16,12">
-                    <TextBlock Text="🖥 THIS COMPUTER"
+                    <TextBlock Text="THIS COMPUTER"
                                FontFamily="{StaticResource DisplayFont}"
                                FontSize="8"
                                CharacterSpacing="150"
@@ -304,7 +313,7 @@
                             <PivotItem>
                                 <PivotItem.Header>
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <FontIcon Glyph="&#xE7FC;" FontSize="12"/>
+                                        <FontIcon Glyph="&#xE10F;" FontSize="12"/>
                                         <TextBlock Text="General"
                                                    FontFamily="{StaticResource DisplayFont}"
                                                    FontSize="12"/>
@@ -314,7 +323,7 @@
                                     <StackPanel Spacing="14">
                                         <!-- Executable -->
                                         <StackPanel Spacing="6">
-                                            <TextBlock Text="🗡 EXECUTABLE"
+                                            <TextBlock Text="EXECUTABLE"
                                                    FontFamily="{StaticResource DisplayFont}"
                                                    FontSize="9"
                                                    CharacterSpacing="150"
@@ -342,7 +351,7 @@
 
                                         <!-- Connection -->
                                         <StackPanel Spacing="8">
-                                            <TextBlock Text="⚔ CONNECTION"
+                                            <TextBlock Text="CONNECTION"
                                                    FontFamily="{StaticResource DisplayFont}"
                                                    FontSize="9"
                                                    CharacterSpacing="150"
@@ -389,7 +398,7 @@
                             <PivotItem>
                                 <PivotItem.Header>
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <FontIcon Glyph="&#xE713;" FontSize="12"/>
+                                        <FontIcon Glyph="&#xE8D7;" FontSize="12"/>
                                         <TextBlock Text="Automation"
                                                    FontFamily="{StaticResource DisplayFont}"
                                                    FontSize="12"/>
@@ -498,16 +507,7 @@
 
                                         <HyperlinkButton x:Name="OpenRepoLink"
                                                          Click="OnOpenRepoClick"
-                                                         Padding="0"
-                                                         Margin="0,-4,0,0">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <FontIcon Glyph="&#xE774;" FontSize="11" Foreground="{StaticResource GoldBrush}"/>
-                                                <TextBlock Text="Open repo in browser"
-                                                           FontFamily="{StaticResource BodyFont}"
-                                                           FontSize="10"
-                                                           Foreground="{StaticResource GoldBrush}"/>
-                                            </StackPanel>
-                                        </HyperlinkButton>
+                                                         Visibility="Collapsed"/>
 
                                         <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
                                             <Button x:Name="SyncAddonsButton"
@@ -547,6 +547,16 @@
                                                                FontFamily="{StaticResource DisplayFont}"
                                                                FontSize="12"/>
                                                 </StackPanel>
+                                            </Button>
+
+                                            <Button x:Name="OpenRepoButton"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Height="40"
+                                                    Width="40"
+                                                    Padding="0"
+                                                    Click="OnOpenRepoClick"
+                                                    ToolTipService.ToolTip="Open repo in browser">
+                                                <FontIcon Glyph="&#xE774;" FontSize="14"/>
                                             </Button>
 
                                             <ProgressRing x:Name="SyncProgressRing"
@@ -600,6 +610,14 @@
                                          Height="56"
                                          Padding="40,0"
                                          Click="OnDetailLaunchClick">
+                                    <Button.Resources>
+                                        <SolidColorBrush x:Key="ButtonForeground" Color="#C8F0D8"/>
+                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFF"/>
+                                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#A0D0B0"/>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2D5A46"/>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1E4030"/>
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+                                    </Button.Resources>
                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                         <TextBlock x:Name="LaunchButtonIcon" Text="⚔" FontSize="18" />
                                         <TextBlock x:Name="LaunchButtonText" Text="Launch" 
@@ -629,6 +647,14 @@
                                         Height="56"
                                         Padding="40,0"
                                         Click="OnSaveEditClick">
+                                    <Button.Resources>
+                                        <SolidColorBrush x:Key="ButtonForeground" Color="#C8F0D8"/>
+                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFF"/>
+                                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#A0D0B0"/>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2D5A46"/>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1E4030"/>
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+                                    </Button.Resources>
                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                         <FontIcon Glyph="&#xE74E;" FontSize="16" Foreground="#C8F0D8"/>
                                         <TextBlock Text="Save Changes" 

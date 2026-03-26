@@ -246,7 +246,8 @@ public sealed partial class MainWindow : Window
         EditSyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
         EditSyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
         AddonSyncPivotItem.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
-        OpenRepoLink.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
+        OpenRepoLink.Visibility = Visibility.Collapsed;
+        OpenRepoButton.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
         UpdateLastSyncedText(game);
 
         // Reset to General tab when switching games
@@ -300,7 +301,8 @@ public sealed partial class MainWindow : Window
         AddonSyncPivotItem.Visibility = isEditing ? Visibility.Visible :
             (GameListView.SelectedItem is GameEntry g && g.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
         SyncButtonsPanel.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        OpenRepoLink.Visibility = isEditing ? Visibility.Collapsed :
+        OpenRepoLink.Visibility = Visibility.Collapsed;
+        OpenRepoButton.Visibility = isEditing ? Visibility.Collapsed :
             (GameListView.SelectedItem is GameEntry g2 && g2.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
     }
 
