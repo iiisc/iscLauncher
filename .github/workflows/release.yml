@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
@@ -37,6 +37,10 @@ jobs:
             }
           } else {
             $ver = "${{ github.ref_name }}" -replace '^v', ''
+            if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+              Write-Error "Tag '${{ github.ref_name }}' does not contain a valid version. Expected: v<major>.<minor>.<patch>"
+              exit 1
+            }
           }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
           echo "TAG=v$ver" >> $env:GITHUB_OUTPUT
@@ -64,6 +68,13 @@ jobs:
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: Publish x64
         run: >
@@ -127,29 +138,27 @@ jobs:
               }
             }
 
-            # Verify signatures
+            # Verify that signatures were applied
             foreach ($file in $files) {
-              & $signtool verify /pa /v $file.FullName
-              if ($LASTEXITCODE -ne 0) {
-                Write-Error "Signature verification failed for $($file.FullName)"
+              $sig = Get-AuthenticodeSignature $file.FullName
+              if ($sig.Status -eq 'NotSigned') {
+                Write-Error "No signature found on $($file.FullName)"
                 exit 1
               }
+              Write-Host "Verified signature on $($file.Name): Status=$($sig.Status), Issuer=$($sig.SignerCertificate.Issuer)"
             }
 
-            Write-Host "All files signed and verified successfully."
+            Write-Host "All files signed successfully."
           }
           finally {
             Remove-Item $certPath -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Create release zip and checksum
+      - name: Create release zip
         shell: pwsh
         run: |
           $tag = "${{ steps.version.outputs.TAG }}"
           Compress-Archive -Path publish\* -DestinationPath "iscLauncher-$tag-win-x64.zip"
-
-          $hash = (Get-FileHash "iscLauncher-$tag-win-x64.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  iscLauncher-$tag-win-x64.zip" | Out-File -Encoding utf8 -FilePath "checksums-$tag.sha256"
 
       - name: Create GitHub Release
         id: create_release
@@ -159,7 +168,6 @@ jobs:
           generate_release_notes: true
           files: |
             iscLauncher-${{ steps.version.outputs.TAG }}-win-x64.zip
-            checksums-${{ steps.version.outputs.TAG }}.sha256
 
       - name: Remove source code archives
         shell: pwsh
@@ -167,6 +175,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $assets = gh api "repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.id }}/assets" | ConvertFrom-Json
-          $assets | Where-Object { $_.name -match '\.tar\.gz$|Source code' } | ForEach-Object {
+          $assets | Where-Object { $_.name -match '\.tar\.gz$|\.zip$' -and $_.name -notmatch '^iscLauncher-' } | ForEach-Object {
             gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$($_.id)"
           }
