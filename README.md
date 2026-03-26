@@ -113,4 +113,4 @@ Have an idea or found a bug? [Open an issue](https://github.com/iiisc/iscLaunche
 
 ## License
 
-This project is provided as-is. See the repository for license details.
+This project is licensed under the [MIT License](LICENSE).
