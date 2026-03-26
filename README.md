@@ -15,6 +15,10 @@
 ---
 
 <p align="center">
+  <img src="Assets/readme_picture2.png" alt="iscLauncher hero" width="800" />
+</p>
+
+<p align="center">
   <img src="Assets/readme_picture1.png" alt="iscLauncher hero" width="800" />
 </p>
 
