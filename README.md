@@ -101,6 +101,25 @@ dotnet publish iscLauncher.csproj -c Release -r win-x64 ^
   -o publish
 ```
 
+### Code Signing (Release Builds)
+
+The release workflow automatically signs the executable with Authenticode when the required secrets are configured. This removes the "Windows protected your PC" SmartScreen warning for end users.
+
+To enable signing, add two **repository secrets** under **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|--------|-------------|
+| `SIGNING_CERTIFICATE` | Base64-encoded `.pfx` code-signing certificate |
+| `SIGNING_CERTIFICATE_PASSWORD` | Password for the `.pfx` file |
+
+To convert a `.pfx` file to base64:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx")) | Set-Clipboard
+```
+
+If the secrets are not set the release workflow still succeeds — it simply skips the signing step.
+
 </details>
 
 ---
