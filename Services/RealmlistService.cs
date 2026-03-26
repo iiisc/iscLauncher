@@ -153,8 +153,12 @@ public class RealmlistService
                 if (replaced != content)
                 {
                     content = replaced;
-                    updated = true;
                 }
+                else
+                {
+                    content += $@"{Environment.NewLine}SET realmList ""{realmlistAddress}""";
+                }
+                updated = true;
             }
 
             if (updated)

@@ -209,7 +209,8 @@ public class AddonSyncService
         // Build a descriptive commit message with addon list in body
         var charName = Path.GetFileName(sourceCharacterPath);
         var serverName = Path.GetFileName(Path.GetDirectoryName(sourceCharacterPath) ?? "");
-        var subject = $"sync: {game.Name} — {addOnsCopied} addon(s), template from {charName}@{serverName}";
+        var pcName = await _gameRepository.GetComputerNameAsync();
+        var subject = $"sync: {game.Name} — {addOnsCopied} addon(s), template from {charName}@{serverName} [{pcName}]";
 
         var bodyLines = new List<string> { "", "Addons:" };
         foreach (var name in addonNames.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
@@ -403,7 +404,8 @@ public class AddonSyncService
         if (await _git.IsStatusCleanAsync(cachePath, ct))
             return new SyncResult(true, "Already at that commit — nothing to rollback.", 0, 0);
 
-        var subject = $"rollback: {game.Name} — restore to {commitHash[..Math.Min(7, commitHash.Length)]}: {commitMessage}";
+        var pcName = await _gameRepository.GetComputerNameAsync();
+        var subject = $"rollback: {game.Name} — restore to {commitHash[..Math.Min(7, commitHash.Length)]}: {commitMessage} [{pcName}]";
         var rollbackMessage = string.IsNullOrWhiteSpace(commitBody) ? subject : $"{subject}\n\n{commitBody}";
         var commitResult = await _git.CommitAsync(cachePath, rollbackMessage, ct);
         if (!commitResult.Success)

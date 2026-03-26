@@ -20,7 +20,7 @@ public class GameRepository
         WriteIndented = true
     };
 
-    private readonly SemaphoreSlim _fileLock = new(1, 1);
+    private static readonly SemaphoreSlim _fileLock = new(1, 1);
 
     public async Task<GameLibrary> LoadAsync()
     {
@@ -88,6 +88,29 @@ public class GameRepository
         {
             var library = await LoadAsync();
             library.Games.RemoveAll(g => g.Id == gameId);
+            await SaveAsync(library);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
+    public async Task<string> GetComputerNameAsync()
+    {
+        var library = await LoadAsync();
+        return string.IsNullOrWhiteSpace(library.ComputerName)
+            ? Environment.MachineName
+            : library.ComputerName;
+    }
+
+    public async Task SetComputerNameAsync(string name)
+    {
+        await _fileLock.WaitAsync();
+        try
+        {
+            var library = await LoadAsync();
+            library.ComputerName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             await SaveAsync(library);
         }
         finally
