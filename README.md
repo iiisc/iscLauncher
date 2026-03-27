@@ -37,6 +37,15 @@ Manage multiple WoW private server installations from one place. iscLauncher han
 
 ---
 
+## Uninstallation
+
+1. Delete the folder you extracted iscLauncher into.
+2. Open **Credential Manager** (Control Panel → Credential Manager → Windows Credentials) and remove any entries prefixed with `IscLauncher`.
+
+No registry keys or other system locations are modified by iscLauncher.
+
+---
+
 ## Quick Start
 
 1. Click **+ Add Game**, select the WoW `.exe`, and fill in the server address, account, and realm.
@@ -72,6 +81,29 @@ A configurable **computer name** is included in each commit message to identify 
 ## Contributing
 
 Open an [issue](https://github.com/iiisc/iscLauncher/issues) or submit a pull request against the `master` branch.
+
+---
+
+## Code signing policy
+
+> **Status:** Code signing certificate application pending with [SignPath Foundation](https://signpath.org).
+
+Once issued, releases will be signed with a certificate provided by SignPath Foundation.
+All signed binaries are built directly from this repository via an automated, verifiable pipeline.
+
+**Team**
+
+| Role | Member |
+|------|--------|
+| Author / Committer | [Carl Lindbom](https://github.com/iiisc) |
+| Reviewer | [Carl Lindbom](https://github.com/iiisc) |
+| Approver | [Carl Lindbom](https://github.com/iiisc) |
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+Addon sync communicates exclusively with the GitHub repository URL entered by the user.
+Passwords are stored locally in Windows Credential Manager and are never transmitted.
 
 ---
 
