@@ -1,132 +1,125 @@
 # iscLauncher
 
-One launcher for all your WoW private servers.
+> Unified launcher for World of Warcraft private servers.
 
 [![Release](https://img.shields.io/github/v/release/iiisc/iscLauncher?style=flat-square&color=C9A84C&label=Release)](https://github.com/iiisc/iscLauncher/releases/latest)
-![Windows 10+](https://img.shields.io/badge/Windows%2010+-0078D6?style=flat-square&logo=windows&logoColor=white)
 [![Downloads](https://img.shields.io/github/downloads/iiisc/iscLauncher/total?style=flat-square&color=3D7A5C&label=Downloads)](https://github.com/iiisc/iscLauncher/releases/latest)
+![Windows 10 1809+](https://img.shields.io/badge/Windows%2010%201809+-0078D6?style=flat-square&logo=windows&logoColor=white)
 
 ![iscLauncher](Assets/iscLauncherScreenshot.png)
 
----
-
-Tired of juggling multiple WoW clients, editing realmlist files by hand, and retyping your password every time you log in? iscLauncher handles all of that for you.
-
-Add your games, hit **Launch**, and you're in.
+iscLauncher manages multiple WoW private server installations from a single interface. It handles realmlist configuration, account pre-fill, credential-secured auto-login, and addon synchronisation across machines — eliminating all manual file editing.
 
 ---
 
-## What It Does
+## Table of Contents
 
-**All your servers in one place** — Keep every WoW installation (Warmane, ChromieCraft, Turtle WoW, etc.) organized in a single list. Each game shows its own icon, server name, and account so you always know which is which.
-
-**One-click launch** — No more hunting for realmlist files. iscLauncher automatically sets the correct server address, account name, and realm before it opens the game. Just click Launch.
-
-**Auto-login** — Store your password once and iscLauncher types it in for you when the login screen appears. Passwords are stored in Windows Credential Manager — never in a text file, never on disk.
-
-**Addon sync across PCs** — Play on a desktop and a laptop? Link a private GitHub repo and iscLauncher will keep your addons and per-character settings (keybinds, macros, UI layout) in sync between machines. Pull, push, or rollback with one click.
-
----
-
-## Getting Started
-
-### Download
-
-1. Head to the [Latest Release](https://github.com/iiisc/iscLauncher/releases/latest)
-2. Download the `.zip` file
-3. Extract it anywhere and run **iscLauncher.exe**
-
-No installer required. The release is a self-contained single-file executable.
-
-### Add Your First Game
-
-1. Click **+ Add Game** and browse to your WoW `.exe`
-2. Fill in the server address (realmlist), your account name, and realm
-3. Enter your password — it's stored securely on your machine
-4. Double-click the game card or press **Launch**
-
-### Sync Addons (Optional)
-
-If you play on more than one PC:
-
-1. Create a **private** repository on GitHub (e.g. `my-wow-sync`)
-2. Open the game's settings, go to the **Addon Sync** tab, and paste the repo URL
-3. Use **Push** on your main PC to upload your addons and settings
-4. Use **Pull** on your other PC to download them
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Addon Sync](#addon-sync)
+- [Security Model](#security-model)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Security
+## Features
 
-- Passwords are stored in **Windows Credential Manager**, the same place Windows keeps your Wi-Fi passwords. They never touch a file on disk.
-- If you use the clipboard option, the password is automatically cleared after 30 seconds.
-- Deleting a game entry also removes its stored password.
-
----
-
-## Tips
-
-- **Startup delay** — If the launcher types your password before the login screen is ready, increase the delay in the game's Automation settings.
-- **Input method** — *SendKeys* works best for most WoW clients. Switch to *Clipboard* if you run into issues with special characters.
-- **Computer name** — The name shown at the bottom-left is used during addon sync so each PC can keep its own keybindings. Give each machine a unique name.
+| Feature | Description |
+|---------|-------------|
+| **Multi-server library** | Add any number of WoW installations. Each entry stores its executable path, server address, account name, and realm independently. |
+| **Automatic realmlist update** | Before launch, `realmlist.wtf` is rewritten across all locale directories found under `Data\`. Falls back to creating `Data\enUS\realmlist.wtf` when none exist. |
+| **WTF config pre-fill** | Account name, realm name, and server address are written to `WTF\Config.wtf` before the game process starts. |
+| **Credential-backed auto-login** | Passwords are stored in Windows Credential Manager. On launch, iscLauncher polls for the game window (up to 15 seconds), then delivers the password via Win32 `SendInput` or the clipboard. |
+| **Smart input detection** | Scans the game directory for DirectX, OpenGL, Vulkan, Steam, and known engine DLLs to automatically suggest the correct input method. |
+| **Addon sync** | Link a private GitHub repository to push and pull `Interface\AddOns` and `WTF` settings between machines, with one-click rollback to any previous commit. |
 
 ---
 
-## Building from Source
+## Requirements
 
-<details>
-<summary>For developers</summary>
+| | Minimum |
+|---|---------|
+| **OS** | Windows 10 version 1809 (build 17763) |
+| **Architecture** | x86 · x64 · ARM64 |
+| **Runtime** | None — release is self-contained |
 
-### Prerequisites
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (Windows 10.0.19041+)
-- Visual Studio 2022 with the **Windows App SDK** workload, or the .NET CLI
+---
 
-### Build & Run
-```bash
-git clone https://github.com/iiisc/iscLauncher.git
-cd iscLauncher
-dotnet build iscLauncher.csproj -c Debug
-dotnet run --project iscLauncher.csproj
-```
+## Installation
 
-### Publish a Portable Executable
-```bash
-dotnet publish iscLauncher.csproj -c Release -r win-x64 ^
-  -p:PublishSingleFile=true ^
-  -p:SelfContained=true ^
-  -p:WindowsAppSDKSelfContained=true ^
-  -p:WindowsPackageType=None ^
-  -p:IncludeNativeLibrariesForSelfExtract=true ^
-  -p:EnableCompressionInSingleFile=true ^
-  -o publish
-```
+1. Go to the [Latest Release](https://github.com/iiisc/iscLauncher/releases/latest).
+2. Download the `.zip` archive.
+3. Extract to any folder and run **iscLauncher.exe**.
 
-### Code Signing (Release Builds)
+No installer or additional runtime is required.
 
-The release workflow automatically signs the executable with Authenticode when the required secrets are configured. This removes the "Windows protected your PC" SmartScreen warning for end users.
+> **SmartScreen warning:** The binary is self-signed. If Windows displays a "Windows protected your PC" prompt, click **More info → Run anyway** to proceed.
 
-To enable signing, add two **repository secrets** under **Settings → Secrets and variables → Actions**:
+---
 
-| Secret | Description |
-|--------|-------------|
-| `SIGNING_CERTIFICATE` | Base64-encoded `.pfx` code-signing certificate |
-| `SIGNING_CERTIFICATE_PASSWORD` | Password for the `.pfx` file |
+## Quick Start
 
-To convert a `.pfx` file to base64:
+### Add a game
 
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx")) | Set-Clipboard
-```
+1. Click **+ Add Game** and select the WoW `.exe`.
+2. Enter the **server address** (realmlist), **account name**, and **realm name**.
+3. Enter your password — it is stored in Windows Credential Manager, not written to disk.
+4. Double-click the game card or click **Launch**.
 
-If the secrets are not set the release workflow still succeeds — it simply skips the signing step.
+### What happens on launch
 
-</details>
+1. `realmlist.wtf` is updated with the configured server address.
+2. `WTF\Config.wtf` is updated with the account and realm name.
+3. The game process is started.
+4. iscLauncher waits for the login window, then delivers the password automatically.
+
+---
+
+## Addon Sync
+
+Addon sync requires a **private** GitHub repository.
+
+1. Create a private repo (e.g. `my-wow-addons`).
+2. Open a game's settings and paste the repository URL into the **Addon Sync** tab.
+3. **Push** — uploads your `Interface\AddOns` and `WTF` folder to the repo.
+4. **Pull** — downloads and applies them on another machine.
+5. **Rollback** — reverts to the previous commit if a sync causes issues.
+
+Each machine is identified by a configurable **computer name** (shown at the bottom-left of the UI), keeping per-machine keybindings separate from shared addon data.
+
+---
+
+## Security Model
+
+| Aspect | Detail |
+|--------|--------|
+| **Password storage** | Windows Credential Manager, keyed as `iscLauncher_<game-id>`. Never written to disk or sent over the network. |
+| **Clipboard mode** | The password is cleared from the clipboard automatically after **30 seconds**, and immediately on app shutdown. |
+| **Credential removal** | Deleting a game entry removes its credential from Credential Manager. |
+| **Addon sync transport** | GitHub HTTPS only. iscLauncher does not store sync credentials; authentication uses your existing Git configuration. |
+
+---
+
+## Troubleshooting
+
+| Symptom | Resolution |
+|---------|-----------|
+| Password typed before the login screen is ready | Increase **Startup Delay** in the game's Automation settings. |
+| Special characters are entered incorrectly | Switch **Input Method** from *SendKeys* to *Clipboard*. |
+| Game launches but no password is entered | The launcher waits up to 15 seconds for the window to appear. Increase startup delay, or verify the window title pattern is correct. |
+| Auto-login fails when game is run as administrator | Run iscLauncher as administrator so `SendInput` can target an elevated window. |
+| Addon sync fails | Verify the repository URL, confirm the repo is private, and ensure your Git credentials have push/pull access. |
 
 ---
 
 ## Contributing
 
-Have an idea or found a bug? [Open an issue](https://github.com/iiisc/iscLauncher/issues) or submit a pull request.
+Bug reports and feature requests are welcome via [GitHub Issues](https://github.com/iiisc/iscLauncher/issues).
+Pull requests should target the `master` branch.
 
 ---
 
