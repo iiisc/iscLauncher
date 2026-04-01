@@ -84,20 +84,9 @@ Open an [issue](https://github.com/iiisc/iscLauncher/issues) or submit a pull re
 
 ---
 
-## Code signing policy
+## Code signing
 
-> **Status:** Code signing certificate application pending with [SignPath Foundation](https://signpath.org).
-
-Once issued, releases will be signed with a certificate provided by SignPath Foundation.
-All signed binaries are built directly from this repository via an automated, verifiable pipeline.
-
-**Team**
-
-| Role | Member |
-|------|--------|
-| Author / Committer | [Carl Lindbom](https://github.com/iiisc) |
-| Reviewer | [Carl Lindbom](https://github.com/iiisc) |
-| Approver | [Carl Lindbom](https://github.com/iiisc) |
+Releases are self-signed. Windows SmartScreen may warn on first launch — click **More info → Run anyway** to proceed.
 
 **Privacy policy**
 
