@@ -636,14 +636,8 @@ public sealed partial class MainWindow : Window
             repoAddons = [];
         }
 
-        // Count characters that will be overwritten
-        var gameDir = System.IO.Path.GetDirectoryName(game.ExecutablePath);
-        var charCount = 0;
-        if (!string.IsNullOrEmpty(gameDir))
-        {
-            var wtfAccountDir = System.IO.Path.Combine(gameDir, "WTF", "Account");
-            charCount = AddonSyncService.EnumerateCharacterFolders(wtfAccountDir).Count();
-        }
+        // Count characters available in the repo snapshot
+        var charCount = _addonSyncService.GetRepoCharacterCount(game);
 
         if (await SyncPullDialog.ShowAsync(Content.XamlRoot, repoAddons, charCount) != ContentDialogResult.Primary)
             return;
@@ -677,20 +671,7 @@ public sealed partial class MainWindow : Window
     {
         if (GameListView.SelectedItem is not GameEntry game) return;
 
-        var gameDir = System.IO.Path.GetDirectoryName(game.ExecutablePath);
-        if (string.IsNullOrEmpty(gameDir)) return;
-
-        var wtfAccountDir = System.IO.Path.Combine(gameDir, "WTF", "Account");
-        var characters = AddonSyncService.EnumerateCharacterFolders(wtfAccountDir).ToList();
-
-        if (characters.Count == 0)
-        {
-            ShowStatus("No character folders found under WTF/Account/.", false);
-            return;
-        }
-
-        var characterPath = await SyncPushDialog.ShowAsync(Content.XamlRoot, wtfAccountDir, characters);
-        if (string.IsNullOrEmpty(characterPath))
+        if (!await SyncPushDialog.ShowAsync(Content.XamlRoot))
             return;
 
         _syncCts?.Cancel();
@@ -704,7 +685,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var progress = new Progress<string>(msg => ShowStatus(msg, true));
-            var result = await _addonSyncService.UploadAsync(game, characterPath, progress, ct);
+            var result = await _addonSyncService.UploadAsync(game, progress, ct);
             ShowStatus(result.Message, result.Success);
             UpdateLastSyncedText(game);
         }

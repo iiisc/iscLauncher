@@ -35,7 +35,7 @@ public class GitService
 
         // Empty repos have no branches — clone without --branch
         if (Directory.Exists(targetDir))
-            Directory.Delete(targetDir, true);
+            ForceDeleteDirectory(targetDir);
         return await RunGitAsync($"clone --progress \"{repoUrl}\" \"{targetDir}\"", workingDir: null, ct, progress);
     }
 
@@ -177,5 +177,12 @@ public class GitService
         {
             return new GitResult(false, ex.Message);
         }
+    }
+
+    private static void ForceDeleteDirectory(string path)
+    {
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+        Directory.Delete(path, true);
     }
 }

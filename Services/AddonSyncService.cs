@@ -74,47 +74,30 @@ public class AddonSyncService
             }
         }
 
-        // 5. Sync Account-Level Files
-        progress?.Report("Syncing account settings...");
-        var cacheAccountTemplate = Path.Combine(cachePath, "WTF", "AccountTemplate");
+        // 5. Restore WTF/Account snapshot from repo
+        progress?.Report("Restoring WTF settings...");
+        var charactersSynced = 0;
+        var cacheWtfAccount = Path.Combine(cachePath, "WTF", "Account");
         var wtfAccountDir = Path.Combine(gameDir, "WTF", "Account");
 
-        if (Directory.Exists(cacheAccountTemplate) && Directory.Exists(wtfAccountDir))
+        if (Directory.Exists(cacheWtfAccount))
         {
-            foreach (var accountDir in Directory.GetDirectories(wtfAccountDir))
-            {
-                ct.ThrowIfCancellationRequested();
-                CopyDirectoryRecursive(cacheAccountTemplate, accountDir, excludeBackups: true, ct);
-            }
+            CopyDirectoryRecursive(cacheWtfAccount, wtfAccountDir, excludeBackups: true, ct);
+            charactersSynced = EnumerateCharacterFolders(cacheWtfAccount).Count();
         }
 
-        // 6. Fan-Out Character Settings
-        progress?.Report("Syncing character settings...");
-        var charactersSynced = 0;
-        var cacheCharTemplate = Path.Combine(cachePath, "WTF", "CharacterTemplate");
-
-        if (Directory.Exists(cacheCharTemplate) && Directory.Exists(wtfAccountDir))
-        {
-            foreach (var charPath in EnumerateCharacterFolders(wtfAccountDir))
-            {
-                ct.ThrowIfCancellationRequested();
-                CopyDirectoryRecursive(cacheCharTemplate, charPath, excludeBackups: true, ct);
-                charactersSynced++;
-            }
-        }
-
-        // 7. Update timestamp
+        // 6. Update timestamp
         game.LastSynced = DateTime.UtcNow;
         await _gameRepository.UpdateGameAsync(game);
 
-        var message = $"Synced {addOnsCopied} addon(s), settings applied to {charactersSynced} character(s).";
-        if (!Directory.Exists(wtfAccountDir))
-            message += " No WTF/Account folders found — addons synced only.";
+        var message = charactersSynced > 0
+            ? $"Synced {addOnsCopied} addon(s), {charactersSynced} character(s) restored."
+            : $"Synced {addOnsCopied} addon(s). No WTF snapshot found in repo.";
 
         return new SyncResult(true, message, addOnsCopied, charactersSynced);
     }
 
-    public async Task<SyncResult> UploadAsync(GameEntry game, string sourceCharacterPath, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<SyncResult> UploadAsync(GameEntry game, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         // 1. Validate
         progress?.Report("Checking prerequisites...");
@@ -127,9 +110,6 @@ public class AddonSyncService
         var gameDir = Path.GetDirectoryName(game.ExecutablePath);
         if (string.IsNullOrEmpty(gameDir) || !File.Exists(game.ExecutablePath))
             return new SyncResult(false, "Game executable not found.", 0, 0);
-
-        if (!Directory.Exists(sourceCharacterPath))
-            return new SyncResult(false, $"Character folder not found: {sourceCharacterPath}", 0, 0);
 
         // 2. Clone or Pull
         var cachePath = _git.GetLocalCachePath(game);
@@ -146,7 +126,7 @@ public class AddonSyncService
         var localAddOns = Path.Combine(gameDir, "Interface", "AddOns");
 
         if (Directory.Exists(cacheAddOns))
-            Directory.Delete(cacheAddOns, true);
+            ForceDeleteDirectory(cacheAddOns);
         Directory.CreateDirectory(cacheAddOns);
 
         if (Directory.Exists(localAddOns))
@@ -164,32 +144,23 @@ public class AddonSyncService
         }
         var addOnsCopied = addonNames.Count;
 
-        // 4. Export Account Template
-        progress?.Report("Exporting account settings...");
-        var cacheAccountTemplate = Path.Combine(cachePath, "WTF", "AccountTemplate");
-        var accountDir = FindParentAccountFolder(sourceCharacterPath, gameDir);
+        // 4. Snapshot entire WTF/Account structure
+        progress?.Report("Snapshotting WTF settings...");
+        var cacheWtf = Path.Combine(cachePath, "WTF");
+        var cacheWtfAccount = Path.Combine(cacheWtf, "Account");
+        var localWtfAccount = Path.Combine(gameDir, "WTF", "Account");
 
-        if (Directory.Exists(cacheAccountTemplate))
-            Directory.Delete(cacheAccountTemplate, true);
-        Directory.CreateDirectory(cacheAccountTemplate);
+        if (Directory.Exists(cacheWtf))
+            ForceDeleteDirectory(cacheWtf);
 
-        if (accountDir != null && Directory.Exists(accountDir))
+        var charactersSynced = 0;
+        if (Directory.Exists(localWtfAccount))
         {
-            CopyAccountLevelFiles(accountDir, cacheAccountTemplate, ct);
+            CopyDirectoryRecursive(localWtfAccount, cacheWtfAccount, excludeBackups: true, ct);
+            charactersSynced = EnumerateCharacterFolders(localWtfAccount).Count();
         }
 
-        // 5. Export Character Template
-        progress?.Report("Exporting character settings...");
-        var cacheCharTemplate = Path.Combine(cachePath, "WTF", "CharacterTemplate");
-
-        if (Directory.Exists(cacheCharTemplate))
-            Directory.Delete(cacheCharTemplate, true);
-        Directory.CreateDirectory(cacheCharTemplate);
-
-        CopyDirectoryRecursive(sourceCharacterPath, cacheCharTemplate, excludeBackups: true, ct);
-        var charFileCount = Directory.GetFiles(cacheCharTemplate, "*", SearchOption.AllDirectories).Length;
-
-        // 6. Ensure .gitignore exists
+        // 5. Ensure .gitignore exists
         var gitignorePath = Path.Combine(cachePath, ".gitignore");
         if (!File.Exists(gitignorePath))
         {
@@ -197,20 +168,17 @@ public class AddonSyncService
                 "*.old\n*.bak\n*.lua.bak\nThumbs.db\n.DS_Store\n", ct);
         }
 
-        // 7. Commit & Push
+        // 6. Commit & Push
         progress?.Report("Committing changes...");
         var addResult = await _git.AddAllAsync(cachePath, ct);
         if (!addResult.Success)
             return new SyncResult(false, $"Git add failed: {addResult.Output}", 0, 0);
 
         if (await _git.IsStatusCleanAsync(cachePath, ct))
-            return new SyncResult(true, "Already up to date — nothing to push.", addOnsCopied, 0);
+            return new SyncResult(true, "Already up to date — nothing to push.", addOnsCopied, charactersSynced);
 
-        // Build a descriptive commit message with addon list in body
-        var charName = Path.GetFileName(sourceCharacterPath);
-        var serverName = Path.GetFileName(Path.GetDirectoryName(sourceCharacterPath) ?? "");
         var pcName = await _gameRepository.GetComputerNameAsync();
-        var subject = $"sync: {game.Name} — {addOnsCopied} addon(s), template from {charName}@{serverName} [{pcName}]";
+        var subject = $"sync: {game.Name} — {addOnsCopied} addon(s), {charactersSynced} character(s) [{pcName}]";
 
         var bodyLines = new List<string> { "", "Addons:" };
         foreach (var name in addonNames.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
@@ -227,11 +195,11 @@ public class AddonSyncService
         if (!pushResult.Success)
             return new SyncResult(false, $"Push failed — check that you have write access to the repo. {pushResult.Output}", 0, 0);
 
-        // 8. Update timestamp
+        // 7. Update timestamp
         game.LastSynced = DateTime.UtcNow;
         await _gameRepository.UpdateGameAsync(game);
 
-        return new SyncResult(true, $"Pushed {addOnsCopied} addon(s) and character template ({charFileCount} files).", addOnsCopied, charFileCount);
+        return new SyncResult(true, $"Pushed {addOnsCopied} addon(s) and {charactersSynced} character(s).", addOnsCopied, charactersSynced);
     }
 
     private async Task<GitResult> EnsureCacheRepoAsync(GameEntry game, string cachePath, CancellationToken ct, IProgress<string>? progress)
@@ -245,7 +213,7 @@ public class AddonSyncService
             if (currentRemote != null && !string.Equals(currentRemote.TrimEnd('/'), game.SyncRepoUrl!.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
             {
                 progress?.Report("Repo URL changed — re-cloning...");
-                Directory.Delete(cachePath, true);
+                ForceDeleteDirectory(cachePath);
                 return await _git.CloneAsync(game.SyncRepoUrl!, branch, cachePath, ct);
             }
 
@@ -260,41 +228,6 @@ public class AddonSyncService
         return await _git.CloneAsync(game.SyncRepoUrl!, branch, cachePath, ct, progress);
     }
 
-    private static string? FindParentAccountFolder(string characterPath, string gameDir)
-    {
-        var wtfAccountDir = Path.Combine(gameDir, "WTF", "Account");
-        if (!Directory.Exists(wtfAccountDir))
-            return null;
-
-        // characterPath is e.g. <gameDir>/WTF/Account/ISC3S/Onyxia/Isc
-        // We need the account folder: <gameDir>/WTF/Account/ISC3S
-        var relativePath = Path.GetRelativePath(wtfAccountDir, characterPath);
-        var parts = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (parts.Length >= 1)
-            return Path.Combine(wtfAccountDir, parts[0]);
-
-        return null;
-    }
-
-    private static void CopyAccountLevelFiles(string accountDir, string targetDir, CancellationToken ct)
-    {
-        // Copy files (excluding .old and .bak, and excluding server subdirectories' contents)
-        foreach (var file in Directory.GetFiles(accountDir))
-        {
-            ct.ThrowIfCancellationRequested();
-            if (IsExcludedFile(file)) continue;
-            File.Copy(file, Path.Combine(targetDir, Path.GetFileName(file)), overwrite: true);
-        }
-
-        // Copy SavedVariables subfolder only
-        var savedVarsDir = Path.Combine(accountDir, "SavedVariables");
-        if (Directory.Exists(savedVarsDir))
-        {
-            var targetSavedVars = Path.Combine(targetDir, "SavedVariables");
-            CopyDirectoryRecursive(savedVarsDir, targetSavedVars, excludeBackups: true, ct);
-        }
-    }
-
     private static void CopyDirectoryRecursive(string sourceDir, string targetDir, bool excludeBackups, CancellationToken ct)
     {
         Directory.CreateDirectory(targetDir);
@@ -303,7 +236,10 @@ public class AddonSyncService
         {
             ct.ThrowIfCancellationRequested();
             if (excludeBackups && IsExcludedFile(file)) continue;
-            File.Copy(file, Path.Combine(targetDir, Path.GetFileName(file)), overwrite: true);
+            var destFile = Path.Combine(targetDir, Path.GetFileName(file));
+            if (File.Exists(destFile))
+                File.SetAttributes(destFile, FileAttributes.Normal);
+            File.Copy(file, destFile, overwrite: true);
         }
 
         foreach (var dir in Directory.GetDirectories(sourceDir))
@@ -312,6 +248,13 @@ public class AddonSyncService
             var dirName = Path.GetFileName(dir);
             CopyDirectoryRecursive(dir, Path.Combine(targetDir, dirName), excludeBackups, ct);
         }
+    }
+
+    private static void ForceDeleteDirectory(string path)
+    {
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+        Directory.Delete(path, true);
     }
 
     private static bool IsExcludedFile(string filePath)
@@ -324,7 +267,7 @@ public class AddonSyncService
         return fileName.EndsWith(".lua.bak", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static IEnumerable<string> EnumerateCharacterFolders(string wtfAccountDir)
+    private static IEnumerable<string> EnumerateCharacterFolders(string wtfAccountDir)
     {
         if (!Directory.Exists(wtfAccountDir))
             yield break;
@@ -354,6 +297,13 @@ public class AddonSyncService
 
         await _git.PullAsync(cachePath, ct);
         return await _git.LogAsync(cachePath, 20, ct);
+    }
+
+    public int GetRepoCharacterCount(GameEntry game)
+    {
+        var cachePath = _git.GetLocalCachePath(game);
+        var cacheWtfAccount = Path.Combine(cachePath, "WTF", "Account");
+        return EnumerateCharacterFolders(cacheWtfAccount).Count();
     }
 
     public async Task<List<string>> GetRepoAddonListAsync(GameEntry game, IProgress<string>? progress = null, CancellationToken ct = default)

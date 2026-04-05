@@ -19,7 +19,7 @@ public static class SyncPullDialog
         int characterCount)
     {
         var warningText = characterCount > 0
-            ? $"This will overwrite addon and WTF settings for {characterCount} character(s). Continue?"
+            ? $"This will sync addons and restore {characterCount} character(s) from the repo snapshot. Continue?"
             : "This will sync addons from the repo. Continue?";
 
         var contentPanel = new StackPanel { Spacing = 12 };
@@ -36,7 +36,7 @@ public static class SyncPullDialog
         {
             contentPanel.Children.Add(new TextBlock
             {
-                Text = "⚠ Local character settings will be replaced with the repo template.",
+                Text = "⚠ Local character settings will be overwritten for characters present in the repo snapshot.",
                 FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
                 FontSize = 11,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
