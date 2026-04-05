@@ -26,6 +26,7 @@ public sealed partial class MainWindow : Window
     private readonly CredentialService _credentialService = new();
     private readonly GameLauncherService _gameLauncherService;
     private readonly AddonSyncService _addonSyncService = new(new GitService());
+    private readonly AppUpdateService _updateService = new();
     private readonly ObservableCollection<GameEntry> _games = new();
     private readonly HashSet<Guid> _runningGames = new();
     private GameEntry? _currentEditingGame;
@@ -34,6 +35,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
         _gameLauncherService = new GameLauncherService(_credentialService);
         GameListView.ItemsSource = _games;
 
@@ -772,6 +774,53 @@ public sealed partial class MainWindow : Window
         catch
         {
             // Non-fatal — name will still be used from the TextBox next time
+        }
+    }
+
+    private async void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        UpdateButton.IsEnabled = false;
+        ShowStatus("Checking for updates...", true);
+        try
+        {
+            var result = await _updateService.CheckForUpdateAsync();
+
+            if (!result.UpdateAvailable)
+            {
+                ShowStatus($"You're already on the latest version (v{AppUpdateService.CurrentVersion}).", true);
+                return;
+            }
+
+            if (result.DownloadUrl == null)
+            {
+                ShowStatus($"Update v{result.LatestVersion} is available but has no downloadable asset.", false);
+                return;
+            }
+
+            var dialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Update Available");
+            dialog.Content = $"Version {result.LatestVersion} is available. Download and install now?\n\nThe app will restart after updating.";
+            dialog.PrimaryButtonText = "Update";
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                ShowStatus("Update cancelled.", true);
+                return;
+            }
+
+            var progress = new Progress<double>(p =>
+                ShowStatus($"Downloading update... {(int)(p * 100)}%", true));
+
+            ShowStatus("Downloading update...", true);
+            await _updateService.DownloadAndApplyAsync(result.DownloadUrl, result.AssetName!, progress);
+            Application.Current.Exit();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Update failed: {ex.Message}", false);
+        }
+        finally
+        {
+            UpdateButton.IsEnabled = true;
         }
     }
 }
