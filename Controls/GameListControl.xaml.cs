@@ -78,7 +78,9 @@ public sealed partial class GameListControl : UserControl
     {
         OptionsButton.BorderBrush = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "BorderBrush"];
         OptionsButton.BorderThickness = new Thickness(selected ? 2 : 1);
-        OptionsButton.Background = (Brush)Application.Current.Resources[selected ? "Surface3Brush" : "Surface2Brush"];
+        OptionsButton.Background = selected
+            ? (Brush)Application.Current.Resources["Surface3Brush"]
+            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         OptionsButtonIcon.Foreground = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "TextMutedBrush"];
     }
 

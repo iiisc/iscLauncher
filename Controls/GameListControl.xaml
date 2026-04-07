@@ -171,9 +171,8 @@
                     Click="OnOptionsClick"
                     Style="{StaticResource AddGameButtonStyle}"
                     Height="56"
-                    Padding="0"
                     ToolTipService.ToolTip="Options">
-                <FontIcon x:Name="OptionsButtonIcon" Glyph="&#xE713;" FontSize="16" Foreground="{StaticResource TextMutedBrush}"/>
+                <FontIcon x:Name="OptionsButtonIcon" Glyph="&#xE713;" FontSize="16"/>
             </Button>
         </Grid>
     </Grid>
