@@ -1,22 +1,15 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
-using iscLauncher.Dialogs;
-using iscLauncher.Helpers;
+using iscLauncher.Controls;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml.Media.Imaging;
 using WinRT.Interop;
 
 namespace iscLauncher;
@@ -29,103 +22,231 @@ public sealed partial class MainWindow : Window
     private readonly AddonSyncService _addonSyncService = new(new GitService());
     private readonly AppUpdateService _updateService = new();
     private readonly ObservableCollection<GameEntry> _games = new();
-    private readonly HashSet<Guid> _runningGames = new();
-    private GameEntry? _currentEditingGame;
-    private CancellationTokenSource? _syncCts;
-    private UpdateCheckResult? _pendingUpdate;
-    private CancellationTokenSource? _updateCts;
     private bool _checkUpdatesOnStartup;
-    private bool _suppressSettingsSave;
 
     public MainWindow()
     {
         InitializeComponent();
-        VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
         _gameLauncherService = new GameLauncherService(_credentialService);
-        GameListView.ItemsSource = _games;
+        VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
+
+        var hwnd = WindowNative.GetWindowHandle(this);
+
+        // Inject services
+        GameList.SetGames(_games);
+
+        GameDetail.GameRepository = _gameRepository;
+        GameDetail.CredentialService = _credentialService;
+        GameDetail.GameLauncherService = _gameLauncherService;
+        GameDetail.AddonSyncService = _addonSyncService;
+        GameDetail.OwnerHwnd = hwnd;
+
+        OptionsPanel.GameRepository = _gameRepository;
+        OptionsPanel.CredentialService = _credentialService;
+        OptionsPanel.AppUpdateService = _updateService;
+        OptionsPanel.OwnerHwnd = hwnd;
+        OptionsPanel.Games = _games;
+
+        AddGamePanel.GameRepository = _gameRepository;
+        AddGamePanel.CredentialService = _credentialService;
+        AddGamePanel.OwnerHwnd = hwnd;
+
+        // Wire events
+        GameList.GameSelected     += OnGameSelected;
+        GameList.LaunchRequested  += OnLaunchRequested;
+        GameList.DeleteConfirmed  += OnDeleteConfirmed;
+        GameList.AddGameRequested += OnAddGameRequested;
+        GameList.OptionsRequested += OnOptionsRequested;
+
+        GameDetail.GameSaved      += OnGameSaved;
+        GameDetail.EscapeRequested += OnDetailEscapeRequested;
+
+        OptionsPanel.CloseRequested               += OnOptionsCloseRequested;
+        OptionsPanel.LibraryImported              += OnLibraryImported;
+        OptionsPanel.IconCacheCleared             += OnIconCacheCleared;
+        OptionsPanel.CheckUpdatesOnStartupChanged += (_, v) => _checkUpdatesOnStartup = v;
+
+        AddGamePanel.GameAdded  += OnGameAdded;
+        AddGamePanel.Cancelled  += OnAddGameCancelled;
 
         Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
 
-        // Hook into ListView loaded event to update selection visuals
-        GameListView.Loaded += (s, e) =>
-        {
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-            {
-                UpdateSelectionVisuals();
-            });
-        };
+        GameList.Loaded += (_, _) =>
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => GameList.UpdateSelectionVisuals());
 
-        // Set window size and custom title bar
         SetWindowSize(900, 650);
         SetupCustomTitleBar();
-
-        _ = LoadGamesAsync();
+        _ = LoadAsync();
     }
 
-    private void SetWindowSize(int width, int height)
+    // ── Navigation ────────────────────────────────────────────────────────────
+
+    private void ShowDetail(GameEntry game, string? statusMessage = null)
     {
-        var hwnd = WindowNative.GetWindowHandle(this);
-        var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-        var appWindow = AppWindow.GetFromWindowId(windowId);
-        // Guard against null AppWindow (can happen in some host scenarios)
-        if (appWindow != null)
+        EmptyState.Visibility   = Visibility.Collapsed;
+        GameDetail.Visibility   = Visibility.Visible;
+        OptionsPanel.Visibility = Visibility.Collapsed;
+        AddGamePanel.Visibility = Visibility.Collapsed;
+        GameList.SetAddGameHighlight(false);
+        GameList.SetOptionsHighlight(false);
+        GameDetail.LoadGame(game, statusMessage);
+    }
+
+    private void ShowEmptyState()
+    {
+        EmptyState.Visibility   = Visibility.Visible;
+        GameDetail.Visibility   = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Collapsed;
+        AddGamePanel.Visibility = Visibility.Collapsed;
+        GameList.SetAddGameHighlight(false);
+        GameList.SetOptionsHighlight(false);
+    }
+
+    private void ShowAddGame()
+    {
+        EmptyState.Visibility   = Visibility.Collapsed;
+        GameDetail.Visibility   = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Collapsed;
+        AddGamePanel.Visibility = Visibility.Visible;
+        GameList.SetSelectedGame(null);
+        GameList.SetAddGameHighlight(true);
+        GameList.SetOptionsHighlight(false);
+        AddGamePanel.ClearAndFocus();
+    }
+
+    private void ShowOptions()
+    {
+        EmptyState.Visibility   = Visibility.Collapsed;
+        GameDetail.Visibility   = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Visible;
+        AddGamePanel.Visibility = Visibility.Collapsed;
+        GameList.SetOptionsHighlight(true);
+        GameList.SetAddGameHighlight(false);
+        OptionsPanel.Activate(_checkUpdatesOnStartup);
+    }
+
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    private async void OnGameSelected(object? sender, GameEntry? game)
+    {
+        if (GameDetail.Visibility == Visibility.Visible && GameDetail.IsEditing)
         {
-            // Scale to current DPI so the window looks the same on high-DPI laptops
-            var dpi = GetDpiForWindow(hwnd);
-            var scalingFactor = dpi / 96.0;
-            var scaledWidth = (int)(width * scalingFactor);
-            var scaledHeight = (int)(height * scalingFactor);
-
-            appWindow.Resize(new Windows.Graphics.SizeInt32(scaledWidth, scaledHeight));
-
-            // Set a minimum size so the Launch button is always visible
-            if (appWindow.Presenter is OverlappedPresenter presenter)
+            if (!await GameDetail.ConfirmNavigateAwayAsync())
             {
-                // OverlappedPresenter doesn't expose MinWidth directly;
-                // we enforce via the Win32 minimum tracking size below.
+                GameList.SetSelectedGame(GameDetail.CurrentGame);
+                return;
             }
         }
+        if (game == null) ShowEmptyState();
+        else ShowDetail(game);
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
+    private async void OnLaunchRequested(object? sender, GameEntry game) =>
+        await GameDetail.LaunchAsync(game);
 
-    private void SetupCustomTitleBar()
+    private async void OnDeleteConfirmed(object? sender, GameEntry game)
     {
-        // Extend content into title bar
-        ExtendsContentIntoTitleBar = true;
-        // AppTitleBar may be null depending on XAML loading; guard to avoid NRE
-        if (AppTitleBar != null)
-        {
-            SetTitleBar(AppTitleBar);
-        }
+        _credentialService.DeleteCredential(game.CredentialTarget);
+        await _gameRepository.RemoveGameAsync(game.Id);
+        _games.Remove(game);
+        GameList.SetSelectedGame(null);
+        if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
+        else ShowEmptyState();
     }
 
-    private async Task LoadGamesAsync()
+    private async void OnAddGameRequested(object? sender, EventArgs e)
+    {
+        if (GameDetail.Visibility == Visibility.Visible &&
+            GameDetail.IsEditing &&
+            !await GameDetail.ConfirmNavigateAwayAsync()) return;
+        ShowAddGame();
+    }
+
+    private async void OnOptionsRequested(object? sender, EventArgs e)
+    {
+        if (OptionsPanel.Visibility == Visibility.Visible)
+        { OnOptionsCloseRequested(sender, e); return; }
+        if (GameDetail.Visibility == Visibility.Visible &&
+            GameDetail.IsEditing &&
+            !await GameDetail.ConfirmNavigateAwayAsync()) return;
+        ShowOptions();
+    }
+
+    private async void OnGameSaved(object? sender, GameEntry savedGame)
+    {
+        // Reload from disk so computed properties (ExecutableDisplayPath etc.) refresh
+        var library = await _gameRepository.LoadAsync();
+        _games.Clear();
+        foreach (var g in library.Games) _games.Add(g);
+        var refreshed = _games.FirstOrDefault(g => g.Id == savedGame.Id);
+        if (refreshed != null) { GameList.SetSelectedGame(refreshed); ShowDetail(refreshed, "Game updated successfully!"); }
+    }
+
+    private void OnGameAdded(object? sender, GameEntry game)
+    {
+        _games.Add(game);
+        GameList.SetSelectedGame(game);
+        ShowDetail(game, "Game added successfully!");
+    }
+
+    private void OnAddGameCancelled(object? sender, EventArgs e)
+    {
+        if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
+        else ShowEmptyState();
+    }
+
+    private void OnOptionsCloseRequested(object? sender, EventArgs e)
+    {
+        GameList.SetOptionsHighlight(false);
+        OptionsPanel.Visibility = Visibility.Collapsed;
+        if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
+        else ShowEmptyState();
+    }
+
+    private void OnLibraryImported(object? sender, LibraryImportedEventArgs e)
+    {
+        _checkUpdatesOnStartup = e.CheckUpdatesOnStartup;
+        _games.Clear();
+        foreach (var g in e.Games) _games.Add(g);
+        GameList.SetSelectedGame(null);
+        ShowEmptyState();
+    }
+
+    private void OnIconCacheCleared(object? sender, EventArgs e)
+    {
+        // Force ListView to re-evaluate icons by bouncing the collection
+        var snapshot = _games.ToList();
+        _games.Clear();
+        foreach (var g in snapshot) _games.Add(g);
+    }
+
+    private void OnDetailEscapeRequested(object? sender, EventArgs e)
+    {
+        GameList.SetSelectedGame(null);
+        ShowEmptyState();
+    }
+
+    // ── Startup ───────────────────────────────────────────────────────────────
+
+    private async Task LoadAsync()
     {
         try
         {
             var library = await _gameRepository.LoadAsync();
             _games.Clear();
-            foreach (var game in library.Games)
-            {
-                _games.Add(game);
-            }
-
-            ComputerNameTextBox.Text = string.IsNullOrWhiteSpace(library.ComputerName)
-                ? Environment.MachineName
-                : library.ComputerName;
-
+            foreach (var g in library.Games) _games.Add(g);
+            GameDetail.SetComputerName(string.IsNullOrWhiteSpace(library.ComputerName)
+                ? Environment.MachineName : library.ComputerName);
             _checkUpdatesOnStartup = library.CheckUpdatesOnStartup;
-
-            UpdateEmptyState();
-
-            if (_checkUpdatesOnStartup)
-                _ = CheckForUpdatesSilentlyAsync();
+            if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
+            if (_checkUpdatesOnStartup) _ = CheckForUpdatesSilentlyAsync();
         }
         catch (Exception ex)
         {
-            ShowStatus($"Failed to load games: {ex.Message}", false);
+            var d = Helpers.DialogHelper.CreateThemedDialog(Content.XamlRoot, "Load Error");
+            d.Content = $"Failed to load games: {ex.Message}";
+            _ = d.ShowAsync();
         }
     }
 
@@ -135,951 +256,39 @@ public sealed partial class MainWindow : Window
         {
             var result = await _updateService.CheckForUpdateAsync();
             if (result.UpdateAvailable && result.DownloadUrl != null)
-                ShowStatus($"Update available: v{result.LatestVersion}. Go to Options to install.", true);
-        }
-        catch
-        {
-            // Silent — don't surface errors for background checks
-        }
-    }
-
-    private void UpdateEmptyState()
-    {
-        // Update empty state in the right panel
-        bool hasGames = _games.Count > 0;
-
-        // If no game is selected and we have games, auto-select first game
-        if (hasGames && GameListView.SelectedItem == null && _games.Count > 0)
-        {
-            GameListView.SelectedIndex = 0;
-
-            // Manually trigger visual update for the selected item
-            DispatcherQueue.TryEnqueue(() =>
             {
-                UpdateSelectionVisuals();
-            });
-        }
-        else if (!hasGames)
-        {
-            // Show empty state in detail panel
-            HideGameDetails();
-        }
-    }
-
-    private void UpdateSelectionVisuals()
-    {
-        // Update visual states for all items
-        foreach (var item in GameListView.Items)
-        {
-            var container = GameListView.ContainerFromItem(item) as ListViewItem;
-            if (container != null)
-            {
-                var border = FindVisualChild<Border>(container, "GameCardBorder");
-                if (border != null)
-                {
-                    bool isSelected = item == GameListView.SelectedItem;
-
-                    // Update border appearance
-                    if (isSelected)
-                    {
-                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"];
-                        border.BorderThickness = new Thickness(2);
-                        border.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface3Brush"];
-                        border.Shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
-                        border.Translation = new System.Numerics.Vector3(0, 0, 8);
-                    }
-                    else
-                    {
-                        border.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderBrush"];
-                        border.BorderThickness = new Thickness(1);
-                        border.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["Surface2Brush"];
-                        border.Shadow = null;
-                        border.Translation = new System.Numerics.Vector3(0, 0, 0);
-                    }
-                }
+                // Show a non-modal nudge by briefly surfacing the Options panel is not feasible silently.
+                // The user will see the update when they open Options.
             }
         }
+        catch { }
     }
 
-    private void OnGameSelectionChanged(object sender, SelectionChangedEventArgs e)
+    // ── Window setup ──────────────────────────────────────────────────────────
+
+    private void SetWindowSize(int width, int height)
     {
-        UpdateSelectionVisuals();
-
-        if (GameListView.SelectedItem is GameEntry game)
-        {
-            ShowGameDetails(game);
-        }
-        else
-        {
-            HideGameDetails();
-        }
-    }
-
-    private T? FindVisualChild<T>(DependencyObject parent, string name = "") where T : DependencyObject
-    {
-        for (int i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
-
-            if (child is T typedChild && (string.IsNullOrEmpty(name) || (child as FrameworkElement)?.Name == name))
-            {
-                return typedChild;
-            }
-
-            var result = FindVisualChild<T>(child, name);
-            if (result != null)
-            {
-                return result;
-            }
-        }
-        return null;
-    }
-
-    private void ShowGameDetails(GameEntry game)
-    {
-        // Show detail panel, hide empty state and options
-        DetailPanel.Visibility = Visibility.Visible;
-        EmptyStatePanel.Visibility = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Collapsed;
-
-        // Reset edit mode
-        _currentEditingGame = null;
-        SetEditMode(false);
-
-        // Populate details
-        DetailGameName.Text = game.Name;
-        EditGameNameTextBox.Text = game.Name;
-        EditExecutableTextBox.Text = game.ExecutablePath;
-        EditRealmlistTextBox.Text = game.RealmlistAddress ?? string.Empty;
-        EditAccountTextBox.Text = game.AccountName ?? string.Empty;
-        EditRealmTextBox.Text = game.RealmName ?? string.Empty;
-        EditWindowTitleTextBox.Text = game.WindowTitle ?? string.Empty;
-        EditStartupDelayNumberBox.Value = game.StartupDelaySeconds;
-        EditPasswordBox.Password = string.Empty;
-
-        EditInputMethodComboBox.SelectedIndex = game.InputMethod switch
-        {
-            PasswordInputMethod.SendKeys => 0,
-            PasswordInputMethod.Clipboard => 1,
-            _ => 0
-        };
-
-        // Store selected game in button tags
-        DetailEditButton.Tag = game;
-        DetailLaunchButton.Tag = game;
-        SaveEditButton.Tag = game;
-
-        // Populate sync fields
-        EditSyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
-        EditSyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
-        AddonSyncPivotItem.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
-        OpenRepoLink.Visibility = Visibility.Collapsed;
-        OpenRepoButton.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
-        UpdateLastSyncedText(game);
-
-        // Reset to General tab when switching games
-        DetailPivot.SelectedIndex = 0;
-
-        // Reflect running state on the launch button
-        UpdateLaunchButtonState(game);
-    }
-
-    private void HideGameDetails()
-    {
-        DetailPanel.Visibility = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Collapsed;
-        EmptyStatePanel.Visibility = Visibility.Visible;
-    }
-
-    private void SetEditMode(bool isEditing)
-    {
-        // Toggle controls interactive state
-        EditGameNameTextBox.IsEnabled = isEditing;
-        EditRealmlistTextBox.IsEnabled = isEditing;
-        EditAccountTextBox.IsEnabled = isEditing;
-        EditRealmTextBox.IsEnabled = isEditing;
-        EditWindowTitleTextBox.IsEnabled = isEditing;
-        EditPasswordBox.IsEnabled = isEditing;
-        EditInputMethodComboBox.IsEnabled = isEditing;
-        EditStartupDelayNumberBox.IsEnabled = isEditing;
-
-        // Executable: enabled but readonly, use browse button to change
-        EditExecutableTextBox.IsEnabled = isEditing;
-        EditExecutableTextBox.IsReadOnly = true;
-
-        // Toggle browse button
-        BrowseButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-
-        // Toggle Game Name edit section
-        GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-
-        // Update header text visibility
-        DetailGameName.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-
-        // Toggle button groups
-        ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-
-        // Addon sync controls
-        EditSyncRepoUrlTextBox.IsEnabled = isEditing;
-        EditSyncBranchTextBox.IsEnabled = isEditing;
-        ComputerNameTextBox.IsEnabled = isEditing;
-        SyncAddonsButton.IsEnabled = !isEditing;
-        UploadAddonsButton.IsEnabled = !isEditing;
-        RollbackButton.IsEnabled = !isEditing;
-        AddonSyncPivotItem.Visibility = isEditing ? Visibility.Visible :
-            (GameListView.SelectedItem is GameEntry g && g.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
-        SyncButtonsPanel.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        OpenRepoLink.Visibility = Visibility.Collapsed;
-        OpenRepoButton.Visibility = isEditing ? Visibility.Collapsed :
-            (GameListView.SelectedItem is GameEntry g2 && g2.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed);
-    }
-
-    private void OnDetailPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // Placeholder for any tab-switch logic if needed later
-    }
-
-    private async void OnAddGameClick(object sender, RoutedEventArgs e)
-    {
-        var dialog = new GameDialog(this);
-        dialog.XamlRoot = Content.XamlRoot;
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary && dialog.GameEntry != null)
-        {
-            // Save password to credential manager
-            if (!string.IsNullOrEmpty(dialog.Password))
-            {
-                _credentialService.SaveCredential(dialog.GameEntry.CredentialTarget, dialog.Password);
-            }
-
-            // Save game to repository
-            await _gameRepository.AddGameAsync(dialog.GameEntry);
-            _games.Add(dialog.GameEntry);
-            UpdateEmptyState();
-
-            ShowStatus("Game added successfully!", true);
-        }
-    }
-
-    private async void OnDeleteClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button && button.Tag is GameEntry game)
-        {
-            var confirmDialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Delete Game");
-            confirmDialog.Content = $"Are you sure you want to delete '{game.Name}'? This will also remove the stored password.";
-            confirmDialog.PrimaryButtonText = "Delete";
-
-            var result = await confirmDialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                _credentialService.DeleteCredential(game.CredentialTarget);
-                await _gameRepository.RemoveGameAsync(game.Id);
-                _games.Remove(game);
-
-                GameListView.SelectedItem = null;
-                UpdateEmptyState();
-
-                ShowStatus("Game deleted.", true);
-            }
-        }
-    }
-
-    private void OnDetailEditClick(object sender, RoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is GameEntry game)
-        {
-            _currentEditingGame = game;
-            SetEditMode(true);
-        }
-    }
-
-    private void OnCancelEditClick(object sender, RoutedEventArgs e)
-    {
-        // Return to view mode
-        if (_currentEditingGame != null && GameListView.SelectedItem is GameEntry game)
-        {
-            ShowGameDetails(game);
-        }
-        _currentEditingGame = null;
-    }
-
-    private async void OnSaveEditClick(object sender, RoutedEventArgs e)
-    {
-        if (_currentEditingGame == null) return;
-
-        // Validate
-        if (string.IsNullOrWhiteSpace(EditGameNameTextBox.Text))
-        {
-            ShowStatus("Game name is required", false);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(EditExecutableTextBox.Text))
-        {
-            ShowStatus("Executable path is required", false);
-            return;
-        }
-
-        var oldPath = _currentEditingGame.ExecutablePath;
-        var gameId = _currentEditingGame.Id; // Store the ID before async operations
-
-        // Update game entry
-        _currentEditingGame.Name = EditGameNameTextBox.Text.Trim();
-        _currentEditingGame.ExecutablePath = EditExecutableTextBox.Text.Trim();
-        _currentEditingGame.RealmlistAddress = EditRealmlistTextBox.Text.Trim();
-        _currentEditingGame.AccountName = EditAccountTextBox.Text.Trim();
-        _currentEditingGame.RealmName = EditRealmTextBox.Text.Trim();
-        _currentEditingGame.WindowTitle = EditWindowTitleTextBox.Text.Trim();
-        _currentEditingGame.StartupDelaySeconds = double.IsNaN(EditStartupDelayNumberBox.Value)
-            ? 0 : (int)EditStartupDelayNumberBox.Value;
-
-        _currentEditingGame.InputMethod = EditInputMethodComboBox.SelectedIndex switch
-        {
-            0 => PasswordInputMethod.SendKeys,
-            1 => PasswordInputMethod.Clipboard,
-            _ => PasswordInputMethod.SendKeys
-        };
-
-        // Update sync fields
-        _currentEditingGame.SyncRepoUrl = string.IsNullOrWhiteSpace(EditSyncRepoUrlTextBox.Text)
-            ? null : EditSyncRepoUrlTextBox.Text.Trim();
-        _currentEditingGame.SyncBranch = string.IsNullOrWhiteSpace(EditSyncBranchTextBox.Text)
-            ? null : EditSyncBranchTextBox.Text.Trim();
-
-        // Update password if provided
-        if (!string.IsNullOrEmpty(EditPasswordBox.Password))
-        {
-            _credentialService.SaveCredential(_currentEditingGame.CredentialTarget, EditPasswordBox.Password);
-        }
-
-        // Invalidate icon cache if executable path changed
-        if (oldPath != _currentEditingGame.ExecutablePath)
-        {
-            Services.IconExtractor.InvalidateCache(oldPath);
-        }
-
-        // Update game in repository
-        await _gameRepository.UpdateGameAsync(_currentEditingGame);
-
-        // Refresh list and show updated details
-        await LoadGamesAsync();
-        var updatedGame = _games.FirstOrDefault(g => g.Id == gameId); // Use stored ID
-        if (updatedGame != null)
-        {
-            GameListView.SelectedItem = updatedGame;
-            ShowGameDetails(updatedGame);
-        }
-
-        _currentEditingGame = null;
-        ShowStatus("Game updated successfully!", true);
-    }
-
-    private async void OnBrowseExecutableClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        picker.FileTypeFilter.Add(".exe");
-
         var hwnd = WindowNative.GetWindowHandle(this);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
+        var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+        var appWindow = AppWindow.GetFromWindowId(windowId);
+        if (appWindow != null)
         {
-            EditExecutableTextBox.Text = file.Path;
+            var dpi = GetDpiForWindow(hwnd);
+            var scale = dpi / 96.0;
+            appWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
         }
     }
 
-    private async void OnDetailLaunchClick(object sender, RoutedEventArgs e)
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    private void SetupCustomTitleBar()
     {
-        if (sender is Button button && button.Tag is GameEntry game)
-        {
-            await LaunchGameAsync(game);
-        }
-    }
-
-    private async void OnGameDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is GameEntry game)
-        {
-            await LaunchGameAsync(game);
-        }
-    }
-
-    private async Task LaunchGameAsync(GameEntry game)
-    {
-        // Prevent launching the same game entry twice
-        if (_runningGames.Contains(game.Id))
-        {
-            ShowStatus($"{game.Name} is already running.", false);
-            return;
-        }
-
-        // Show immediate feedback
-        ShowStatus($"Launching {game.Name}...", true);
-
-        var result = await _gameLauncherService.LaunchGameAsync(game);
-        ShowStatus(result.Message, result.Success);
-
-        // Track the launched process so this entry can't be launched again until it exits
-        if (result.Success && result.ProcessId is int pid)
-        {
-            try
-            {
-                var process = Process.GetProcessById(pid);
-                _runningGames.Add(game.Id);
-                UpdateLaunchButtonState(game);
-
-                process.EnableRaisingEvents = true;
-                process.Exited += (s, e) =>
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        _runningGames.Remove(game.Id);
-                        // Update button if this game is still selected
-                        if (GameListView.SelectedItem is GameEntry selected && selected.Id == game.Id)
-                        {
-                            UpdateLaunchButtonState(selected);
-                        }
-                    });
-                };
-            }
-            catch
-            {
-                // Process already exited before we could attach; don't track it
-            }
-        }
-    }
-
-    private void UpdateLaunchButtonState(GameEntry game)
-    {
-        var isRunning = _runningGames.Contains(game.Id);
-        DetailLaunchButton.IsEnabled = !isRunning;
-        LaunchButtonText.Text = isRunning ? "Running" : "Launch";
-    }
-
-    private CancellationTokenSource? _statusHideCts;
-    private CancellationTokenSource? _optionsStatusHideCts;
-
-    private void ShowStatus(string message, bool isSuccess)
-    {
-        // Cancel and dispose any previous auto-hide timer
-        _statusHideCts?.Cancel();
-        _statusHideCts?.Dispose();
-        _statusHideCts = null;
-
-        StatusText.Text = message;
-        StatusInfoBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
-        StatusInfoBar.IsOpen = true;
-
-        if (isSuccess)
-        {
-            var cts = new CancellationTokenSource();
-            _statusHideCts = cts;
-            _ = HideStatusAfterDelay(5000, cts.Token);
-        }
-    }
-
-    private async Task HideStatusAfterDelay(int delayMs, CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(delayMs, token);
-            StatusInfoBar.IsOpen = false;
-        }
-        catch (OperationCanceledException)
-        {
-            // Timer was cancelled by a newer status message
-        }
-    }
-
-    private void ShowOptionsStatus(string message, bool isSuccess)
-    {
-        _optionsStatusHideCts?.Cancel();
-        _optionsStatusHideCts?.Dispose();
-        _optionsStatusHideCts = null;
-
-        OptionsStatusText.Text = message;
-        OptionsStatusBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
-        OptionsStatusBar.IsOpen = true;
-
-        if (isSuccess)
-        {
-            var cts = new CancellationTokenSource();
-            _optionsStatusHideCts = cts;
-            _ = HideOptionsStatusAfterDelay(5000, cts.Token);
-        }
-    }
-
-    private async Task HideOptionsStatusAfterDelay(int delayMs, CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(delayMs, token);
-            OptionsStatusBar.IsOpen = false;
-        }
-        catch (OperationCanceledException)
-        {
-            // Timer was cancelled by a newer status message
-        }
-    }
-
-    private async void OnGameIconLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is Microsoft.UI.Xaml.Controls.Image image && 
-            image.DataContext is GameEntry game)
-        {
-            var icon = await Services.IconExtractor.GetIconFromExecutableAsync(game.ExecutablePath);
-            if (icon != null)
-            {
-                image.Source = icon;
-
-                // Hide the fallback icon since we have a real icon
-                if (image.Parent is Grid grid)
-                {
-                    foreach (var child in grid.Children)
-                    {
-                        if (child is FontIcon fallbackIcon)
-                        {
-                            fallbackIcon.Visibility = Visibility.Collapsed;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private void UpdateLastSyncedText(GameEntry game)
-    {
-        if (game.LastSynced is DateTime lastSynced)
-        {
-            var elapsed = DateTime.UtcNow - lastSynced;
-            var text = elapsed.TotalMinutes < 1 ? "just now" :
-                       elapsed.TotalMinutes < 60 ? $"{(int)elapsed.TotalMinutes} min ago" :
-                       elapsed.TotalHours < 24 ? $"{(int)elapsed.TotalHours}h ago" :
-                       $"{(int)elapsed.TotalDays}d ago";
-            LastSyncedText.Text = $"Last synced: {text}";
-            LastSyncedText.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            LastSyncedText.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void SetSyncUiBusy(bool busy)
-    {
-        SyncAddonsButton.IsEnabled = !busy;
-        UploadAddonsButton.IsEnabled = !busy;
-        RollbackButton.IsEnabled = !busy;
-        SyncProgressRing.IsActive = busy;
-        SyncProgressRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        CancelSyncButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is not GameEntry game) return;
-
-        // Fetch repo addon list (this also ensures the cache is up to date)
-        ShowStatus("Fetching addon list from repo...", true);
-        List<string> repoAddons;
-        try
-        {
-            var fetchProgress = new Progress<string>(msg => ShowStatus(msg, true));
-            repoAddons = await _addonSyncService.GetRepoAddonListAsync(game, fetchProgress);
-        }
-        catch
-        {
-            repoAddons = [];
-        }
-
-        // Count characters available in the repo snapshot
-        var charCount = _addonSyncService.GetRepoCharacterCount(game);
-
-        if (await SyncPullDialog.ShowAsync(Content.XamlRoot, repoAddons, charCount) != ContentDialogResult.Primary)
-            return;
-
-        _syncCts?.Cancel();
-        _syncCts?.Dispose();
-        _syncCts = new CancellationTokenSource();
-        var ct = _syncCts.Token;
-
-        SetSyncUiBusy(true);
-        ShowStatus("Syncing addons...", true);
-
-        try
-        {
-            var progress = new Progress<string>(msg => ShowStatus(msg, true));
-            var result = await _addonSyncService.SyncAsync(game, progress, ct);
-            ShowStatus(result.Message, result.Success);
-            UpdateLastSyncedText(game);
-        }
-        catch (OperationCanceledException)
-        {
-            ShowStatus("Sync cancelled.", false);
-        }
-        finally
-        {
-            SetSyncUiBusy(false);
-        }
-    }
-
-    private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is not GameEntry game) return;
-
-        if (!await SyncPushDialog.ShowAsync(Content.XamlRoot))
-            return;
-
-        _syncCts?.Cancel();
-        _syncCts?.Dispose();
-        _syncCts = new CancellationTokenSource();
-        var ct = _syncCts.Token;
-
-        SetSyncUiBusy(true);
-        ShowStatus("Uploading to repo...", true);
-
-        try
-        {
-            var progress = new Progress<string>(msg => ShowStatus(msg, true));
-            var result = await _addonSyncService.UploadAsync(game, progress, ct);
-            ShowStatus(result.Message, result.Success);
-            UpdateLastSyncedText(game);
-        }
-        catch (OperationCanceledException)
-        {
-            ShowStatus("Upload cancelled.", false);
-        }
-        finally
-        {
-            SetSyncUiBusy(false);
-        }
-    }
-
-    private async void OnRollbackClick(object sender, RoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is not GameEntry game) return;
-
-        var selectedCommit = await RollbackDialog.ShowAsync(
-            Content.XamlRoot,
-            () => _addonSyncService.GetCommitLogAsync(game));
-        if (selectedCommit == null)
-            return;
-
-        _syncCts?.Cancel();
-        _syncCts?.Dispose();
-        _syncCts = new CancellationTokenSource();
-        var ct = _syncCts.Token;
-
-        SetSyncUiBusy(true);
-        ShowStatus("Rolling back...", true);
-
-        try
-        {
-            var progress = new Progress<string>(msg => ShowStatus(msg, true));
-            var result = await _addonSyncService.RollbackAsync(game, selectedCommit.Hash, selectedCommit.Message, selectedCommit.Body, progress, ct);
-            ShowStatus(result.Message, result.Success);
-            UpdateLastSyncedText(game);
-        }
-        catch (OperationCanceledException)
-        {
-            ShowStatus("Rollback cancelled.", false);
-        }
-        finally
-        {
-            SetSyncUiBusy(false);
-        }
-    }
-
-    private void OnCancelSyncClick(object sender, RoutedEventArgs e)
-    {
-        _syncCts?.Cancel();
-    }
-
-    private void OnOpenRepoClick(object sender, RoutedEventArgs e)
-    {
-        if (GameListView.SelectedItem is not GameEntry game || !game.HasSyncRepo) return;
-
-        var url = game.SyncRepoUrl!.TrimEnd('/');
-        if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-            url = url[..^4];
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch
-        {
-            ShowStatus("Could not open browser.", false);
-        }
-    }
-
-    private async void OnComputerNameLostFocus(object sender, RoutedEventArgs e)
-    {
-        var name = ComputerNameTextBox.Text?.Trim();
-        if (string.IsNullOrEmpty(name))
-        {
-            ComputerNameTextBox.Text = Environment.MachineName;
-            name = null; // clear the override so it falls back
-        }
-        try
-        {
-            await _gameRepository.SetComputerNameAsync(name ?? "");
-        }
-        catch
-        {
-            // Non-fatal — name will still be used from the TextBox next time
-        }
-    }
-
-    private void OnOptionsClick(object sender, RoutedEventArgs e) => ShowOptionsPanel();
-
-    // ── Options: DATA ────────────────────────────────────────────────────────
-
-    private void OnOpenDataFolderClick(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Directory.CreateDirectory(GameRepository.AppDataFolder);
-            Process.Start(new ProcessStartInfo(GameRepository.AppDataFolder) { UseShellExecute = true });
-        }
-        catch
-        {
-            ShowOptionsStatus("Could not open data folder.", false);
-        }
-    }
-
-    private async void OnExportLibraryClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new Windows.Storage.Pickers.FileSavePicker();
-        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
-        picker.SuggestedFileName = "games_backup";
-        picker.FileTypeChoices.Add("JSON file", new List<string> { ".json" });
-
-        var hwnd = WindowNative.GetWindowHandle(this);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-        var file = await picker.PickSaveFileAsync();
-        if (file == null) return;
-
-        try
-        {
-            var library = await _gameRepository.LoadAsync();
-            var json = JsonSerializer.Serialize(library, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(file.Path, json);
-            ShowOptionsStatus($"Exported {library.Games.Count} game(s) successfully.", true);
-        }
-        catch (Exception ex)
-        {
-            ShowOptionsStatus($"Export failed: {ex.Message}", false);
-        }
-    }
-
-    private async void OnImportLibraryClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        picker.FileTypeFilter.Add(".json");
-        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
-
-        var hwnd = WindowNative.GetWindowHandle(this);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-        var file = await picker.PickSingleFileAsync();
-        if (file == null) return;
-
-        GameLibrary? imported;
-        try
-        {
-            var json = await File.ReadAllTextAsync(file.Path);
-            imported = JsonSerializer.Deserialize<GameLibrary>(json);
-        }
-        catch
-        {
-            ShowOptionsStatus("Selected file is not a valid library backup.", false);
-            return;
-        }
-
-        if (imported == null)
-        {
-            ShowOptionsStatus("Selected file is not a valid library backup.", false);
-            return;
-        }
-
-        var confirmDialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Import Library");
-        confirmDialog.Content = $"This will replace your current library with {imported.Games.Count} game(s) from the backup. Passwords are not included in exports and must be re-entered. Continue?";
-        confirmDialog.PrimaryButtonText = "Import";
-        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        try
-        {
-            var destPath = Path.Combine(GameRepository.AppDataFolder, "games.json");
-            Directory.CreateDirectory(GameRepository.AppDataFolder);
-            File.Copy(file.Path, destPath, overwrite: true);
-
-            // Reload the game list in-place so the Options panel stays visible
-            var reloaded = await _gameRepository.LoadAsync();
-            _games.Clear();
-            foreach (var game in reloaded.Games)
-                _games.Add(game);
-
-            _checkUpdatesOnStartup = reloaded.CheckUpdatesOnStartup;
-            _suppressSettingsSave = true;
-            CheckUpdatesOnStartupToggle.IsOn = _checkUpdatesOnStartup;
-            _suppressSettingsSave = false;
-
-            ShowOptionsStatus($"Imported {reloaded.Games.Count} game(s) successfully.", true);
-        }
-        catch (Exception ex)
-        {
-            ShowOptionsStatus($"Import failed: {ex.Message}", false);
-        }
-    }
-
-    private void OnClearIconCacheClick(object sender, RoutedEventArgs e)
-    {
-        Services.IconExtractor.ClearCache();
-        var items = _games.ToList();
-        _games.Clear();
-        foreach (var game in items)
-            _games.Add(game);
-        ShowOptionsStatus("Icon cache cleared.", true);
-    }
-
-    // ── Options: DEFAULTS ────────────────────────────────────────────────────
-
-    private async void OnCheckUpdatesOnStartupToggled(object sender, RoutedEventArgs e)
-    {
-        if (_suppressSettingsSave) return;
-        _checkUpdatesOnStartup = CheckUpdatesOnStartupToggle.IsOn;
-        await _gameRepository.SetCheckUpdatesOnStartupAsync(_checkUpdatesOnStartup);
-    }
-
-    // ── Options: SECURITY ────────────────────────────────────────────────────
-
-    private async void OnRemoveAllPasswordsClick(object sender, RoutedEventArgs e)
-    {
-        if (_games.Count == 0)
-        {
-            ShowOptionsStatus("No stored passwords to remove.", false);
-            return;
-        }
-
-        var confirmDialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Remove All Passwords");
-        confirmDialog.Content = $"This will permanently delete passwords for all {_games.Count} game(s) from Windows Credential Manager. This cannot be undone.";
-        confirmDialog.PrimaryButtonText = "Remove All";
-        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        int removed = 0;
-        foreach (var game in _games)
-        {
-            if (_credentialService.DeleteCredential(game.CredentialTarget))
-                removed++;
-        }
-        ShowOptionsStatus($"Removed {removed} password(s).", true);
-    }
-
-    private void ShowOptionsPanel()
-    {
-        GameListView.SelectedItem = null;
-        DetailPanel.Visibility = Visibility.Collapsed;
-        EmptyStatePanel.Visibility = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Visible;
-        OptionsVersionText.Text = $"v{AppUpdateService.CurrentVersion}";
-        OptionsStatusBar.IsOpen = false;
-        UpdateAvailableText.Visibility = Visibility.Collapsed;
-        UpdateProgressBar.Visibility = Visibility.Collapsed;
-        CheckUpdatesButtonIcon.Glyph = "\uE72C";
-        CheckUpdatesButtonText.Text = "Check for Updates";
-        _pendingUpdate = null;
-
-        _suppressSettingsSave = true;
-        CheckUpdatesOnStartupToggle.IsOn = _checkUpdatesOnStartup;
-        _suppressSettingsSave = false;
-    }
-
-    private async void OnUpdateButtonClick(object sender, RoutedEventArgs e)
-    {
-        if (_pendingUpdate == null)
-        {
-            CheckUpdatesButton.IsEnabled = false;
-            UpdateAvailableText.Visibility = Visibility.Collapsed;
-            ShowOptionsStatus("Checking for updates...", true);
-
-            try
-            {
-                _updateCts?.Cancel();
-                _updateCts?.Dispose();
-                _updateCts = new CancellationTokenSource();
-
-                var result = await _updateService.CheckForUpdateAsync(_updateCts.Token);
-
-                if (!result.UpdateAvailable)
-                {
-                    ShowOptionsStatus($"You're up to date (v{AppUpdateService.CurrentVersion}).", true);
-                }
-                else if (result.DownloadUrl == null)
-                {
-                    ShowOptionsStatus($"Version {result.LatestVersion} is available but has no downloadable asset.", false);
-                }
-                else
-                {
-                    OptionsStatusBar.IsOpen = false;
-                    _pendingUpdate = result;
-                    UpdateAvailableText.Text = $"Version {result.LatestVersion} is available. The app will restart after installing.";
-                    UpdateAvailableText.Visibility = Visibility.Visible;
-                    CheckUpdatesButtonIcon.Glyph = "\uE896";
-                    CheckUpdatesButtonText.Text = "Download & Install";
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                OptionsStatusBar.IsOpen = false;
-            }
-            catch (Exception ex)
-            {
-                ShowOptionsStatus($"Update check failed: {ex.Message}", false);
-            }
-            finally
-            {
-                CheckUpdatesButton.IsEnabled = true;
-            }
-        }
-        else
-        {
-            CheckUpdatesButton.IsEnabled = false;
-            UpdateProgressBar.Value = 0;
-            UpdateProgressBar.Visibility = Visibility.Visible;
-            ShowOptionsStatus("Downloading update...", true);
-
-            try
-            {
-                _updateCts?.Cancel();
-                _updateCts?.Dispose();
-                _updateCts = new CancellationTokenSource();
-
-                var progress = new Progress<double>(p =>
-                {
-                    UpdateProgressBar.Value = p;
-                    OptionsStatusText.Text = $"Downloading update... {(int)(p * 100)}%";
-                });
-
-                await _updateService.DownloadAndApplyAsync(
-                    _pendingUpdate.DownloadUrl!,
-                    _pendingUpdate.AssetName!,
-                    progress,
-                    _updateCts.Token);
-
-                Application.Current.Exit();
-            }
-            catch (Exception ex)
-            {
-                ShowOptionsStatus($"Update failed: {ex.Message}", false);
-                UpdateProgressBar.Visibility = Visibility.Collapsed;
-                CheckUpdatesButton.IsEnabled = true;
-            }
-        }
+        ExtendsContentIntoTitleBar = true;
+        if (AppTitleBar != null) SetTitleBar(AppTitleBar);
+
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+        if (File.Exists(iconPath))
+            TitleBarIcon.Source = new BitmapImage(new Uri(iconPath));
     }
 }

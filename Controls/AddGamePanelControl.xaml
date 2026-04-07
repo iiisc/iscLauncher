@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="iscLauncher.Controls.AddGamePanelControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0">
+            <StackPanel Spacing="20" Padding="32,18,32,18">
+
+                <InfoBar x:Name="FormInfoBar"
+                         IsOpen="False"
+                         IsClosable="True"
+                         Severity="Error"/>
+
+                <!-- ESSENTIALS -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="ESSENTIALS" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Game Name *" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="NameTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., World of Warcraft"
+                                 FontSize="12"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Executable *" Style="{StaticResource FieldLabelStyle}"/>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ExecutableTextBox"
+                                     Style="{StaticResource ThemedTextBoxStyle}"
+                                     IsReadOnly="True"
+                                     PlaceholderText="Select game executable..."
+                                     FontSize="12"/>
+                            <Button Grid.Column="1"
+                                    Click="OnBrowseClick"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="16,0"
+                                    Height="40">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE8DA;" FontSize="12"/>
+                                    <TextBlock Text="Browse"
+                                               FontFamily="{StaticResource DisplayFont}"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Password *" Style="{StaticResource FieldLabelStyle}"/>
+                        <PasswordBox x:Name="PasswordBox"
+                                     Style="{StaticResource ThemedPasswordBoxStyle}"
+                                     PlaceholderText="Enter game password"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Password Input Method" Style="{StaticResource FieldLabelStyle}"/>
+                        <ComboBox x:Name="InputMethodComboBox"
+                                  Style="{StaticResource ThemedComboBoxStyle}"
+                                  HorizontalAlignment="Stretch"
+                                  SelectedIndex="0">
+                            <ComboBoxItem Content="SendKeys (Best for DirectX games)"/>
+                            <ComboBoxItem Content="Clipboard (Manual paste)"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- CONNECTION -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Realmlist Address" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="RealmlistTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., logon.warmane.com"
+                                 FontSize="12"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Realm Name" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="RealmTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., ChromieCraft"
+                                 FontSize="12"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Account Name" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="AccountTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., myaccount"
+                                 FontSize="12"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ADVANCED -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="ADVANCED" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Window Title (optional)" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="WindowTitleTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
+                                 FontSize="12"/>
+                        <TextBlock Text="Used to find the login window when auto-typing the password."
+                                   Style="{StaticResource FieldHintStyle}"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ADDON SYNC -->
+                <StackPanel Spacing="12">
+                    <TextBlock Text="ADDON SYNC" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="GitHub Repo URL" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="SyncRepoUrlTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="e.g., https://github.com/user/wow-sync.git"
+                                 FontSize="12"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Branch" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox x:Name="SyncBranchTextBox"
+                                 Style="{StaticResource ThemedTextBoxStyle}"
+                                 PlaceholderText="main"
+                                 FontSize="12"/>
+                    </StackPanel>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Action Bar -->
+        <Border Grid.Row="1"
+                Background="{StaticResource BgBrush}"
+                Padding="32,16">
+            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Left">
+                <Button Click="OnCancelClick"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Height="44"
+                        Padding="24,0">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="Escape"/>
+                    </Button.KeyboardAccelerators>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                        <TextBlock Text="Cancel"
+                                   FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="13"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Click="OnSaveClick"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Height="56"
+                        Padding="40,0">
+                    <Button.Resources>
+                        <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource EmeraldForegroundColor}"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#A0D0B0"/>
+                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource EmeraldDarkColor}"/>
+                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource EmeraldPressedColor}"/>
+                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+                    </Button.Resources>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon Glyph="&#xE710;" FontSize="16" Foreground="{StaticResource EmeraldForegroundBrush}"/>
+                        <TextBlock Text="Add Game"
+                                   FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="15"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -5,159 +5,266 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:iscLauncher"
     xmlns:converters="using:iscLauncher.Converters">
-    <Application.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-            </ResourceDictionary.MergedDictionaries>
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+      </ResourceDictionary.MergedDictionaries>
 
-            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+      <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
-            <!-- ===== FONT FAMILIES ===== -->
-            <FontFamily x:Key="DisplayFont">Segoe UI</FontFamily>
-            <FontFamily x:Key="DisplayRegularFont">Segoe UI</FontFamily>
-            <FontFamily x:Key="SerifFont">Segoe UI</FontFamily>
-            <FontFamily x:Key="SerifItalicFont">Segoe UI</FontFamily>
-            <FontFamily x:Key="BodyFont">Segoe UI</FontFamily>
-            <FontFamily x:Key="BodyMediumFont">Segoe UI Semibold</FontFamily>
+      <!-- ===== FONT FAMILIES ===== -->
+      <FontFamily x:Key="DisplayFont">Segoe UI</FontFamily>
+      <FontFamily x:Key="DisplayRegularFont">Segoe UI</FontFamily>
+      <FontFamily x:Key="SerifFont">Segoe UI</FontFamily>
+      <FontFamily x:Key="SerifItalicFont">Segoe UI</FontFamily>
+      <FontFamily x:Key="BodyFont">Segoe UI</FontFamily>
+      <FontFamily x:Key="BodyMediumFont">Segoe UI Semibold</FontFamily>
 
-            <!-- ===== FANTASY THEME: DESIGN TOKENS ===== -->
+      <!-- ===== FANTASY THEME: DESIGN TOKENS ===== -->
 
-            <!-- Backgrounds -->
-            <Color x:Key="BgColor">#12100E</Color>
-            <Color x:Key="SurfaceColor">#1C1813</Color>
-            <Color x:Key="Surface2Color">#221D17</Color>
-            <Color x:Key="Surface3Color">#2B2419</Color>
+      <!-- Backgrounds -->
+      <Color x:Key="BgColor">#12100E</Color>
+      <Color x:Key="TitleBarColor">#0F0D0B</Color>
+      <Color x:Key="SurfaceColor">#1C1813</Color>
+      <Color x:Key="Surface2Color">#221D17</Color>
+      <Color x:Key="Surface3Color">#2B2419</Color>
 
-            <!-- Accents -->
-            <Color x:Key="GoldColor">#C9A84C</Color>
-            <Color x:Key="GoldLightColor">#E8C97A</Color>
-            <Color x:Key="GoldDarkColor">#8A6E2F</Color>
-            <Color x:Key="EmeraldColor">#3D7A5C</Color>
-            <Color x:Key="EmeraldLightColor">#5AAF85</Color>
-            <Color x:Key="CrimsonColor">#9B3A3A</Color>
-            <Color x:Key="ParchmentColor">#D4B896</Color>
+      <!-- Accents -->
+      <Color x:Key="GoldColor">#C9A84C</Color>
+      <Color x:Key="GoldLightColor">#E8C97A</Color>
+      <Color x:Key="GoldDarkColor">#8A6E2F</Color>
+      <Color x:Key="EmeraldColor">#3D7A5C</Color>
+      <Color x:Key="EmeraldLightColor">#5AAF85</Color>
+      <Color x:Key="EmeraldDarkColor">#2D5A46</Color>
+      <Color x:Key="EmeraldPressedColor">#1E4030</Color>
+      <Color x:Key="EmeraldForegroundColor">#C8F0D8</Color>
+      <Color x:Key="CrimsonColor">#9B3A3A</Color>
+      <Color x:Key="ParchmentColor">#D4B896</Color>
 
-            <!-- Text -->
-            <Color x:Key="TextPrimaryColor">#E8DCC8</Color>
-            <Color x:Key="TextMutedColor">#8A7A65</Color>
-            <Color x:Key="TextDimColor">#4A3F30</Color>
+      <!-- Text -->
+      <Color x:Key="TextPrimaryColor">#E8DCC8</Color>
+      <Color x:Key="TextMutedColor">#8A7A65</Color>
+      <Color x:Key="TextDimColor">#4A3F30</Color>
 
-            <!-- Borders -->
-            <Color x:Key="BorderColor">#2D2418</Color>
-            <Color x:Key="BorderHighColor">#4A3820</Color>
+      <!-- Borders -->
+      <Color x:Key="BorderColor">#2D2418</Color>
+      <Color x:Key="BorderHighColor">#4A3820</Color>
 
-            <!-- Brushes -->
-            <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
-            <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
-            <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
-            <SolidColorBrush x:Key="Surface3Brush" Color="{StaticResource Surface3Color}"/>
-            <SolidColorBrush x:Key="GoldBrush" Color="{StaticResource GoldColor}"/>
-            <SolidColorBrush x:Key="GoldLightBrush" Color="{StaticResource GoldLightColor}"/>
-            <SolidColorBrush x:Key="GoldDarkBrush" Color="{StaticResource GoldDarkColor}"/>
-            <SolidColorBrush x:Key="EmeraldBrush" Color="{StaticResource EmeraldColor}"/>
-            <SolidColorBrush x:Key="EmeraldLightBrush" Color="{StaticResource EmeraldLightColor}"/>
-            <SolidColorBrush x:Key="CrimsonBrush" Color="{StaticResource CrimsonColor}"/>
-            <SolidColorBrush x:Key="ParchmentBrush" Color="{StaticResource ParchmentColor}"/>
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
-            <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
-            <SolidColorBrush x:Key="TextDimBrush" Color="{StaticResource TextDimColor}"/>
-            <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
-            <SolidColorBrush x:Key="BorderHighBrush" Color="{StaticResource BorderHighColor}"/>
+      <!-- Brushes -->
+      <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+      <SolidColorBrush x:Key="TitleBarBrush" Color="{StaticResource TitleBarColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
+      <SolidColorBrush x:Key="Surface3Brush" Color="{StaticResource Surface3Color}"/>
+      <SolidColorBrush x:Key="GoldBrush" Color="{StaticResource GoldColor}"/>
+      <SolidColorBrush x:Key="GoldLightBrush" Color="{StaticResource GoldLightColor}"/>
+      <SolidColorBrush x:Key="GoldDarkBrush" Color="{StaticResource GoldDarkColor}"/>
+      <SolidColorBrush x:Key="EmeraldBrush" Color="{StaticResource EmeraldColor}"/>
+      <SolidColorBrush x:Key="EmeraldLightBrush" Color="{StaticResource EmeraldLightColor}"/>
+      <SolidColorBrush x:Key="EmeraldDarkBrush" Color="{StaticResource EmeraldDarkColor}"/>
+      <SolidColorBrush x:Key="EmeraldPressedBrush" Color="{StaticResource EmeraldPressedColor}"/>
+      <SolidColorBrush x:Key="EmeraldForegroundBrush" Color="{StaticResource EmeraldForegroundColor}"/>
+      <SolidColorBrush x:Key="CrimsonBrush" Color="{StaticResource CrimsonColor}"/>
+      <SolidColorBrush x:Key="ParchmentBrush" Color="{StaticResource ParchmentColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
+      <SolidColorBrush x:Key="TextDimBrush" Color="{StaticResource TextDimColor}"/>
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+      <SolidColorBrush x:Key="BorderHighBrush" Color="{StaticResource BorderHighColor}"/>
 
-            <!-- ===== BUTTON STYLES ===== -->
+      <!-- ===== GLOBAL BUTTON BRUSHES (gold by default; PrimaryButtonStyle overrides to emerald) ===== -->
+      <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource GoldColor}"/>
+      <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource GoldLightColor}"/>
+      <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource GoldDarkColor}"/>
+      <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource TextDimColor}"/>
+      <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource Surface3Color}"/>
+      <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource Surface2Color}"/>
+      <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource BorderHighColor}"/>
 
-            <!-- Primary Button (Launch) -->
-            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-                <Setter Property="Background">
-                    <Setter.Value>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="{StaticResource EmeraldColor}" Offset="0"/>
-                            <GradientStop Color="#2D5A46" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Setter.Value>
-                </Setter>
-                <Setter Property="Foreground" Value="#C8F0D8"/>
-                <Setter Property="BorderBrush">
-                    <Setter.Value>
-                        <SolidColorBrush Color="{StaticResource EmeraldLightColor}" Opacity="0.3"/>
-                    </Setter.Value>
-                </Setter>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Height" Value="50"/>
-                <Setter Property="FontSize" Value="14"/>
-                <Setter Property="FontWeight" Value="Bold"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            </Style>
+      <!-- ===== TOGGLE SWITCH ===== -->
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="{StaticResource EmeraldColor}"/>
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="{StaticResource EmeraldDarkColor}"/>
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="White"/>
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="White"/>
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="White"/>
 
-            <!-- Secondary Button (Edit, Cancel) -->
-            <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderHighBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Height" Value="40"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="FontSize" Value="13"/>
-            </Style>
+      <!-- ===== ACCENT BUTTON (ContentDialog primary button) ===== -->
+      <SolidColorBrush x:Key="AccentButtonBackground" Color="{StaticResource EmeraldColor}"/>
+      <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+      <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="{StaticResource EmeraldDarkColor}"/>
+      <SolidColorBrush x:Key="AccentButtonForeground" Color="{StaticResource EmeraldForegroundColor}"/>
+      <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="White"/>
+      <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#A0D0B0"/>
 
-            <!-- Danger Button (Delete) -->
-            <Style x:Key="DangerButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="{StaticResource CrimsonBrush}"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Height" Value="40"/>
-                <Setter Property="CornerRadius" Value="6"/>
-            </Style>
+      <!-- ===== BUTTON STYLES ===== -->
 
-            <!-- Add Game Button -->
-            <Style x:Key="AddGameButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                <Setter Property="BorderThickness" Value="2"/>
-                <Setter Property="Height" Value="56"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="HorizontalAlignment" Value="Stretch"/>
-                <Setter Property="FontSize" Value="14"/>
-            </Style>
+      <!-- Primary Button (Launch, Save, Add Game action) -->
+      <!-- NOTE: WinUI3 does not support Style.Resources; apply <Button.Resources> with the
+                 six EmeraldButton* brushes at each call site for correct hover/pressed colours. -->
+      <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background">
+          <Setter.Value>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+              <GradientStop Color="{StaticResource EmeraldColor}" Offset="0"/>
+              <GradientStop Color="{StaticResource EmeraldDarkColor}" Offset="1"/>
+            </LinearGradientBrush>
+          </Setter.Value>
+        </Setter>
+        <Setter Property="Foreground" Value="{StaticResource EmeraldForegroundBrush}"/>
+        <Setter Property="BorderBrush">
+          <Setter.Value>
+            <SolidColorBrush Color="{StaticResource EmeraldLightColor}" Opacity="0.3"/>
+          </Setter.Value>
+        </Setter>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="50"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      </Style>
 
-            <!-- ===== TEXT BOX STYLE ===== -->
-            <Style x:Key="ThemedTextBoxStyle" TargetType="TextBox">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="Padding" Value="12,10"/>
-                <Setter Property="Height" Value="40"/>
-                <Setter Property="FontSize" Value="12"/>
-            </Style>
+      <!-- Secondary Button (Edit, Cancel) -->
+      <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderHighBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="FontSize" Value="13"/>
+      </Style>
 
-            <!-- ===== PASSWORD BOX STYLE ===== -->
-            <Style x:Key="ThemedPasswordBoxStyle" TargetType="PasswordBox">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="Padding" Value="12,10"/>
-                <Setter Property="Height" Value="40"/>
-            </Style>
+      <!--
+                EMERALD ACTION BUTTON — required on every Button using PrimaryButtonStyle.
+                WinUI3 does not support Style.Resources, so add this block at each call site:
 
-            <!-- ===== COMBO BOX STYLE ===== -->
-            <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
-                <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="6"/>
-                <Setter Property="Padding" Value="12,8"/>
-                <Setter Property="Height" Value="40"/>
-                <Setter Property="FontSize" Value="12"/>
-            </Style>
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonForeground"          Color="{StaticResource EmeraldForegroundColor}"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed"    Color="#A0D0B0"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource EmeraldDarkColor}"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed"    Color="{StaticResource EmeraldPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource EmeraldLightColor}"/>
+                </Button.Resources>
+            -->
 
-        </ResourceDictionary>
-    </Application.Resources>
+      <!-- Danger Button (Delete) -->
+      <Style x:Key="DangerButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource CrimsonBrush}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="CornerRadius" Value="6"/>
+      </Style>
+
+      <!-- Add Game Button -->
+      <Style x:Key="AddGameButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Height" Value="56"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="FontSize" Value="14"/>
+      </Style>
+
+      <!-- ===== TEXT BOX STYLE ===== -->
+      <Style x:Key="ThemedTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="FontSize" Value="12"/>
+      </Style>
+
+      <!-- ===== PASSWORD BOX STYLE ===== -->
+      <Style x:Key="ThemedPasswordBoxStyle" TargetType="PasswordBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Height" Value="40"/>
+      </Style>
+
+      <!-- ===== COMBO BOX STYLE ===== -->
+      <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="FontSize" Value="12"/>
+      </Style>
+
+      <!-- ===== FOCUS BORDER ===== -->
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{StaticResource EmeraldColor}"/>
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{StaticResource BorderHighColor}"/>
+      <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="{StaticResource EmeraldColor}"/>
+
+      <!-- ===== COMBOBOX DROPDOWN ===== -->
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{StaticResource Surface2Color}"/>
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{StaticResource BorderColor}"/>
+      <SolidColorBrush x:Key="ComboBoxDropDownForeground" Color="{StaticResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="{StaticResource TextPrimaryColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="{StaticResource GoldColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="{StaticResource GoldLightColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemForegroundDisabled" Color="{StaticResource TextDimColor}"/>
+      <SolidColorBrush x:Key="ComboBoxItemBackground" Color="Transparent"/>
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource Surface3Color}"/>
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource Surface3Color}"/>
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="{StaticResource Surface3Color}"/>
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundDisabled" Color="Transparent"/>
+
+      <!-- ComboBox selection pill (the small vertical indicator on the left of the selected item) -->
+      <SolidColorBrush x:Key="ComboBoxItemPillFillBrush" Color="{StaticResource EmeraldColor}"/>
+
+      <!-- ===== NUMBER BOX STYLE ===== -->
+      <Style x:Key="ThemedNumberBoxStyle" TargetType="NumberBox">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="FontSize" Value="12"/>
+      </Style>
+
+      <!-- ===== TEXT BLOCK STYLES ===== -->
+      <!-- Uppercase gold section heading: ESSENTIALS, CONNECTION, UPDATES, etc. -->
+      <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="CharacterSpacing" Value="150"/>
+        <Setter Property="Foreground" Value="{StaticResource GoldDarkBrush}"/>
+      </Style>
+
+      <!-- Small muted label above a form input -->
+      <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFont}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+      </Style>
+
+      <!-- Small italic hint/description below a form input -->
+      <Style x:Key="FieldHintStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFont}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontStyle" Value="Italic"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+      </Style>
+
+    </ResourceDictionary>
+  </Application.Resources>
 </Application>
