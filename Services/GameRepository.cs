@@ -9,7 +9,7 @@ namespace iscLauncher.Services;
 
 public class GameRepository
 {
-    private static readonly string AppDataFolder = Path.Combine(
+    public static readonly string AppDataFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
 
@@ -111,6 +111,21 @@ public class GameRepository
         {
             var library = await LoadAsync();
             library.ComputerName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            await SaveAsync(library);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
+    public async Task SetCheckUpdatesOnStartupAsync(bool value)
+    {
+        await _fileLock.WaitAsync();
+        try
+        {
+            var library = await LoadAsync();
+            library.CheckUpdatesOnStartup = value;
             await SaveAsync(library);
         }
         finally

@@ -14,4 +14,7 @@ public class GameLibrary
     /// </summary>
     [JsonPropertyName("computerName")]
     public string? ComputerName { get; set; }
+
+    [JsonPropertyName("checkUpdatesOnStartup")]
+    public bool CheckUpdatesOnStartup { get; set; }
 }

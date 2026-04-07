@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -31,6 +32,10 @@ public sealed partial class MainWindow : Window
     private readonly HashSet<Guid> _runningGames = new();
     private GameEntry? _currentEditingGame;
     private CancellationTokenSource? _syncCts;
+    private UpdateCheckResult? _pendingUpdate;
+    private CancellationTokenSource? _updateCts;
+    private bool _checkUpdatesOnStartup;
+    private bool _suppressSettingsSave;
 
     public MainWindow()
     {
@@ -111,11 +116,30 @@ public sealed partial class MainWindow : Window
                 ? Environment.MachineName
                 : library.ComputerName;
 
+            _checkUpdatesOnStartup = library.CheckUpdatesOnStartup;
+
             UpdateEmptyState();
+
+            if (_checkUpdatesOnStartup)
+                _ = CheckForUpdatesSilentlyAsync();
         }
         catch (Exception ex)
         {
             ShowStatus($"Failed to load games: {ex.Message}", false);
+        }
+    }
+
+    private async Task CheckForUpdatesSilentlyAsync()
+    {
+        try
+        {
+            var result = await _updateService.CheckForUpdateAsync();
+            if (result.UpdateAvailable && result.DownloadUrl != null)
+                ShowStatus($"Update available: v{result.LatestVersion}. Go to Options to install.", true);
+        }
+        catch
+        {
+            // Silent — don't surface errors for background checks
         }
     }
 
@@ -213,9 +237,10 @@ public sealed partial class MainWindow : Window
 
     private void ShowGameDetails(GameEntry game)
     {
-        // Show detail panel, hide empty state
+        // Show detail panel, hide empty state and options
         DetailPanel.Visibility = Visibility.Visible;
         EmptyStatePanel.Visibility = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Collapsed;
 
         // Reset edit mode
         _currentEditingGame = null;
@@ -262,6 +287,7 @@ public sealed partial class MainWindow : Window
     private void HideGameDetails()
     {
         DetailPanel.Visibility = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Collapsed;
         EmptyStatePanel.Visibility = Visibility.Visible;
     }
 
@@ -534,6 +560,7 @@ public sealed partial class MainWindow : Window
     }
 
     private CancellationTokenSource? _statusHideCts;
+    private CancellationTokenSource? _optionsStatusHideCts;
 
     private void ShowStatus(string message, bool isSuccess)
     {
@@ -560,6 +587,37 @@ public sealed partial class MainWindow : Window
         {
             await Task.Delay(delayMs, token);
             StatusInfoBar.IsOpen = false;
+        }
+        catch (OperationCanceledException)
+        {
+            // Timer was cancelled by a newer status message
+        }
+    }
+
+    private void ShowOptionsStatus(string message, bool isSuccess)
+    {
+        _optionsStatusHideCts?.Cancel();
+        _optionsStatusHideCts?.Dispose();
+        _optionsStatusHideCts = null;
+
+        OptionsStatusText.Text = message;
+        OptionsStatusBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+        OptionsStatusBar.IsOpen = true;
+
+        if (isSuccess)
+        {
+            var cts = new CancellationTokenSource();
+            _optionsStatusHideCts = cts;
+            _ = HideOptionsStatusAfterDelay(5000, cts.Token);
+        }
+    }
+
+    private async Task HideOptionsStatusAfterDelay(int delayMs, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(delayMs, token);
+            OptionsStatusBar.IsOpen = false;
         }
         catch (OperationCanceledException)
         {
@@ -777,50 +835,251 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnUpdateClick(object sender, RoutedEventArgs e)
+    private void OnOptionsClick(object sender, RoutedEventArgs e) => ShowOptionsPanel();
+
+    // ── Options: DATA ────────────────────────────────────────────────────────
+
+    private void OnOpenDataFolderClick(object sender, RoutedEventArgs e)
     {
-        UpdateButton.IsEnabled = false;
-        ShowStatus("Checking for updates...", true);
         try
         {
-            var result = await _updateService.CheckForUpdateAsync();
+            Directory.CreateDirectory(GameRepository.AppDataFolder);
+            Process.Start(new ProcessStartInfo(GameRepository.AppDataFolder) { UseShellExecute = true });
+        }
+        catch
+        {
+            ShowOptionsStatus("Could not open data folder.", false);
+        }
+    }
 
-            if (!result.UpdateAvailable)
-            {
-                ShowStatus($"You're already on the latest version (v{AppUpdateService.CurrentVersion}).", true);
-                return;
-            }
+    private async void OnExportLibraryClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FileSavePicker();
+        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+        picker.SuggestedFileName = "games_backup";
+        picker.FileTypeChoices.Add("JSON file", new List<string> { ".json" });
 
-            if (result.DownloadUrl == null)
-            {
-                ShowStatus($"Update v{result.LatestVersion} is available but has no downloadable asset.", false);
-                return;
-            }
+        var hwnd = WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
-            var dialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Update Available");
-            dialog.Content = $"Version {result.LatestVersion} is available. Download and install now?\n\nThe app will restart after updating.";
-            dialog.PrimaryButtonText = "Update";
+        var file = await picker.PickSaveFileAsync();
+        if (file == null) return;
 
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-            {
-                ShowStatus("Update cancelled.", true);
-                return;
-            }
-
-            var progress = new Progress<double>(p =>
-                ShowStatus($"Downloading update... {(int)(p * 100)}%", true));
-
-            ShowStatus("Downloading update...", true);
-            await _updateService.DownloadAndApplyAsync(result.DownloadUrl, result.AssetName!, progress);
-            Application.Current.Exit();
+        try
+        {
+            var library = await _gameRepository.LoadAsync();
+            var json = JsonSerializer.Serialize(library, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(file.Path, json);
+            ShowOptionsStatus($"Exported {library.Games.Count} game(s) successfully.", true);
         }
         catch (Exception ex)
         {
-            ShowStatus($"Update failed: {ex.Message}", false);
+            ShowOptionsStatus($"Export failed: {ex.Message}", false);
         }
-        finally
+    }
+
+    private async void OnImportLibraryClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker();
+        picker.FileTypeFilter.Add(".json");
+        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+
+        var hwnd = WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        var file = await picker.PickSingleFileAsync();
+        if (file == null) return;
+
+        GameLibrary? imported;
+        try
         {
-            UpdateButton.IsEnabled = true;
+            var json = await File.ReadAllTextAsync(file.Path);
+            imported = JsonSerializer.Deserialize<GameLibrary>(json);
+        }
+        catch
+        {
+            ShowOptionsStatus("Selected file is not a valid library backup.", false);
+            return;
+        }
+
+        if (imported == null)
+        {
+            ShowOptionsStatus("Selected file is not a valid library backup.", false);
+            return;
+        }
+
+        var confirmDialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Import Library");
+        confirmDialog.Content = $"This will replace your current library with {imported.Games.Count} game(s) from the backup. Passwords are not included in exports and must be re-entered. Continue?";
+        confirmDialog.PrimaryButtonText = "Import";
+        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            var destPath = Path.Combine(GameRepository.AppDataFolder, "games.json");
+            Directory.CreateDirectory(GameRepository.AppDataFolder);
+            File.Copy(file.Path, destPath, overwrite: true);
+
+            // Reload the game list in-place so the Options panel stays visible
+            var reloaded = await _gameRepository.LoadAsync();
+            _games.Clear();
+            foreach (var game in reloaded.Games)
+                _games.Add(game);
+
+            _checkUpdatesOnStartup = reloaded.CheckUpdatesOnStartup;
+            _suppressSettingsSave = true;
+            CheckUpdatesOnStartupToggle.IsOn = _checkUpdatesOnStartup;
+            _suppressSettingsSave = false;
+
+            ShowOptionsStatus($"Imported {reloaded.Games.Count} game(s) successfully.", true);
+        }
+        catch (Exception ex)
+        {
+            ShowOptionsStatus($"Import failed: {ex.Message}", false);
+        }
+    }
+
+    private void OnClearIconCacheClick(object sender, RoutedEventArgs e)
+    {
+        Services.IconExtractor.ClearCache();
+        var items = _games.ToList();
+        _games.Clear();
+        foreach (var game in items)
+            _games.Add(game);
+        ShowOptionsStatus("Icon cache cleared.", true);
+    }
+
+    // ── Options: DEFAULTS ────────────────────────────────────────────────────
+
+    private async void OnCheckUpdatesOnStartupToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettingsSave) return;
+        _checkUpdatesOnStartup = CheckUpdatesOnStartupToggle.IsOn;
+        await _gameRepository.SetCheckUpdatesOnStartupAsync(_checkUpdatesOnStartup);
+    }
+
+    // ── Options: SECURITY ────────────────────────────────────────────────────
+
+    private async void OnRemoveAllPasswordsClick(object sender, RoutedEventArgs e)
+    {
+        if (_games.Count == 0)
+        {
+            ShowOptionsStatus("No stored passwords to remove.", false);
+            return;
+        }
+
+        var confirmDialog = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Remove All Passwords");
+        confirmDialog.Content = $"This will permanently delete passwords for all {_games.Count} game(s) from Windows Credential Manager. This cannot be undone.";
+        confirmDialog.PrimaryButtonText = "Remove All";
+        if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        int removed = 0;
+        foreach (var game in _games)
+        {
+            if (_credentialService.DeleteCredential(game.CredentialTarget))
+                removed++;
+        }
+        ShowOptionsStatus($"Removed {removed} password(s).", true);
+    }
+
+    private void ShowOptionsPanel()
+    {
+        GameListView.SelectedItem = null;
+        DetailPanel.Visibility = Visibility.Collapsed;
+        EmptyStatePanel.Visibility = Visibility.Collapsed;
+        OptionsPanel.Visibility = Visibility.Visible;
+        OptionsVersionText.Text = $"v{AppUpdateService.CurrentVersion}";
+        OptionsStatusBar.IsOpen = false;
+        UpdateAvailableText.Visibility = Visibility.Collapsed;
+        UpdateProgressBar.Visibility = Visibility.Collapsed;
+        CheckUpdatesButtonIcon.Glyph = "\uE72C";
+        CheckUpdatesButtonText.Text = "Check for Updates";
+        _pendingUpdate = null;
+
+        _suppressSettingsSave = true;
+        CheckUpdatesOnStartupToggle.IsOn = _checkUpdatesOnStartup;
+        _suppressSettingsSave = false;
+    }
+
+    private async void OnUpdateButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (_pendingUpdate == null)
+        {
+            CheckUpdatesButton.IsEnabled = false;
+            UpdateAvailableText.Visibility = Visibility.Collapsed;
+            ShowOptionsStatus("Checking for updates...", true);
+
+            try
+            {
+                _updateCts?.Cancel();
+                _updateCts?.Dispose();
+                _updateCts = new CancellationTokenSource();
+
+                var result = await _updateService.CheckForUpdateAsync(_updateCts.Token);
+
+                if (!result.UpdateAvailable)
+                {
+                    ShowOptionsStatus($"You're up to date (v{AppUpdateService.CurrentVersion}).", true);
+                }
+                else if (result.DownloadUrl == null)
+                {
+                    ShowOptionsStatus($"Version {result.LatestVersion} is available but has no downloadable asset.", false);
+                }
+                else
+                {
+                    OptionsStatusBar.IsOpen = false;
+                    _pendingUpdate = result;
+                    UpdateAvailableText.Text = $"Version {result.LatestVersion} is available. The app will restart after installing.";
+                    UpdateAvailableText.Visibility = Visibility.Visible;
+                    CheckUpdatesButtonIcon.Glyph = "\uE896";
+                    CheckUpdatesButtonText.Text = "Download & Install";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                OptionsStatusBar.IsOpen = false;
+            }
+            catch (Exception ex)
+            {
+                ShowOptionsStatus($"Update check failed: {ex.Message}", false);
+            }
+            finally
+            {
+                CheckUpdatesButton.IsEnabled = true;
+            }
+        }
+        else
+        {
+            CheckUpdatesButton.IsEnabled = false;
+            UpdateProgressBar.Value = 0;
+            UpdateProgressBar.Visibility = Visibility.Visible;
+            ShowOptionsStatus("Downloading update...", true);
+
+            try
+            {
+                _updateCts?.Cancel();
+                _updateCts?.Dispose();
+                _updateCts = new CancellationTokenSource();
+
+                var progress = new Progress<double>(p =>
+                {
+                    UpdateProgressBar.Value = p;
+                    OptionsStatusText.Text = $"Downloading update... {(int)(p * 100)}%";
+                });
+
+                await _updateService.DownloadAndApplyAsync(
+                    _pendingUpdate.DownloadUrl!,
+                    _pendingUpdate.AssetName!,
+                    progress,
+                    _updateCts.Token);
+
+                Application.Current.Exit();
+            }
+            catch (Exception ex)
+            {
+                ShowOptionsStatus($"Update failed: {ex.Message}", false);
+                UpdateProgressBar.Visibility = Visibility.Collapsed;
+                CheckUpdatesButton.IsEnabled = true;
+            }
         }
     }
 }
