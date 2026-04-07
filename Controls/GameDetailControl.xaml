@@ -28,11 +28,6 @@
                              Style="{StaticResource ThemedTextBoxStyle}"
                              FontSize="13"/>
                 </StackPanel>
-                <Rectangle Height="1.5"
-                           Fill="{StaticResource GoldDarkBrush}"
-                           Opacity="0.3"
-                           HorizontalAlignment="Left"
-                           Width="90"/>
             </StackPanel>
 
             <!-- Status feedback -->
