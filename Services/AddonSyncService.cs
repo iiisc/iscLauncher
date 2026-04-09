@@ -53,7 +53,7 @@ public class AddonSyncService
         if (Directory.Exists(wtfDir))
         {
             progress?.Report("Backing up WTF settings...");
-            BackupWtfFolder(wtfDir, game);
+            await Task.Run(() => BackupWtfFolder(wtfDir, game), ct);
         }
 
         // 4. Sync AddOns
@@ -64,14 +64,17 @@ public class AddonSyncService
         if (Directory.Exists(cacheAddOns))
         {
             Directory.CreateDirectory(localAddOns);
-            foreach (var addonDir in Directory.GetDirectories(cacheAddOns))
+            await Task.Run(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                var addonName = Path.GetFileName(addonDir);
-                var targetDir = Path.Combine(localAddOns, addonName);
-                CopyDirectoryRecursive(addonDir, targetDir, excludeBackups: false, ct);
-                addOnsCopied++;
-            }
+                foreach (var addonDir in Directory.GetDirectories(cacheAddOns))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var addonName = Path.GetFileName(addonDir);
+                    var targetDir = Path.Combine(localAddOns, addonName);
+                    CopyDirectoryRecursive(addonDir, targetDir, excludeBackups: false, ct);
+                    addOnsCopied++;
+                }
+            }, ct);
         }
 
         // 5. Restore WTF/Account snapshot from repo
@@ -82,8 +85,8 @@ public class AddonSyncService
 
         if (Directory.Exists(cacheWtfAccount))
         {
-            CopyDirectoryRecursive(cacheWtfAccount, wtfAccountDir, excludeBackups: true, ct);
-            charactersSynced = EnumerateCharacterFolders(cacheWtfAccount).Count();
+            await Task.Run(() => CopyDirectoryRecursive(cacheWtfAccount, wtfAccountDir, excludeBackups: true, ct), ct);
+            charactersSynced = await Task.Run(() => EnumerateCharacterFolders(cacheWtfAccount).Count(), ct);
         }
 
         // 6. Update timestamp
@@ -126,21 +129,24 @@ public class AddonSyncService
         var localAddOns = Path.Combine(gameDir, "Interface", "AddOns");
 
         if (Directory.Exists(cacheAddOns))
-            ForceDeleteDirectory(cacheAddOns);
+            await Task.Run(() => ForceDeleteDirectory(cacheAddOns), ct);
         Directory.CreateDirectory(cacheAddOns);
 
         if (Directory.Exists(localAddOns))
         {
-            foreach (var addonDir in Directory.GetDirectories(localAddOns))
+            await Task.Run(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                var addonName = Path.GetFileName(addonDir);
-                if (addonName.StartsWith("Blizzard_", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                var targetDir = Path.Combine(cacheAddOns, addonName);
-                CopyDirectoryRecursive(addonDir, targetDir, excludeBackups: false, ct);
-                addonNames.Add(addonName);
-            }
+                foreach (var addonDir in Directory.GetDirectories(localAddOns))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var addonName = Path.GetFileName(addonDir);
+                    if (addonName.StartsWith("Blizzard_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var targetDir = Path.Combine(cacheAddOns, addonName);
+                    CopyDirectoryRecursive(addonDir, targetDir, excludeBackups: false, ct);
+                    addonNames.Add(addonName);
+                }
+            }, ct);
         }
         var addOnsCopied = addonNames.Count;
 
@@ -151,13 +157,13 @@ public class AddonSyncService
         var localWtfAccount = Path.Combine(gameDir, "WTF", "Account");
 
         if (Directory.Exists(cacheWtf))
-            ForceDeleteDirectory(cacheWtf);
+            await Task.Run(() => ForceDeleteDirectory(cacheWtf), ct);
 
         var charactersSynced = 0;
         if (Directory.Exists(localWtfAccount))
         {
-            CopyDirectoryRecursive(localWtfAccount, cacheWtfAccount, excludeBackups: true, ct);
-            charactersSynced = EnumerateCharacterFolders(localWtfAccount).Count();
+            await Task.Run(() => CopyDirectoryRecursive(localWtfAccount, cacheWtfAccount, excludeBackups: true, ct), ct);
+            charactersSynced = await Task.Run(() => EnumerateCharacterFolders(localWtfAccount).Count(), ct);
         }
 
         // 5. Ensure .gitignore exists
@@ -327,6 +333,19 @@ public class AddonSyncService
             .ToList()!;
     }
 
+    public List<string> GetLocalAddonList(GameEntry game)
+    {
+        var gameDir = Path.GetDirectoryName(game.ExecutablePath);
+        if (string.IsNullOrEmpty(gameDir)) return [];
+        var localAddOns = Path.Combine(gameDir, "Interface", "AddOns");
+        if (!Directory.Exists(localAddOns)) return [];
+        return Directory.GetDirectories(localAddOns)
+            .Select(Path.GetFileName)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList()!;
+    }
+
     public async Task<SyncResult> RollbackAsync(GameEntry game, string commitHash, string commitMessage, string commitBody = "", IProgress<string>? progress = null, CancellationToken ct = default)
     {
         progress?.Report("Checking prerequisites...");
@@ -335,6 +354,10 @@ public class AddonSyncService
 
         if (string.IsNullOrWhiteSpace(game.SyncRepoUrl))
             return new SyncResult(false, "No sync repo URL configured.", 0, 0);
+
+        var gameDir = Path.GetDirectoryName(game.ExecutablePath);
+        if (string.IsNullOrEmpty(gameDir) || !File.Exists(game.ExecutablePath))
+            return new SyncResult(false, "Game executable not found.", 0, 0);
 
         var cachePath = _git.GetLocalCachePath(game);
         var gitResult = await EnsureCacheRepoAsync(game, cachePath, ct, progress);
@@ -351,25 +374,68 @@ public class AddonSyncService
         if (!addResult.Success)
             return new SyncResult(false, $"Git add failed: {addResult.Output}", 0, 0);
 
-        if (await _git.IsStatusCleanAsync(cachePath, ct))
-            return new SyncResult(true, "Already at that commit — nothing to rollback.", 0, 0);
+        if (!await _git.IsStatusCleanAsync(cachePath, ct))
+        {
+            var pcName = await _gameRepository.GetComputerNameAsync();
+            var subject = $"rollback: {game.Name} — restore to {commitHash[..Math.Min(7, commitHash.Length)]}: {commitMessage} [{pcName}]";
+            var rollbackMessage = string.IsNullOrWhiteSpace(commitBody) ? subject : $"{subject}\n\n{commitBody}";
+            var commitResult = await _git.CommitAsync(cachePath, rollbackMessage, ct);
+            if (!commitResult.Success)
+                return new SyncResult(false, $"Git commit failed: {commitResult.Output}", 0, 0);
 
-        var pcName = await _gameRepository.GetComputerNameAsync();
-        var subject = $"rollback: {game.Name} — restore to {commitHash[..Math.Min(7, commitHash.Length)]}: {commitMessage} [{pcName}]";
-        var rollbackMessage = string.IsNullOrWhiteSpace(commitBody) ? subject : $"{subject}\n\n{commitBody}";
-        var commitResult = await _git.CommitAsync(cachePath, rollbackMessage, ct);
-        if (!commitResult.Success)
-            return new SyncResult(false, $"Git commit failed: {commitResult.Output}", 0, 0);
+            progress?.Report("Pushing rollback...");
+            var pushResult = await _git.PushAsync(cachePath, ct);
+            if (!pushResult.Success)
+                return new SyncResult(false, $"Push failed: {pushResult.Output}", 0, 0);
+        }
 
-        progress?.Report("Pushing rollback...");
-        var pushResult = await _git.PushAsync(cachePath, ct);
-        if (!pushResult.Success)
-            return new SyncResult(false, $"Push failed: {pushResult.Output}", 0, 0);
+        // Backup WTF before overwriting
+        var wtfDir = Path.Combine(gameDir, "WTF");
+        if (Directory.Exists(wtfDir))
+        {
+            progress?.Report("Backing up current WTF settings...");
+            await Task.Run(() => BackupWtfFolder(wtfDir, game), ct);
+        }
+
+        // Apply AddOns from the rolled-back cache
+        progress?.Report("Applying rolled-back addons...");
+        var addOnsCopied = 0;
+        var cacheAddOns = Path.Combine(cachePath, "AddOns");
+        var localAddOns = Path.Combine(gameDir, "Interface", "AddOns");
+        if (Directory.Exists(cacheAddOns))
+        {
+            Directory.CreateDirectory(localAddOns);
+            await Task.Run(() =>
+            {
+                foreach (var addonDir in Directory.GetDirectories(cacheAddOns))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var addonName = Path.GetFileName(addonDir);
+                    var targetDir = Path.Combine(localAddOns, addonName);
+                    CopyDirectoryRecursive(addonDir, targetDir, excludeBackups: false, ct);
+                    addOnsCopied++;
+                }
+            }, ct);
+        }
+
+        // Restore WTF/Account snapshot
+        progress?.Report("Restoring WTF settings...");
+        var charactersSynced = 0;
+        var cacheWtfAccount = Path.Combine(cachePath, "WTF", "Account");
+        var wtfAccountDir = Path.Combine(gameDir, "WTF", "Account");
+        if (Directory.Exists(cacheWtfAccount))
+        {
+            await Task.Run(() => CopyDirectoryRecursive(cacheWtfAccount, wtfAccountDir, excludeBackups: true, ct), ct);
+            charactersSynced = await Task.Run(() => EnumerateCharacterFolders(cacheWtfAccount).Count(), ct);
+        }
 
         game.LastSynced = DateTime.UtcNow;
         await _gameRepository.UpdateGameAsync(game);
 
-        return new SyncResult(true, $"Rolled back to: {commitMessage}", 0, 0);
+        var message = charactersSynced > 0
+            ? $"Rolled back and applied: {commitMessage}. {addOnsCopied} addon(s), {charactersSynced} character(s) restored."
+            : $"Rolled back and applied: {commitMessage}. {addOnsCopied} addon(s) restored.";
+        return new SyncResult(true, message, addOnsCopied, charactersSynced);
     }
 
     private static readonly string BackupRoot = Path.Combine(
@@ -385,10 +451,10 @@ public class AddonSyncService
         var backupDir = Path.Combine(BackupRoot, game.Id.ToString());
         Directory.CreateDirectory(backupDir);
 
-        // Keep only last 5 backups
+        // Keep only last 2 backups
         var existing = Directory.GetFiles(backupDir, "*.zip")
             .OrderByDescending(f => f)
-            .Skip(4)
+            .Skip(1)
             .ToList();
         foreach (var old in existing)
         {

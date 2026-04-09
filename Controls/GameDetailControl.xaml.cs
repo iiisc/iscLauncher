@@ -244,7 +244,8 @@ public sealed partial class GameDetailControl : UserControl
         catch { repoAddons = []; }
 
         var charCount = AddonSyncService!.GetRepoCharacterCount(_game);
-        if (await SyncPullDialog.ShowAsync(XamlRoot, repoAddons, charCount) != ContentDialogResult.Primary) return;
+        var localAddons = AddonSyncService!.GetLocalAddonList(_game);
+        if (await SyncPullDialog.ShowAsync(XamlRoot, repoAddons, localAddons, charCount) != ContentDialogResult.Primary) return;
 
         await RunSyncAsync("Syncing addons...",
             (p, ct) => AddonSyncService.SyncAsync(_game, p, ct));
@@ -287,6 +288,8 @@ public sealed partial class GameDetailControl : UserControl
 
     private void OnCancelSyncClick(object sender, RoutedEventArgs e) => _syncCts?.Cancel();
 
+    public void CancelSync() => _syncCts?.Cancel();
+
     private void OnOpenRepoClick(object sender, RoutedEventArgs e)
     {
         if (_game?.HasSyncRepo != true) return;
@@ -296,8 +299,11 @@ public sealed partial class GameDetailControl : UserControl
         catch { ShowStatus("Could not open browser.", false); }
     }
 
+    public bool IsSyncing { get; private set; }
+
     private void SetSyncBusy(bool busy)
     {
+        IsSyncing = busy;
         SyncAddonsButton.IsEnabled = !busy;
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;

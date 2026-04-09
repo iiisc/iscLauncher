@@ -56,7 +56,7 @@ public static class RollbackDialog
 
         var dialog = DialogHelper.CreateThemedDialog(xamlRoot, "⚔ Rollback to Previous Sync");
         dialog.Content = contentPanel;
-        dialog.PrimaryButtonText = "Rollback";
+        dialog.PrimaryButtonText = "Rollback & Apply";
         dialog.IsPrimaryButtonEnabled = false;
         dialog.MinWidth = 600;
         dialog.MaxWidth = 700;
@@ -233,7 +233,7 @@ public static class RollbackDialog
             contentPanel.Children.Clear();
             contentPanel.Children.Add(new TextBlock
             {
-                Text = "Select the commit to restore. This will reset the repo to that snapshot and push.",
+                Text = "Select the commit to restore. Addons and WTF settings will be applied to your local game folder automatically.",
                 FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
                 FontSize = 13,
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
@@ -242,15 +242,6 @@ public static class RollbackDialog
             contentPanel.Children.Add(commitListView);
             contentPanel.Children.Add(addonDetailHeader);
             contentPanel.Children.Add(addonDetailScroller);
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = "⚠ The repo will be overwritten. Run Pull afterwards to apply the restored state locally.",
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                FontSize = 11,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
-                FontStyle = Windows.UI.Text.FontStyle.Italic,
-                TextWrapping = TextWrapping.Wrap
-            });
 
             dialog.IsPrimaryButtonEnabled = true;
         };

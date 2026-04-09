@@ -138,6 +138,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
+        GameDetail.CancelSync();
         if (game == null) ShowEmptyState();
         else ShowDetail(game);
     }
@@ -160,6 +161,7 @@ public sealed partial class MainWindow : Window
         if (GameDetail.Visibility == Visibility.Visible &&
             GameDetail.IsEditing &&
             !await GameDetail.ConfirmNavigateAwayAsync()) return;
+        GameDetail.CancelSync();
         ShowAddGame();
     }
 
@@ -170,6 +172,7 @@ public sealed partial class MainWindow : Window
         if (GameDetail.Visibility == Visibility.Visible &&
             GameDetail.IsEditing &&
             !await GameDetail.ConfirmNavigateAwayAsync()) return;
+        GameDetail.CancelSync();
         ShowOptions();
     }
 
