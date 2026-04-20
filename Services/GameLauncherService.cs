@@ -31,6 +31,44 @@ public class GameLauncherService
         try { Windows.ApplicationModel.DataTransfer.Clipboard.Clear(); } catch { }
     }
 
+    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game, int processId, CancellationToken cancellationToken = default)
+    {
+        var password = _credentialService.GetCredential(game.CredentialTarget);
+        if (string.IsNullOrEmpty(password))
+            return new LaunchResult(false, "Password not found in Credential Manager");
+
+        try
+        {
+            // Verify the process is still alive
+            Process.GetProcessById(processId);
+        }
+        catch
+        {
+            return new LaunchResult(false, "The game process is no longer running.");
+        }
+
+        if (game.InputMethod == PasswordInputMethod.Clipboard)
+        {
+            CopyPasswordToClipboard(password);
+            return new LaunchResult(true, "Password copied to clipboard - press Ctrl+V to paste.", processId);
+        }
+
+        var result = await _automationService.AutomatePasswordEntryAsync(
+            processId,
+            password,
+            game.WindowTitle,
+            cancellationToken: cancellationToken);
+
+        if (result.Success)
+            return new LaunchResult(true, "Password sent to running game.", processId);
+
+        // Fallback to clipboard
+        CopyPasswordToClipboard(password);
+        return new LaunchResult(true,
+            $"Auto-entry failed ({result.Message}). Password copied to clipboard - press Ctrl+V to paste.",
+            processId);
+    }
+
     public async Task<LaunchResult> LaunchGameAsync(GameEntry game, CancellationToken cancellationToken = default)
     {
         // Verify executable exists

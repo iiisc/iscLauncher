@@ -29,6 +29,7 @@ public sealed partial class GameDetailControl : UserControl
     private GameEntry? _game;
     private GameEntry? _editingGame;
     private readonly HashSet<Guid> _runningGames = new();
+    private readonly Dictionary<Guid, int> _runningProcessIds = new();
     private CancellationTokenSource? _syncCts;
     private CancellationTokenSource? _statusHideCts;
 
@@ -196,7 +197,25 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnLaunchClick(object sender, RoutedEventArgs e)
     {
-        if (_game != null) await LaunchGameAsync(_game);
+        if (_game == null) return;
+        if (_runningGames.Contains(_game.Id) && _runningProcessIds.TryGetValue(_game.Id, out var pid))
+            await SendPasswordAsync(_game, pid);
+        else
+            await LaunchGameAsync(_game);
+    }
+
+    private async Task SendPasswordAsync(GameEntry game, int processId)
+    {
+        ShowStatus($"Sending password to {game.Name}...", true);
+        var result = await GameLauncherService!.SendPasswordToRunningGameAsync(game, processId);
+        ShowStatus(result.Message, result.Success);
+        if (!result.Success)
+        {
+            // Process is gone — clean up running state
+            _runningGames.Remove(game.Id);
+            _runningProcessIds.Remove(game.Id);
+            if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
+        }
     }
 
     private async Task LaunchGameAsync(GameEntry game)
@@ -214,11 +233,13 @@ public sealed partial class GameDetailControl : UserControl
             {
                 var process = Process.GetProcessById(pid);
                 _runningGames.Add(game.Id);
+                _runningProcessIds[game.Id] = pid;
                 UpdateLaunchButtonState(game);
                 process.EnableRaisingEvents = true;
                 process.Exited += (s, e) => DispatcherQueue.TryEnqueue(() =>
                 {
                     _runningGames.Remove(game.Id);
+                    _runningProcessIds.Remove(game.Id);
                     if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
                 });
             }
@@ -229,8 +250,9 @@ public sealed partial class GameDetailControl : UserControl
     private void UpdateLaunchButtonState(GameEntry game)
     {
         var isRunning = _runningGames.Contains(game.Id);
-        LaunchButton.IsEnabled = !isRunning;
-        LaunchButtonText.Text = isRunning ? "Running" : "Launch";
+        LaunchButton.IsEnabled = true;
+        LaunchButtonText.Text = isRunning ? "Send Password" : "Launch";
+        LaunchButtonIcon.Text = isRunning ? "🔑" : "⚔";
     }
 
     // ── Addon Sync ────────────────────────────────────────────────────────────
