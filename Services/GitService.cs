@@ -25,27 +25,33 @@ public class GitService
     public async Task<bool> IsGitInstalledAsync(CancellationToken ct = default)
     {
         if (!_gitFound)
-            _gitFound = (await RunGitAsync("--version", ct)).Success;
+            _gitFound = (await RunGitAsync(["--version"], ct)).Success;
         return _gitFound;
     }
 
     public async Task<GitResult> CloneAsync(string repoUrl, string branch, string targetDir, CancellationToken ct = default, IProgress<string>? progress = null)
     {
-        var result = await RunGitAsync($"clone --progress --branch \"{branch}\" \"{repoUrl}\" \"{targetDir}\"", ct, progress);
+        var result = await RunGitAsync(["clone", "--progress", "--branch", branch, "--", repoUrl, targetDir], ct, progress);
         if (result.Success)
             return result;
 
         // Empty repos have no branches — clone without --branch
         if (Directory.Exists(targetDir))
             ForceDeleteDirectory(targetDir);
-        return await RunGitAsync($"clone --progress \"{repoUrl}\" \"{targetDir}\"", ct, progress);
+        return await RunGitAsync(["clone", "--progress", "--", repoUrl, targetDir], ct, progress);
     }
 
     public async Task<GitResult> PullAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" pull", ct);
+        await RunGitAsync(["-C", repoDir, "pull"], ct);
+
+    public async Task<bool> IsRemoteEmptyAsync(string repoDir, CancellationToken ct = default)
+    {
+        var result = await RunGitAsync(["-C", repoDir, "ls-remote", "--heads", "origin"], ct);
+        return result.Success && string.IsNullOrWhiteSpace(result.Output);
+    }
 
     public async Task<GitResult> AddAllAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" add -A", ct);
+        await RunGitAsync(["-C", repoDir, "add", "-A"], ct);
 
     public async Task<GitResult> CommitAsync(string repoDir, string message, CancellationToken ct = default)
     {
@@ -54,7 +60,8 @@ public class GitService
         {
             await File.WriteAllTextAsync(msgFile, message, new UTF8Encoding(false), ct);
             return await RunGitAsync(
-                $"-C \"{repoDir}\" -c user.name=\"iscLauncher\" -c user.email=\"noreply\" -c i18n.commitEncoding=utf-8 commit --file=\"{msgFile}\"", ct);
+                ["-C", repoDir, "-c", "user.name=iscLauncher", "-c", "user.email=noreply", "-c", "i18n.commitEncoding=utf-8",
+                 "commit", $"--file={msgFile}"], ct);
         }
         finally
         {
@@ -63,17 +70,17 @@ public class GitService
     }
 
     public async Task<GitResult> PushAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" push -u origin HEAD", ct);
+        await RunGitAsync(["-C", repoDir, "push", "-u", "origin", "HEAD"], ct);
 
     public async Task<string?> GetRemoteUrlAsync(string repoDir, CancellationToken ct = default)
     {
-        var result = await RunGitAsync($"-C \"{repoDir}\" remote get-url origin", ct);
+        var result = await RunGitAsync(["-C", repoDir, "remote", "get-url", "origin"], ct);
         return result.Success ? result.Output.Trim() : null;
     }
 
     public async Task<bool> IsStatusCleanAsync(string repoDir, CancellationToken ct = default)
     {
-        var result = await RunGitAsync($"-C \"{repoDir}\" status --porcelain", ct);
+        var result = await RunGitAsync(["-C", repoDir, "status", "--porcelain"], ct);
         return result.Success && string.IsNullOrWhiteSpace(result.Output);
     }
 
@@ -83,7 +90,7 @@ public class GitService
         const char rs = '\x1e';
         const char us = '\x1f';
         var format = $"--format={rs}%h{us}%s{us}%b{us}%ai";
-        var result = await RunGitAsync($"-C \"{repoDir}\" -c i18n.logOutputEncoding=utf-8 log {format} -n {count}", ct);
+        var result = await RunGitAsync(["-C", repoDir, "-c", "i18n.logOutputEncoding=utf-8", "log", format, "-n", count.ToString()], ct);
         var entries = new List<GitCommitEntry>();
         if (!result.Success)
             return entries;
@@ -105,16 +112,15 @@ public class GitService
     }
 
     public async Task<GitResult> CheckoutCommitFilesAsync(string repoDir, string commitHash, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" checkout {commitHash} -- .", ct);
+        await RunGitAsync(["-C", repoDir, "checkout", commitHash, "--", "."], ct);
 
-    private static async Task<GitResult> RunGitAsync(string arguments, CancellationToken ct, IProgress<string>? progress = null)
+    private static async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null)
     {
         try
         {
             var psi = new ProcessStartInfo
             {
                 FileName = "git",
-                Arguments = arguments,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -122,6 +128,9 @@ public class GitService
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8
             };
+            // ArgumentList quotes each value, so paths and URLs with spaces or quotes stay intact
+            foreach (var arg in arguments)
+                psi.ArgumentList.Add(arg);
 
             using var process = new Process { StartInfo = psi };
 

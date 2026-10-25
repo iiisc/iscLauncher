@@ -174,24 +174,19 @@ public class AddonSyncService
         if (!Directory.Exists(Path.Combine(cachePath, ".git")))
             return [];
 
-        await _git.PullAsync(cachePath, ct);
+        var pullResult = await PullCacheAsync(cachePath, ct);
+        if (!pullResult.Success)
+            throw new InvalidOperationException($"Could not update from the sync repo: {pullResult.Output.Trim()}");
         return await _git.LogAsync(cachePath, 20, ct);
     }
 
     public int GetRepoCharacterCount(GameEntry game) =>
         EnumerateCharacterFolders(WtfAccountDir(_git.GetLocalCachePath(game))).Count();
 
-    public async Task<List<string>> GetRepoAddonListAsync(GameEntry game, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<(SyncResult? Error, List<string> Addons)> GetRepoAddonListAsync(GameEntry game, IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(game.SyncRepoUrl))
-            return [];
-
-        var cachePath = _git.GetLocalCachePath(game);
-        var gitResult = await EnsureCacheRepoAsync(game, cachePath, ct, progress);
-        if (!gitResult.Success)
-            return [];
-
-        return SubdirectoryNames(Path.Combine(cachePath, "AddOns"));
+        var (error, _, cachePath) = await PrepareAsync(game, progress, ct);
+        return error != null ? (error, []) : (null, SubdirectoryNames(Path.Combine(cachePath, "AddOns")));
     }
 
     public List<string> GetLocalAddonList(GameEntry game)
@@ -310,14 +305,21 @@ public class AddonSyncService
             }
 
             progress?.Report("Pulling latest changes...");
-            var pullResult = await _git.PullAsync(cachePath, ct);
-            // Pull can fail on empty repos (no commits yet) — that's fine for upload flow
-            return pullResult.Success ? pullResult : new GitResult(true, "Empty repo — will create first commit.");
+            return await PullCacheAsync(cachePath, ct);
         }
 
         progress?.Report("Cloning repository...");
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
         return await _git.CloneAsync(game.SyncRepoUrl!, branch, cachePath, ct, progress);
+    }
+
+    private async Task<GitResult> PullCacheAsync(string cachePath, CancellationToken ct)
+    {
+        var pullResult = await _git.PullAsync(cachePath, ct);
+        // Pulling a repo with no commits yet fails; that's expected before the first upload
+        if (!pullResult.Success && await _git.IsRemoteEmptyAsync(cachePath, ct))
+            return new GitResult(true, "Empty repo — will create first commit.");
+        return pullResult;
     }
 
     private static string LocalAddOnsDir(string gameDir) => Path.Combine(gameDir, "Interface", "AddOns");

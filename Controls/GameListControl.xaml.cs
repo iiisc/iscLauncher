@@ -1,6 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Numerics;
+using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
@@ -102,15 +104,23 @@ public sealed partial class GameListControl : UserControl
             DeleteConfirmed?.Invoke(this, game);
     }
 
-    private async void OnGameIconLoaded(object sender, RoutedEventArgs e)
+    private void OnGameIconLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not Image image || image.DataContext is not GameEntry game) return;
+        // x:Bind can't load the icon asynchronously, so reload it whenever the entry changes (e.g. a new executable)
+        PropertyChangedEventHandler onChanged = (_, _) => _ = LoadIconAsync(image, game);
+        game.PropertyChanged += onChanged;
+        image.Unloaded += (_, _) => game.PropertyChanged -= onChanged;
+        _ = LoadIconAsync(image, game);
+    }
+
+    private static async Task LoadIconAsync(Image image, GameEntry game)
+    {
         var icon = await IconExtractor.GetIconFromExecutableAsync(game.ExecutablePath);
-        if (icon == null) return;
         image.Source = icon;
         if (image.Parent is Grid grid)
             foreach (var child in grid.Children)
-                if (child is FontIcon fallback) { fallback.Visibility = Visibility.Collapsed; break; }
+                if (child is FontIcon fallback) { fallback.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed; break; }
     }
 
     private void OnAddGameClick(object sender, RoutedEventArgs e) =>

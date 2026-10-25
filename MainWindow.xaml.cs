@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using iscLauncher.Controls;
@@ -25,6 +24,7 @@ public sealed partial class MainWindow : Window
     private readonly AppUpdateService _updateService = new();
     private readonly ObservableCollection<GameEntry> _games = new();
     private bool _checkUpdatesOnStartup;
+    private UpdateCheckResult? _startupUpdate;
 
     public MainWindow()
     {
@@ -161,16 +161,8 @@ public sealed partial class MainWindow : Window
         if (await TryLeaveDetailAsync()) ShowOptions();
     }
 
-    private void OnGameSaved(object? sender, GameEntry savedGame)
-    {
-        // The card's x:Bind values are one-time, so re-insert the edited entry to re-template its row
-        var index = _games.IndexOf(savedGame);
-        if (index < 0) return;
-        _games.RemoveAt(index);
-        _games.Insert(index, savedGame);
-        GameList.SetSelectedGame(savedGame);
+    private void OnGameSaved(object? sender, GameEntry savedGame) =>
         ShowDetail(savedGame, "Game updated successfully!");
-    }
 
     private void OnGameAdded(object? sender, GameEntry game)
     {
@@ -199,8 +191,10 @@ public sealed partial class MainWindow : Window
         ShowEmptyState();
     }
 
-    // Re-adding every item makes the ListView re-run each icon's Loaded handler
-    private void OnIconCacheCleared(object? sender, EventArgs e) => ReplaceGames(_games.ToList());
+    private void OnIconCacheCleared(object? sender, EventArgs e)
+    {
+        foreach (var game in _games) game.NotifyChanged();
+    }
 
     private void OnDetailEscapeRequested(object? sender, EventArgs e)
     {
@@ -234,11 +228,21 @@ public sealed partial class MainWindow : Window
             var result = await _updateService.CheckForUpdateAsync();
             if (result.UpdateAvailable && result.DownloadUrl != null)
             {
-                // Show a non-modal nudge by briefly surfacing the Options panel is not feasible silently.
-                // The user will see the update when they open Options.
+                _startupUpdate = result;
+                UpdateBar.Message = $"Version {result.LatestVersion} is ready to install.";
+                UpdateBar.IsOpen = true;
             }
         }
+        // Being offline or rate-limited at startup isn't worth interrupting for; Options can check again
         catch { }
+    }
+
+    private async void OnUpdateBarClick(object sender, RoutedEventArgs e)
+    {
+        if (_startupUpdate == null || !await TryLeaveDetailAsync()) return;
+        UpdateBar.IsOpen = false;
+        ShowOptions();
+        OptionsPanel.ShowAvailableUpdate(_startupUpdate);
     }
 
     private void SetWindowSize(IntPtr hwnd, int width, int height)

@@ -13,7 +13,7 @@ public class GameRepository
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
 
-    internal static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
+    private static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -29,22 +29,42 @@ public class GameRepository
             return new GameLibrary();
         }
 
+        var json = await File.ReadAllTextAsync(GamesFilePath);
         try
         {
-            var json = await File.ReadAllTextAsync(GamesFilePath);
             return JsonSerializer.Deserialize<GameLibrary>(json, JsonOptions) ?? new GameLibrary();
         }
-        catch
+        catch (JsonException ex)
         {
-            return new GameLibrary();
+            // Move the unreadable file aside so the next save can't overwrite the user's only copy
+            var corruptPath = $"{GamesFilePath}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
+            File.Move(GamesFilePath, corruptPath);
+            throw new InvalidDataException(
+                $"games.json could not be read ({ex.Message}). It was moved to {corruptPath} and the library starts empty.", ex);
         }
     }
 
-    public async Task SaveAsync(GameLibrary library)
+    private async Task SaveAsync(GameLibrary library)
     {
         Directory.CreateDirectory(AppDataFolder);
         var json = JsonSerializer.Serialize(library, JsonOptions);
-        await File.WriteAllTextAsync(GamesFilePath, json);
+        // Write-then-rename so a crash mid-write can't leave a truncated games.json
+        var tempPath = GamesFilePath + ".tmp";
+        await File.WriteAllTextAsync(tempPath, json);
+        File.Move(tempPath, GamesFilePath, overwrite: true);
+    }
+
+    public async Task ReplaceAsync(GameLibrary library)
+    {
+        await _fileLock.WaitAsync();
+        try
+        {
+            await SaveAsync(library);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public Task AddGameAsync(GameEntry game) =>

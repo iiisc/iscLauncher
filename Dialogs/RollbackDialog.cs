@@ -65,9 +65,9 @@ public static class RollbackDialog
             {
                 commits = await loadCommitsAsync();
             }
-            catch
+            catch (Exception ex)
             {
-                ShowMessage("Failed to load commit history.", "CrimsonBrush");
+                ShowMessage($"Failed to load commit history. {ex.Message}", "CrimsonBrush");
                 return;
             }
 
@@ -212,6 +212,8 @@ public static class RollbackDialog
         FontFamily = Res<FontFamily>("BodyFont"),
         FontSize = 13,
         Foreground = Res<Brush>(brushKey),
-        HorizontalAlignment = HorizontalAlignment.Center
+        HorizontalAlignment = HorizontalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
+        TextWrapping = TextWrapping.Wrap
     };
 }

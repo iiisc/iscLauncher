@@ -79,11 +79,11 @@
                                 </Border>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                                    <TextBlock Text="{x:Bind Name}"
+                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}"
                                                FontFamily="{StaticResource DisplayFont}"
                                                FontSize="13"
                                                Foreground="{StaticResource TextPrimaryBrush}" />
-                                    <TextBlock Text="{x:Bind ExecutableDisplayPath}"
+                                    <TextBlock Text="{x:Bind ExecutableDisplayPath, Mode=OneWay}"
                                                FontFamily="{StaticResource BodyFont}"
                                                FontSize="10"
                                                Foreground="{StaticResource TextMutedBrush}"
@@ -91,26 +91,26 @@
                                                TextWrapping="NoWrap"
                                                MaxLines="1" />
                                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
-                                                Visibility="{x:Bind HasServerInfo}">
+                                                Visibility="{x:Bind HasServerInfo, Mode=OneWay}">
                                         <StackPanel Orientation="Horizontal" Spacing="4"
-                                                    Visibility="{x:Bind HasRealmName}">
+                                                    Visibility="{x:Bind HasRealmName, Mode=OneWay}">
                                             <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                                            <TextBlock Text="{x:Bind RealmName}"
+                                            <TextBlock Text="{x:Bind RealmName, Mode=OneWay}"
                                                        FontFamily="{StaticResource BodyFont}"
                                                        FontSize="10"
                                                        Foreground="{StaticResource TextMutedBrush}" />
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Spacing="4"
-                                                    Visibility="{x:Bind HasAccountName}">
+                                                    Visibility="{x:Bind HasAccountName, Mode=OneWay}">
                                             <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                                            <TextBlock Text="{x:Bind AccountName}"
+                                            <TextBlock Text="{x:Bind AccountName, Mode=OneWay}"
                                                        FontFamily="{StaticResource BodyFont}"
                                                        FontSize="10"
                                                        Foreground="{StaticResource TextMutedBrush}" />
                                         </StackPanel>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0"
-                                                Visibility="{x:Bind HasSyncRepo}">
+                                                Visibility="{x:Bind HasSyncRepo, Mode=OneWay}">
                                         <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
                                         <TextBlock Text="Sync"
                                                    FontFamily="{StaticResource BodyFont}"

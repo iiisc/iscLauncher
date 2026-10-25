@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json.Serialization;
 
@@ -17,8 +18,13 @@ public enum PasswordInputMethod
     Clipboard = 1
 }
 
-public class GameEntry
+public class GameEntry : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>Refreshes every binding to this entry. Call after editing its fields in place.</summary>
+    public void NotifyChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+
     [JsonPropertyName("id")]
     public Guid Id { get; set; } = Guid.NewGuid();
 

@@ -85,12 +85,7 @@ public sealed partial class OptionsPanelControl : UserControl
                 }
                 else
                 {
-                    StatusBar.IsOpen = false;
-                    _pendingUpdate = result;
-                    UpdateAvailableText.Text = $"Version {result.LatestVersion} is available. The app will restart after installing.";
-                    UpdateAvailableText.Visibility = Visibility.Visible;
-                    CheckUpdatesIcon.Glyph = "\uE896";
-                    CheckUpdatesText.Text = "Download & Install";
+                    ShowAvailableUpdate(result);
                 }
             }
             catch (OperationCanceledException) { StatusBar.IsOpen = false; }
@@ -123,6 +118,16 @@ public sealed partial class OptionsPanelControl : UserControl
                 CheckUpdatesButton.IsEnabled = true;
             }
         }
+    }
+
+    public void ShowAvailableUpdate(UpdateCheckResult update)
+    {
+        StatusBar.IsOpen = false;
+        _pendingUpdate = update;
+        UpdateAvailableText.Text = $"Version {update.LatestVersion} is available. The app will restart after installing.";
+        UpdateAvailableText.Visibility = Visibility.Visible;
+        CheckUpdatesIcon.Glyph = "\uE896";
+        CheckUpdatesText.Text = "Download & Install";
     }
 
     private async void OnCheckUpdatesOnStartupToggled(object sender, RoutedEventArgs e)
@@ -185,17 +190,15 @@ public sealed partial class OptionsPanelControl : UserControl
 
         try
         {
-            Directory.CreateDirectory(Services.GameRepository.AppDataFolder);
-            File.Copy(file.Path, Services.GameRepository.GamesFilePath, overwrite: true);
-            var reloaded = await GameRepository.LoadAsync();
+            await GameRepository!.ReplaceAsync(imported);
 
             _suppressSave = true;
-            CheckUpdatesOnStartupToggle.IsOn = reloaded.CheckUpdatesOnStartup;
+            CheckUpdatesOnStartupToggle.IsOn = imported.CheckUpdatesOnStartup;
             _suppressSave = false;
 
             LibraryImported?.Invoke(this, new LibraryImportedEventArgs(
-                reloaded.Games, reloaded.CheckUpdatesOnStartup));
-            ShowStatus($"Imported {reloaded.Games.Count} game(s) successfully.", true);
+                imported.Games, imported.CheckUpdatesOnStartup));
+            ShowStatus($"Imported {imported.Games.Count} game(s) successfully.", true);
         }
         catch (Exception ex) { ShowStatus($"Import failed: {ex.Message}", false); }
     }

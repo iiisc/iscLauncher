@@ -59,6 +59,16 @@
                 </StackPanel>
                 <controls:OptionsPanelControl x:Name="OptionsPanel" Visibility="Collapsed"/>
                 <controls:AddGamePanelControl x:Name="AddGamePanel" Visibility="Collapsed"/>
+                <InfoBar x:Name="UpdateBar"
+                         IsOpen="False"
+                         Severity="Informational"
+                         Title="Update available"
+                         VerticalAlignment="Bottom"
+                         Margin="16">
+                    <InfoBar.ActionButton>
+                        <Button Content="View" Click="OnUpdateBarClick"/>
+                    </InfoBar.ActionButton>
+                </InfoBar>
             </Grid>
         </Grid>
     </Grid>

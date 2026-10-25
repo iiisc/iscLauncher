@@ -133,6 +133,7 @@ public sealed partial class GameDetailControl : UserControl
             IconExtractor.InvalidateCache(oldPath);
 
         await GameRepository!.UpdateGameAsync(game);
+        game.NotifyChanged();
 
         _isEditing = false;
         GameSaved?.Invoke(this, game);
@@ -241,9 +242,11 @@ public sealed partial class GameDetailControl : UserControl
     {
         if (_game == null) return;
         ShowStatus("Fetching addon list from repo...", true);
+        SyncResult? error;
         List<string> repoAddons;
-        try { repoAddons = await AddonSyncService!.GetRepoAddonListAsync(_game, new Progress<string>(m => ShowStatus(m, true))); }
-        catch { repoAddons = []; }
+        try { (error, repoAddons) = await AddonSyncService!.GetRepoAddonListAsync(_game, new Progress<string>(m => ShowStatus(m, true))); }
+        catch (Exception ex) { ShowStatus($"Could not read the sync repo: {ex.Message}", false); return; }
+        if (error != null) { ShowStatus(error.Message, false); return; }
 
         var charCount = AddonSyncService!.GetRepoCharacterCount(_game);
         var localAddons = AddonSyncService!.GetLocalAddonList(_game);
