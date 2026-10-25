@@ -69,6 +69,19 @@ public class GameLauncherService
             return new LaunchResult(false, "Executable not found: " + game.ExecutablePath);
         }
 
+        if (BattleNetInstall.Find(game.ExecutablePath) is { } official)
+        {
+            try
+            {
+                official.Launch();
+                return new LaunchResult(true, $"Starting {game.Name} through Battle.net...");
+            }
+            catch (Exception ex)
+            {
+                return new LaunchResult(false, $"Couldn't start Battle.net: {ex.Message}");
+            }
+        }
+
         var realmlistResult = await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
         if (!realmlistResult.Success)
         {

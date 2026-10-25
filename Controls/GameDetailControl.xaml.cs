@@ -28,6 +28,7 @@ public sealed partial class GameDetailControl : UserControl
 
     private GameEntry? _game;
     private bool _isEditing;
+    private bool _isOfficial;
     private readonly Dictionary<Guid, int> _runningProcessIds = new();
     // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
     private readonly HashSet<Guid> _busyGames = new();
@@ -47,6 +48,7 @@ public sealed partial class GameDetailControl : UserControl
     {
         _game = game;
         _isEditing = false;
+        _isOfficial = BattleNetInstall.Find(game.ExecutablePath) != null;
         SetEditMode(false);
 
         NameTextBox.Text = game.Name;
@@ -168,6 +170,10 @@ public sealed partial class GameDetailControl : UserControl
         GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
         ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
+
+        OfficialNote.Visibility = _isOfficial ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionSection.Visibility = _isOfficial ? Visibility.Collapsed : Visibility.Visible;
+        AutomationTab.Visibility = _isOfficial ? Visibility.Collapsed : Visibility.Visible;
 
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
@@ -305,6 +311,20 @@ public sealed partial class GameDetailControl : UserControl
             await AddonSyncService!.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
     }
 
+    private async void OnCopyCharacterSetupClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        var sources = AddonSyncService!.ListCharacters(game);
+        if (sources.Count == 0)
+        { ShowStatus("No characters found for this game yet. Log in once so the game creates its settings folders.", false); return; }
+
+        var games = new[] { game }.Concat(Games?.Where(g => g.Id != game.Id) ?? []);
+        var choice = await CharacterSetupDialog.ShowAsync(XamlRoot, sources, games.SelectMany(AddonSyncService.ListCharacters).ToList());
+        if (choice == null) return;
+        await RunSyncAsync("Copying character setup...", async (_, ct) =>
+            await AddonSyncService.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
+    }
+
     /// <summary>Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.</summary>
     private async Task RunSyncAsync(string startMessage,
         Func<IProgress<string>, CancellationToken, Task<string?>> operation)
@@ -347,6 +367,7 @@ public sealed partial class GameDetailControl : UserControl
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;
         CopyAddonsButton.IsEnabled = !busy;
+        CopyCharacterSetupButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }

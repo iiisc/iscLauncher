@@ -9,6 +9,8 @@ using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
+public record CharacterFolder(GameEntry Game, string Dir, string Label);
+
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 {
@@ -59,11 +61,11 @@ public class AddonSyncService
 
     public Task<AddonPreview> PreviewPullAsync(SyncSession s, CancellationToken ct) =>
         Task.Run(() => AddonFiles.Compare(s.RepoAddOns, s.GameAddOns, includeRemoved: true,
-            AddonFiles.ClientMajorVersion(s.Game.ExecutablePath), ct) with { Characters = AddonFiles.CharacterCount(s.RepoWtfAccount) }, ct);
+            AddonFiles.ClientMajorVersion(s.Game.ExecutablePath), ct) with { Characters = AddonFiles.CharacterCount(s.CachePath) }, ct);
 
     public Task<AddonPreview> PreviewPushAsync(SyncSession s, CancellationToken ct) =>
         Task.Run(() => AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct)
-            with { Characters = AddonFiles.CharacterCount(s.GameWtfAccount) }, ct);
+            with { Characters = AddonFiles.CharacterCount(s.GameDir) }, ct);
 
     /// <summary>Puts the cache's files back to <paramref name="commit"/> and previews applying them. The next session discards this unless <see cref="RollbackAsync"/> commits it.</summary>
     public async Task<AddonPreview> PreviewRollbackAsync(SyncSession s, string commit, CancellationToken ct)
@@ -119,7 +121,7 @@ public class AddonSyncService
             await File.WriteAllTextAsync(gitignorePath, "*.old\n*.bak\nThumbs.db\n.DS_Store\n", ct);
 
         var repoAddons = AddonFiles.AddonNames(s.RepoAddOns);
-        var characters = AddonFiles.CharacterCount(s.RepoWtfAccount);
+        var characters = AddonFiles.CharacterCount(s.CachePath);
         var pcName = await _gameRepository.GetComputerNameAsync();
         var subject = $"sync: {s.Game.Name} — {repoAddons.Count} addon(s), {characters} character(s) [{pcName}]";
         var message = string.Join("\n", new[] { subject, "", AddonListHeader }.Concat(repoAddons.Select(n => $"  - {n}")));
@@ -162,6 +164,23 @@ public class AddonSyncService
             if (copySettings && CopyAddonSettings(source, target, names) is { } skipped)
                 message += $" Settings weren't copied: {skipped}.";
             return message;
+        }, ct);
+
+    public List<CharacterFolder> ListCharacters(GameEntry game) =>
+        AddonFiles.Characters(GameDir(game)).Select(c => new CharacterFolder(game, c.Dir, c.Label)).ToList();
+
+    public Task<string> CopyCharacterSetupAsync(CharacterFolder source, IReadOnlyList<CharacterFolder> targets, bool enabledAddons, bool addonData, CancellationToken ct) =>
+        Task.Run(() =>
+        {
+            var data = addonData ? AddonFiles.CharacterAddonData(source.Dir) : [];
+            foreach (var game in targets.Select(t => t.Game).Distinct())
+                Backup(game, [], includeWtf: true, ct);
+            foreach (var target in targets)
+            {
+                ct.ThrowIfCancellationRequested();
+                AddonFiles.CopyCharacterSetup(source.Dir, target.Dir, enabledAddons, data);
+            }
+            return $"Gave {targets.Count} character(s) {source.Label}'s addon setup.";
         }, ct);
 
     /// <summary>Reads back the addon list that <see cref="PushAsync"/> writes into the commit body.</summary>

@@ -91,7 +91,15 @@
                                 </Grid>
                             </StackPanel>
 
-                            <StackPanel Spacing="8">
+                            <TextBlock x:Name="OfficialNote"
+                                       Text="Official Blizzard install. Launch starts it through Battle.net, which handles login, so realm, account and password settings don't apply."
+                                       FontFamily="{StaticResource BodyFont}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+
+                            <StackPanel x:Name="ConnectionSection" Spacing="8">
                                 <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}"/>
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Realmlist Address" Style="{StaticResource FieldLabelStyle}"/>
@@ -120,7 +128,7 @@
                 </PivotItem>
 
                 <!-- Automation -->
-                <PivotItem>
+                <PivotItem x:Name="AutomationTab">
                     <PivotItem.Header>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE8D7;" FontSize="12"/>
@@ -180,21 +188,32 @@
                     <ScrollViewer Padding="32,14,32,14">
                         <StackPanel Spacing="8">
                             <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,0,0,12">
-                                <TextBlock Text="COPY TO ANOTHER GAME" Style="{StaticResource SectionHeaderStyle}"/>
-                                <TextBlock Text="Copy addons, and optionally their settings, from this game into another game in your library."
+                                <TextBlock Text="SHARE ADDONS" Style="{StaticResource SectionHeaderStyle}"/>
+                                <TextBlock Text="Copy addons and their settings into another game, or give your other characters the same addon setup as one character."
                                            FontFamily="{StaticResource BodyFont}"
                                            FontSize="11"
                                            Foreground="{StaticResource TextDimBrush}"
                                            TextWrapping="Wrap"/>
-                                <Button x:Name="CopyAddonsButton"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Height="40" Padding="16,0"
-                                        Click="OnCopyAddonsClick">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
-                                        <TextBlock Text="Copy Addons" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
-                                    </StackPanel>
-                                </Button>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="CopyAddonsButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40" Padding="16,0"
+                                            Click="OnCopyAddonsClick">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
+                                            <TextBlock Text="Copy Addons" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="CopyCharacterSetupButton"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Height="40" Padding="16,0"
+                                            Click="OnCopyCharacterSetupClick">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE77B;" FontSize="14"/>
+                                            <TextBlock Text="Copy Character Setup" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
 
                             <TextBlock Text="SYNC BETWEEN PCS" Style="{StaticResource SectionHeaderStyle}"/>
