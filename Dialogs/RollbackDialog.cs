@@ -45,7 +45,7 @@ public static class RollbackDialog
 
         var dialog = CreateThemedDialog(xamlRoot, "⚔ Rollback to Previous Sync");
         dialog.Content = contentPanel;
-        dialog.PrimaryButtonText = "Rollback & Apply";
+        dialog.PrimaryButtonText = "Next";
         dialog.IsPrimaryButtonEnabled = false;
         SetWidth(dialog, 600, 700);
 
@@ -97,9 +97,6 @@ public static class RollbackDialog
 
             foreach (var commit in commits)
             {
-                var dateDisplay = DateTimeOffset.TryParse(commit.DateString, out var dto)
-                    ? dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm")
-                    : commit.DateString;
 
                 var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
                 headerPanel.Children.Add(new TextBlock
@@ -110,11 +107,11 @@ public static class RollbackDialog
                     Foreground = Res<Brush>("GoldBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
-                if (!string.IsNullOrEmpty(dateDisplay))
+                if (!string.IsNullOrEmpty(commit.DisplayDate))
                 {
                     headerPanel.Children.Add(new TextBlock
                     {
-                        Text = dateDisplay,
+                        Text = commit.DisplayDate,
                         FontFamily = Res<FontFamily>("BodyFont"),
                         FontSize = 10,
                         Foreground = Res<Brush>("TextDimBrush"),
@@ -192,7 +189,7 @@ public static class RollbackDialog
 
             contentPanel.Children.Clear();
             contentPanel.Children.Add(BodyText(
-                "Select the commit to restore. Addons and WTF settings will be applied to your local game folder automatically."));
+                "Select the version to restore. Next you'll see what changes on this PC and choose what to apply."));
             contentPanel.Children.Add(commitListView);
             contentPanel.Children.Add(addonDetailHeader);
             contentPanel.Children.Add(addonDetailScroller);

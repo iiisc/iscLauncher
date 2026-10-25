@@ -170,15 +170,34 @@
                 </PivotItem>
 
                 <!-- Addon Sync -->
-                <PivotItem x:Name="AddonSyncTab">
+                <PivotItem>
                     <PivotItem.Header>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE895;" FontSize="12"/>
-                            <TextBlock Text="Addon Sync" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
+                            <TextBlock Text="Addons" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
                         </StackPanel>
                     </PivotItem.Header>
                     <ScrollViewer Padding="32,14,32,14">
                         <StackPanel Spacing="8">
+                            <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,0,0,12">
+                                <TextBlock Text="COPY TO ANOTHER GAME" Style="{StaticResource SectionHeaderStyle}"/>
+                                <TextBlock Text="Copy addons, and optionally their settings, from this game into another game in your library."
+                                           FontFamily="{StaticResource BodyFont}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextDimBrush}"
+                                           TextWrapping="Wrap"/>
+                                <Button x:Name="CopyAddonsButton"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Height="40" Padding="16,0"
+                                        Click="OnCopyAddonsClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
+                                        <TextBlock Text="Copy Addons" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+
+                            <TextBlock Text="SYNC BETWEEN PCS" Style="{StaticResource SectionHeaderStyle}"/>
                             <StackPanel Spacing="4">
                                 <TextBlock Text="GitHub Repo URL" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBox x:Name="SyncRepoUrlTextBox"
@@ -194,7 +213,7 @@
                                          FontSize="12"/>
                             </StackPanel>
                             <StackPanel Spacing="4">
-                                <TextBlock Text="THIS COMPUTER" Style="{StaticResource SectionHeaderStyle}"/>
+                                <TextBlock Text="Computer Name" Style="{StaticResource FieldLabelStyle}"/>
                                 <TextBox x:Name="ComputerNameTextBox"
                                          Style="{StaticResource ThemedTextBoxStyle}"
                                          Height="32"
@@ -239,22 +258,29 @@
                                         <TextBlock Text="Rollback" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="OpenRepoButton"
-                                        Style="{StaticResource SecondaryButtonStyle}"
+                                <Button Style="{StaticResource SecondaryButtonStyle}"
                                         Height="40" Width="40" Padding="0"
                                         Click="OnOpenRepoClick"
                                         ToolTipService.ToolTip="Open repo in browser">
                                     <FontIcon Glyph="&#xE774;" FontSize="14"/>
                                 </Button>
+                            </StackPanel>
+                            <TextBlock x:Name="NoRepoHint"
+                                       Text="Add a GitHub repo URL in Edit Settings to sync addons between PCs. Git must be installed."
+                                       FontFamily="{StaticResource BodyFont}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+
+                            <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
                                 <ProgressRing x:Name="SyncProgressRing"
                                               IsActive="False"
-                                              Width="24" Height="24"
-                                              Visibility="Collapsed"/>
+                                              Width="24" Height="24"/>
                                 <Button x:Name="CancelSyncButton"
                                         Style="{StaticResource SecondaryButtonStyle}"
                                         Height="40" Padding="12,0"
-                                        Click="OnCancelSyncClick"
-                                        Visibility="Collapsed">
+                                        Click="OnCancelSyncClick">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon Glyph="&#xE711;" FontSize="12"/>
                                         <TextBlock Text="Cancel" FontFamily="{StaticResource DisplayFont}" FontSize="12"/>

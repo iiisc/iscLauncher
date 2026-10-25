@@ -86,6 +86,13 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("lastSynced")]
     public DateTime? LastSynced { get; set; }
 
+    /// <summary>
+    /// Repo commit this PC last pulled or pushed. Pushing when the repo has moved past it would overwrite
+    /// another PC's upload, so the push dialog warns.
+    /// </summary>
+    [JsonPropertyName("lastSyncedCommit")]
+    public string? LastSyncedCommit { get; set; }
+
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";
 

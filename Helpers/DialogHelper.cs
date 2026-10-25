@@ -50,6 +50,28 @@ public static class DialogHelper
         TextWrapping = TextWrapping.Wrap
     };
 
+    public static TextBlock SectionLabel(string text, string brushKey = "GoldDarkBrush") => new()
+    {
+        Text = text,
+        FontFamily = Res<FontFamily>("DisplayFont"),
+        FontSize = 10,
+        CharacterSpacing = 60,
+        Foreground = Res<Brush>(brushKey),
+        Margin = new Thickness(0, 4, 0, 0)
+    };
+
+    public static CheckBox Option(string text, bool isChecked) => new()
+    {
+        IsChecked = isChecked,
+        Content = new TextBlock
+        {
+            Text = text,
+            FontFamily = Res<FontFamily>("BodyFont"),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        }
+    };
+
     public static void SetWidth(ContentDialog dialog, double min, double max)
     {
         dialog.MinWidth = min;

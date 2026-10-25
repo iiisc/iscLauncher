@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -23,10 +24,13 @@ public sealed partial class GameDetailControl : UserControl
     public GameLauncherService? GameLauncherService { get; set; }
     public AddonSyncService? AddonSyncService { get; set; }
     public IntPtr OwnerHwnd { get; set; }
+    public IReadOnlyCollection<GameEntry>? Games { get; set; }
 
     private GameEntry? _game;
     private bool _isEditing;
     private readonly Dictionary<Guid, int> _runningProcessIds = new();
+    // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
+    private readonly HashSet<Guid> _busyGames = new();
     private CancellationTokenSource? _syncCts;
     private readonly StatusNotifier _status;
 
@@ -165,14 +169,10 @@ public sealed partial class GameDetailControl : UserControl
         ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
 
-        SyncAddonsButton.IsEnabled = !isEditing;
-        UploadAddonsButton.IsEnabled = !isEditing;
-        RollbackButton.IsEnabled = !isEditing;
-        SyncButtonsPanel.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        AddonSyncTab.Visibility = isEditing ? Visibility.Visible :
-            (_game?.HasSyncRepo == true ? Visibility.Visible : Visibility.Collapsed);
-        OpenRepoButton.Visibility = isEditing ? Visibility.Collapsed :
-            (_game?.HasSyncRepo == true ? Visibility.Visible : Visibility.Collapsed);
+        var hasRepo = _game?.HasSyncRepo == true;
+        CopyAddonsSection.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
+        SyncButtonsPanel.Visibility = !isEditing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
+        NoRepoHint.Visibility = !isEditing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -184,11 +184,25 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnLaunchClick(object sender, RoutedEventArgs e)
     {
-        if (_game == null) return;
-        if (_runningProcessIds.TryGetValue(_game.Id, out var pid))
-            await SendPasswordAsync(_game, pid);
-        else
-            await LaunchAsync(_game);
+        if (_game != null) await LaunchAsync(_game);
+    }
+
+    /// <summary>Launches the game, or types the password into it if it's already running.</summary>
+    public async Task LaunchAsync(GameEntry game)
+    {
+        if (!_busyGames.Add(game.Id))
+        { ShowStatus($"Still working on {game.Name}...", false); return; }
+        try
+        {
+            if (_runningProcessIds.TryGetValue(game.Id, out var runningPid))
+                await SendPasswordAsync(game, runningPid);
+            else
+                await StartGameAsync(game);
+        }
+        finally
+        {
+            _busyGames.Remove(game.Id);
+        }
     }
 
     private async Task SendPasswordAsync(GameEntry game, int processId)
@@ -196,19 +210,10 @@ public sealed partial class GameDetailControl : UserControl
         ShowStatus($"Sending password to {game.Name}...", true);
         var result = await GameLauncherService!.SendPasswordToRunningGameAsync(game, processId);
         ShowStatus(result.Message, result.Success);
-        if (!result.Success)
-        {
-            // Process is gone — clean up running state
-            _runningProcessIds.Remove(game.Id);
-            if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
-        }
     }
 
-    public async Task LaunchAsync(GameEntry game)
+    private async Task StartGameAsync(GameEntry game)
     {
-        if (_runningProcessIds.ContainsKey(game.Id))
-        { ShowStatus($"{game.Name} is already running.", false); return; }
-
         ShowStatus($"Launching {game.Name}...", true);
         var result = await GameLauncherService!.LaunchGameAsync(game);
         ShowStatus(result.Message, result.Success);
@@ -220,12 +225,13 @@ public sealed partial class GameDetailControl : UserControl
                 var process = Process.GetProcessById(pid);
                 _runningProcessIds[game.Id] = pid;
                 UpdateLaunchButtonState(game);
-                process.EnableRaisingEvents = true;
+                // The only place running state is cleared; subscribe before enabling so a quick exit isn't missed
                 process.Exited += (s, e) => DispatcherQueue.TryEnqueue(() =>
                 {
                     _runningProcessIds.Remove(game.Id);
                     if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
                 });
+                process.EnableRaisingEvents = true;
             }
             catch { }
         }
@@ -240,41 +246,68 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
     {
-        if (_game == null) return;
-        ShowStatus("Fetching addon list from repo...", true);
-        SyncResult? error;
-        List<string> repoAddons;
-        try { (error, repoAddons) = await AddonSyncService!.GetRepoAddonListAsync(_game, new Progress<string>(m => ShowStatus(m, true))); }
-        catch (Exception ex) { ShowStatus($"Could not read the sync repo: {ex.Message}", false); return; }
-        if (error != null) { ShowStatus(error.Message, false); return; }
-
-        var charCount = AddonSyncService!.GetRepoCharacterCount(_game);
-        var localAddons = AddonSyncService!.GetLocalAddonList(_game);
-        if (await SyncPullDialog.ShowAsync(XamlRoot, repoAddons, localAddons, charCount) != ContentDialogResult.Primary) return;
-
-        await RunSyncAsync("Syncing addons...",
-            (p, ct) => AddonSyncService.SyncAsync(_game, p, ct));
+        if (_game is not { } game) return;
+        await RunSyncAsync("Checking repo...", async (p, ct) =>
+        {
+            var session = await AddonSyncService!.OpenAsync(game, p, ct);
+            var preview = await AddonSyncService.PreviewPullAsync(session, ct);
+            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, "⚔ Pull from Repo", "Pull",
+                "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
+                null, preview, toRepo: false);
+            return choice == null ? null : await AddonSyncService.PullAsync(session, choice.Addons, choice.Options, p, ct);
+        });
     }
 
     private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
     {
-        if (_game == null) return;
-        if (!await SyncPushDialog.ShowAsync(XamlRoot)) return;
-        await RunSyncAsync("Uploading to repo...",
-            (p, ct) => AddonSyncService!.UploadAsync(_game, p, ct));
+        if (_game is not { } game) return;
+        await RunSyncAsync("Checking repo...", async (p, ct) =>
+        {
+            var session = await AddonSyncService!.OpenAsync(game, p, ct);
+            var previewTask = AddonSyncService.PreviewPushAsync(session, ct);
+            var warningTask = AddonSyncService.DescribeUnpulledChangesAsync(session, ct);
+            await Task.WhenAll(previewTask, warningTask);
+            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, "⚔ Push to Repo", "Push",
+                "Choose what to upload from this PC. The repo keeps every earlier version, so you can roll back.",
+                await warningTask, await previewTask, toRepo: true);
+            return choice == null ? null : await AddonSyncService.PushAsync(session, choice.Addons, choice.Options, p, ct);
+        });
     }
 
     private async void OnRollbackClick(object sender, RoutedEventArgs e)
     {
-        if (_game == null) return;
-        var commit = await RollbackDialog.ShowAsync(XamlRoot, () => AddonSyncService!.GetCommitLogAsync(_game));
-        if (commit == null) return;
-        await RunSyncAsync("Rolling back...",
-            (p, ct) => AddonSyncService!.RollbackAsync(_game, commit.Hash, commit.Message, commit.Body, p, ct));
+        if (_game is not { } game) return;
+        await RunSyncAsync("Checking repo...", async (p, ct) =>
+        {
+            var session = await AddonSyncService!.OpenAsync(game, p, ct);
+            var commit = await RollbackDialog.ShowAsync(XamlRoot, () => AddonSyncService.GetCommitLogAsync(session, ct));
+            if (commit == null) return null;
+
+            var preview = await AddonSyncService.PreviewRollbackAsync(session, commit.Hash, ct);
+            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Roll Back to {commit.Hash}", "Roll Back",
+                $"The repo goes back to “{commit.Message}” for every PC. Choose what to apply to this PC; anything replaced or removed is backed up first.",
+                null, preview, toRepo: false);
+            return choice == null ? null : await AddonSyncService.RollbackAsync(session, commit, choice.Addons, choice.Options, p, ct);
+        });
     }
 
+    private async void OnCopyAddonsClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        var targets = Games?.Where(g => g.Id != game.Id).ToList() ?? [];
+        if (targets.Count == 0)
+        { ShowStatus("Add another game to your library to copy addons into it.", false); return; }
+
+        var choice = await CopyAddonsDialog.ShowAsync(XamlRoot, game, targets,
+            (target, ct) => AddonSyncService!.PreviewCopyAsync(game, target, ct));
+        if (choice == null) return;
+        await RunSyncAsync($"Copying addons to {choice.Target.Name}...", async (_, ct) =>
+            await AddonSyncService!.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
+    }
+
+    /// <summary>Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.</summary>
     private async Task RunSyncAsync(string startMessage,
-        Func<IProgress<string>, CancellationToken, Task<SyncResult>> operation)
+        Func<IProgress<string>, CancellationToken, Task<string?>> operation)
     {
         _syncCts?.Cancel(); _syncCts?.Dispose();
         _syncCts = new CancellationTokenSource();
@@ -283,11 +316,15 @@ public sealed partial class GameDetailControl : UserControl
         ShowStatus(startMessage, true);
         try
         {
-            var result = await operation(new Progress<string>(m => ShowStatus(m, true)), ct);
-            ShowStatus(result.Message, result.Success);
+            var message = await operation(new Progress<string>(m => ShowStatus(m, true)), ct);
+            if (message != null) ShowStatus(message, true);
+            else StatusBar.IsOpen = false;
             if (_game != null) UpdateLastSyncedText(_game);
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
+        catch (SyncException ex) { ShowStatus(ex.Message, false); }
+        // Addon and settings files are often locked by a running game or antivirus; report it rather than crash
+        catch (Exception ex) { ShowStatus($"Failed: {ex.Message}", false); }
         finally { SetSyncBusy(false); }
     }
 
@@ -309,9 +346,9 @@ public sealed partial class GameDetailControl : UserControl
         SyncAddonsButton.IsEnabled = !busy;
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;
+        CopyAddonsButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
-        SyncProgressRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        CancelSyncButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateLastSyncedText(GameEntry game)

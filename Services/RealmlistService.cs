@@ -69,7 +69,7 @@ public class RealmlistService
 
     /// <summary>
     /// Updates the config file with the account name, realm name, and optionally the realmlist.
-    /// Looks for {executableDirectory}\WTF\Config.wtf, then WTF\config.txt.
+    /// Uses {executableDirectory}\WTF\Config.wtf, else WTF\config.txt, and creates Config.wtf if neither exists.
     /// </summary>
     public async Task<RealmlistResult> UpdateConfigAsync(string executablePath, string? accountName, string? realmName, string? realmlistAddress)
     {
@@ -86,18 +86,17 @@ public class RealmlistService
                 return new RealmlistResult(false, "Could not determine executable directory.");
             }
 
-            var configPath = Path.Combine(executableDirectory, "WTF", "Config.wtf");
-            if (!File.Exists(configPath))
+            var wtfDir = Path.Combine(executableDirectory, "WTF");
+            var configPath = Path.Combine(wtfDir, "Config.wtf");
+            var legacyConfigPath = Path.Combine(wtfDir, "config.txt");
+            if (!File.Exists(configPath) && File.Exists(legacyConfigPath))
             {
-                configPath = Path.Combine(executableDirectory, "WTF", "config.txt");
+                configPath = legacyConfigPath;
             }
 
-            if (!File.Exists(configPath))
-            {
-                return new RealmlistResult(false, $"Config file not found in WTF folder. Looked for Config.wtf and config.txt");
-            }
-
-            var content = await File.ReadAllTextAsync(configPath);
+            // A fresh install has no config until the client's first run; start one so that run already logs in correctly
+            Directory.CreateDirectory(wtfDir);
+            var content = File.Exists(configPath) ? await File.ReadAllTextAsync(configPath) : "";
             content = SetConfigValue(content, "accountName", accountName);
             content = SetConfigValue(content, "realmName", realmName);
             content = SetConfigValue(content, "realmList", realmlistAddress);
@@ -123,8 +122,10 @@ public class RealmlistService
 
         var pattern = new Regex($@"^SET {key} ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
         var line = $@"SET {key} ""{value}""";
-        var replaced = pattern.Replace(content, line, 1);
-        return replaced != content ? replaced : content + Environment.NewLine + line;
+        if (pattern.IsMatch(content))
+            // An evaluator inserts the line literally; a replacement string would expand $ sequences in the value
+            return pattern.Replace(content, _ => line, 1);
+        return content.Length == 0 ? line : content + Environment.NewLine + line;
     }
 }
 

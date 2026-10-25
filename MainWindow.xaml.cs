@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
         GameDetail.GameLauncherService = _gameLauncherService;
         GameDetail.AddonSyncService = _addonSyncService;
         GameDetail.OwnerHwnd = hwnd;
+        GameDetail.Games = _games;
 
         OptionsPanel.GameRepository = _gameRepository;
         OptionsPanel.CredentialService = _credentialService;

@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -134,13 +135,25 @@ public class AppUpdateService
             newExePath = destPath;
         }
 
+        // The script runs after this process exits, so it must report its own failure: otherwise the user is left
+        // on the old version (or with no app running) and never finds out why
         var scriptPath = Path.Combine(tempDir, "update.ps1");
-        await File.WriteAllTextAsync(scriptPath,
-            $"Start-Sleep -Milliseconds 1500\r\n" +
-            $"Copy-Item -Path '{newExePath}' -Destination '{currentExe}' -Force\r\n" +
-            $"Start-Process -FilePath '{currentExe}'\r\n" +
-            $"Remove-Item -Path '{tempDir}' -Recurse -Force -ErrorAction SilentlyContinue\r\n",
-            ct).ConfigureAwait(false);
+        var script = $$"""
+            Wait-Process -Id {{Environment.ProcessId}} -Timeout 30 -ErrorAction SilentlyContinue
+            $copied = $false
+            for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
+                try { Copy-Item -LiteralPath {{PsQuote(newExePath)}} -Destination {{PsQuote(currentExe)}} -Force -ErrorAction Stop; $copied = $true }
+                catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $copied) {
+                Add-Type -AssemblyName PresentationFramework
+                [System.Windows.MessageBox]::Show("The update couldn't be installed, so the current version will start instead. Try again from Options, or download the new version from GitHub.", 'iscLauncher update') | Out-Null
+            }
+            Start-Process -FilePath {{PsQuote(currentExe)}}
+            if ($copied) { Remove-Item -LiteralPath {{PsQuote(tempDir)}} -Recurse -Force -ErrorAction SilentlyContinue }
+            """;
+        // Windows PowerShell reads BOM-less files as ANSI, which would mangle non-ASCII characters in the paths
+        await File.WriteAllTextAsync(scriptPath, script, Encoding.UTF8, ct).ConfigureAwait(false);
 
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
@@ -150,6 +163,9 @@ public class AppUpdateService
             WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
         });
     }
+
+    // Single-quoted PowerShell strings are literal; a doubled quote escapes an apostrophe (e.g. C:\Users\O'Brien)
+    private static string PsQuote(string value) => $"'{value.Replace("'", "''")}'";
 
     private static bool IsNewer(string latest, string current)
     {

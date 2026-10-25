@@ -27,8 +27,8 @@ public class GameLauncherService
     /// </summary>
     public void CancelPendingClipboardClear()
     {
-        CancelClipboardTimer();
-        try { Clipboard.Clear(); } catch { }
+        if (CancelClipboardTimer())
+            try { Clipboard.Clear(); } catch { }
     }
 
     public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game, int processId)
@@ -155,27 +155,43 @@ public class GameLauncherService
 
         var cts = new CancellationTokenSource();
         _clipboardClearCts = cts;
-        _ = ClearClipboardAfterDelayAsync(cts.Token);
+        _ = ClearClipboardAfterDelayAsync(password, cts);
     }
 
-    private void CancelClipboardTimer()
+    /// <summary>Stops the pending clear. Returns true if one was pending, meaning our password may still be on the clipboard.</summary>
+    private bool CancelClipboardTimer()
     {
         var cts = Interlocked.Exchange(ref _clipboardClearCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
+        if (cts == null)
+            return false;
+        cts.Cancel();
+        cts.Dispose();
+        return true;
     }
 
-    private static async Task ClearClipboardAfterDelayAsync(CancellationToken token)
+    private async Task ClearClipboardAfterDelayAsync(string password, CancellationTokenSource cts)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), token);
-            Clipboard.Clear();
+            await Task.Delay(TimeSpan.FromSeconds(30), cts.Token);
         }
         catch (OperationCanceledException)
         {
-            // Timer was cancelled (new copy or app shutdown) — nothing to do
+            return;
         }
+
+        if (Interlocked.CompareExchange(ref _clipboardClearCts, null, cts) != cts)
+            return;
+        cts.Dispose();
+
+        try
+        {
+            // Leave the clipboard alone if the user has copied something else since
+            var content = Clipboard.GetContent();
+            if (content.Contains(StandardDataFormats.Text) && await content.GetTextAsync() == password)
+                Clipboard.Clear();
+        }
+        catch { }
     }
 }
 
