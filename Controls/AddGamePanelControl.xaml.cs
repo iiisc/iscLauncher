@@ -1,10 +1,11 @@
 using System;
 using System.IO;
+using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using WinRT.Interop;
+using Windows.Storage.Pickers;
 
 namespace iscLauncher.Controls;
 
@@ -40,22 +41,17 @@ public sealed partial class AddGamePanelControl : UserControl
 
     private async void OnBrowseClick(object sender, RoutedEventArgs e)
     {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        picker.FileTypeFilter.Add(".exe");
-        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder;
-        InitializeWithWindow.Initialize(picker, OwnerHwnd);
-
-        var file = await picker.PickSingleFileAsync();
+        var file = await FormHelpers.PickFileAsync(OwnerHwnd, ".exe", PickerLocationId.ComputerFolder);
         if (file == null) return;
 
         ExecutableTextBox.Text = file.Path;
         if (string.IsNullOrWhiteSpace(NameTextBox.Text))
             NameTextBox.Text = Path.GetFileNameWithoutExtension(file.Name);
 
-        var detection = new AppTypeDetector().DetectAppType(file.Path);
-        InputMethodComboBox.SelectedIndex = (int)detection.SuggestedMethod;
+        // SendKeys is the suggestion for every detected app type
+        InputMethodComboBox.SelectedIndex = 0;
         FormInfoBar.Severity = InfoBarSeverity.Informational;
-        FormInfoBar.Message = $"Auto-detected: {detection.Reason}";
+        FormInfoBar.Message = $"Auto-detected: {new AppTypeDetector().Describe(file.Path)}";
         FormInfoBar.IsOpen = true;
     }
 
@@ -81,17 +77,17 @@ public sealed partial class AddGamePanelControl : UserControl
         {
             Name = NameTextBox.Text.Trim(),
             ExecutablePath = ExecutableTextBox.Text.Trim(),
-            RealmlistAddress = NullIfBlank(RealmlistTextBox.Text),
-            AccountName = NullIfBlank(AccountTextBox.Text),
-            RealmName = NullIfBlank(RealmTextBox.Text),
-            WindowTitle = NullIfBlank(WindowTitleTextBox.Text),
+            RealmlistAddress = RealmlistTextBox.Text.NullIfBlank(),
+            AccountName = AccountTextBox.Text.NullIfBlank(),
+            RealmName = RealmTextBox.Text.NullIfBlank(),
+            WindowTitle = WindowTitleTextBox.Text.NullIfBlank(),
             InputMethod = InputMethodComboBox.SelectedIndex switch
             {
                 1 => PasswordInputMethod.Clipboard,
                 _ => PasswordInputMethod.SendKeys
             },
-            SyncRepoUrl = NullIfBlank(SyncRepoUrlTextBox.Text),
-            SyncBranch = NullIfBlank(SyncBranchTextBox.Text)
+            SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank(),
+            SyncBranch = SyncBranchTextBox.Text.NullIfBlank()
         };
 
         CredentialService!.SaveCredential(game.CredentialTarget, PasswordBox.Password);
@@ -108,7 +104,4 @@ public sealed partial class AddGamePanelControl : UserControl
         FormInfoBar.Message = message;
         FormInfoBar.IsOpen = true;
     }
-
-    private static string? NullIfBlank(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

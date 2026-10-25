@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using iscLauncher.Helpers;
 using iscLauncher.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
 
@@ -22,48 +24,39 @@ public static class RollbackDialog
         XamlRoot xamlRoot,
         Func<Task<List<GitCommitEntry>>> loadCommitsAsync)
     {
-        // Loading indicator shown while commits are fetched
         var loadingRing = new ProgressRing
         {
             IsActive = true,
             Width = 32,
             Height = 32,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"]
+            Foreground = Res<Brush>("GoldBrush")
         };
         var loadingPanel = new StackPanel
         {
-            Orientation = Orientation.Vertical,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Spacing = 12,
             MinHeight = 150,
-            Children =
-            {
-                loadingRing,
-                new TextBlock
-                {
-                    Text = "Loading commit history\u2026",
-                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                    FontSize = 13,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"],
-                    HorizontalAlignment = HorizontalAlignment.Center
-                }
-            }
+            Children = { loadingRing, CenteredMessage("Loading commit history…", "TextMutedBrush") }
         };
 
         var contentPanel = new StackPanel { Spacing = 12 };
         contentPanel.Children.Add(loadingPanel);
 
-        var dialog = DialogHelper.CreateThemedDialog(xamlRoot, "⚔ Rollback to Previous Sync");
+        var dialog = CreateThemedDialog(xamlRoot, "⚔ Rollback to Previous Sync");
         dialog.Content = contentPanel;
         dialog.PrimaryButtonText = "Rollback & Apply";
         dialog.IsPrimaryButtonEnabled = false;
-        dialog.MinWidth = 600;
-        dialog.MaxWidth = 700;
-        dialog.Resources["ContentDialogMaxWidth"] = 700.0;
-        dialog.Resources["ContentDialogMinWidth"] = 600.0;
+        SetWidth(dialog, 600, 700);
 
         ListView? commitListView = null;
+
+        void ShowMessage(string text, string brushKey)
+        {
+            loadingRing.IsActive = false;
+            loadingPanel.Children.Clear();
+            loadingPanel.Children.Add(CenteredMessage(text, brushKey));
+        }
 
         dialog.Opened += async (_, _) =>
         {
@@ -74,48 +67,29 @@ public static class RollbackDialog
             }
             catch
             {
-                loadingRing.IsActive = false;
-                loadingPanel.Children.Clear();
-                loadingPanel.Children.Add(new TextBlock
-                {
-                    Text = "Failed to load commit history.",
-                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                    FontSize = 13,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CrimsonBrush"],
-                    HorizontalAlignment = HorizontalAlignment.Center
-                });
+                ShowMessage("Failed to load commit history.", "CrimsonBrush");
                 return;
             }
 
             if (commits.Count == 0)
             {
-                loadingRing.IsActive = false;
-                loadingPanel.Children.Clear();
-                loadingPanel.Children.Add(new TextBlock
-                {
-                    Text = "No commits found in the repo.",
-                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                    FontSize = 13,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"],
-                    HorizontalAlignment = HorizontalAlignment.Center
-                });
+                ShowMessage("No commits found in the repo.", "TextMutedBrush");
                 return;
             }
 
-            // Build commit list
             commitListView = new ListView
             {
                 SelectionMode = ListViewSelectionMode.Single,
                 MaxHeight = 250,
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SurfaceBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["BorderBrush"],
+                Background = Res<Brush>("SurfaceBrush"),
+                BorderBrush = Res<Brush>("BorderBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(4)
             };
 
             // Remove the default blue selection indicator in all visual states
-            var transparent = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            var transparent = new SolidColorBrush(Colors.Transparent);
             commitListView.Resources["ListViewItemSelectionIndicatorBrush"] = transparent;
             commitListView.Resources["ListViewItemSelectionIndicatorPointerOverBrush"] = transparent;
             commitListView.Resources["ListViewItemSelectionIndicatorPressedBrush"] = transparent;
@@ -123,19 +97,17 @@ public static class RollbackDialog
 
             foreach (var commit in commits)
             {
-                var dateDisplay = "";
-                if (DateTimeOffset.TryParse(commit.DateString, out var dto))
-                    dateDisplay = dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm");
-                else if (!string.IsNullOrEmpty(commit.DateString))
-                    dateDisplay = commit.DateString;
+                var dateDisplay = DateTimeOffset.TryParse(commit.DateString, out var dto)
+                    ? dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm")
+                    : commit.DateString;
 
                 var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
                 headerPanel.Children.Add(new TextBlock
                 {
                     Text = commit.Hash,
-                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                    FontFamily = new FontFamily("Consolas"),
                     FontSize = 11,
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
+                    Foreground = Res<Brush>("GoldBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
                 if (!string.IsNullOrEmpty(dateDisplay))
@@ -143,21 +115,20 @@ public static class RollbackDialog
                     headerPanel.Children.Add(new TextBlock
                     {
                         Text = dateDisplay,
-                        FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                        FontFamily = Res<FontFamily>("BodyFont"),
                         FontSize = 10,
-                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextDimBrush"],
+                        Foreground = Res<Brush>("TextDimBrush"),
                         VerticalAlignment = VerticalAlignment.Center
                     });
                 }
 
-                var item = new ListViewItem
+                commitListView.Items.Add(new ListViewItem
                 {
                     Tag = commit,
                     Padding = new Thickness(8, 6, 8, 6),
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Content = new StackPanel
                     {
-                        Orientation = Orientation.Vertical,
                         Spacing = 2,
                         Children =
                         {
@@ -165,36 +136,33 @@ public static class RollbackDialog
                             new TextBlock
                             {
                                 Text = commit.Message,
-                                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                                FontFamily = Res<FontFamily>("BodyFont"),
                                 FontSize = 12,
-                                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
+                                Foreground = Res<Brush>("TextPrimaryBrush"),
                                 TextWrapping = TextWrapping.Wrap
                             }
                         }
                     }
-                };
-                commitListView.Items.Add(item);
+                });
             }
             commitListView.SelectedIndex = 0;
 
-            // Addon detail panel — shown below the list when a commit is selected
             var addonDetailHeader = new TextBlock
             {
                 Text = "📦 Included Addons",
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["DisplayFont"],
+                FontFamily = Res<FontFamily>("DisplayFont"),
                 FontSize = 10,
                 CharacterSpacing = 100,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldDarkBrush"],
+                Foreground = Res<Brush>("GoldDarkBrush"),
                 Visibility = Visibility.Collapsed
             };
 
             var addonDetailText = new TextBlock
             {
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                FontFamily = Res<FontFamily>("BodyFont"),
                 FontSize = 11,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"],
-                TextWrapping = TextWrapping.Wrap,
-                Visibility = Visibility.Collapsed
+                Foreground = Res<Brush>("TextMutedBrush"),
+                TextWrapping = TextWrapping.Wrap
             };
 
             var addonDetailScroller = new ScrollViewer
@@ -206,22 +174,14 @@ public static class RollbackDialog
 
             void UpdateAddonDetail(GitCommitEntry c)
             {
-                var addons = DialogHelper.ParseAddonListFromBody(c.Body);
+                var addons = AddonSyncService.ParseAddonList(c.Body);
+                var visibility = addons.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                addonDetailHeader.Visibility = visibility;
+                addonDetailScroller.Visibility = visibility;
                 if (addons.Count > 0)
-                {
-                    addonDetailHeader.Visibility = Visibility.Visible;
-                    addonDetailScroller.Visibility = Visibility.Visible;
-                    addonDetailText.Visibility = Visibility.Visible;
                     addonDetailText.Text = string.Join(",  ", addons);
-                }
-                else
-                {
-                    addonDetailHeader.Visibility = Visibility.Collapsed;
-                    addonDetailScroller.Visibility = Visibility.Collapsed;
-                }
             }
 
-            // Show detail for the initially selected commit
             UpdateAddonDetail(commits[0]);
 
             commitListView.SelectionChanged += (_, _) =>
@@ -231,14 +191,8 @@ public static class RollbackDialog
             };
 
             contentPanel.Children.Clear();
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = "Select the commit to restore. Addons and WTF settings will be applied to your local game folder automatically.",
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                FontSize = 13,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
-                TextWrapping = TextWrapping.Wrap
-            });
+            contentPanel.Children.Add(BodyText(
+                "Select the commit to restore. Addons and WTF settings will be applied to your local game folder automatically."));
             contentPanel.Children.Add(commitListView);
             contentPanel.Children.Add(addonDetailHeader);
             contentPanel.Children.Add(addonDetailScroller);
@@ -249,10 +203,15 @@ public static class RollbackDialog
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             return null;
 
-        if (commitListView?.SelectedItem is not ListViewItem selectedItem ||
-            selectedItem.Tag is not GitCommitEntry selectedCommit)
-            return null;
-
-        return selectedCommit;
+        return (commitListView?.SelectedItem as ListViewItem)?.Tag as GitCommitEntry;
     }
+
+    private static TextBlock CenteredMessage(string text, string brushKey) => new()
+    {
+        Text = text,
+        FontFamily = Res<FontFamily>("BodyFont"),
+        FontSize = 13,
+        Foreground = Res<Brush>(brushKey),
+        HorizontalAlignment = HorizontalAlignment.Center
+    };
 }

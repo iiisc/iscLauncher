@@ -19,7 +19,6 @@
     <Page Remove="Controls\GameDetailControl.xaml" />
     <Page Remove="Controls\GameListControl.xaml" />
     <Page Remove="Controls\OptionsPanelControl.xaml" />
-    <Page Remove="Styles\Fonts.xaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -84,9 +83,6 @@
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Controls\OptionsPanelControl.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
-    <None Update="Styles\Fonts.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
   </ItemGroup>

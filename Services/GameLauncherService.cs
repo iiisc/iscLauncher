@@ -1,8 +1,10 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace iscLauncher.Services;
 
@@ -25,13 +27,11 @@ public class GameLauncherService
     /// </summary>
     public void CancelPendingClipboardClear()
     {
-        var cts = Interlocked.Exchange(ref _clipboardClearCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
-        try { Windows.ApplicationModel.DataTransfer.Clipboard.Clear(); } catch { }
+        CancelClipboardTimer();
+        try { Clipboard.Clear(); } catch { }
     }
 
-    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game, int processId, CancellationToken cancellationToken = default)
+    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game, int processId)
     {
         var password = _credentialService.GetCredential(game.CredentialTarget);
         if (string.IsNullOrEmpty(password))
@@ -39,7 +39,6 @@ public class GameLauncherService
 
         try
         {
-            // Verify the process is still alive
             Process.GetProcessById(processId);
         }
         catch
@@ -53,51 +52,35 @@ public class GameLauncherService
             return new LaunchResult(true, "Password copied to clipboard - press Ctrl+V to paste.", processId);
         }
 
-        var result = await _automationService.AutomatePasswordEntryAsync(
-            processId,
-            password,
-            game.WindowTitle,
-            cancellationToken: cancellationToken);
-
+        var result = await _automationService.AutomatePasswordEntryAsync(processId, password, game.WindowTitle);
         if (result.Success)
             return new LaunchResult(true, "Password sent to running game.", processId);
 
-        // Fallback to clipboard
         CopyPasswordToClipboard(password);
         return new LaunchResult(true,
             $"Auto-entry failed ({result.Message}). Password copied to clipboard - press Ctrl+V to paste.",
             processId);
     }
 
-    public async Task<LaunchResult> LaunchGameAsync(GameEntry game, CancellationToken cancellationToken = default)
+    public async Task<LaunchResult> LaunchGameAsync(GameEntry game)
     {
-        // Verify executable exists
-        if (!System.IO.File.Exists(game.ExecutablePath))
+        if (!File.Exists(game.ExecutablePath))
         {
             return new LaunchResult(false, "Executable not found: " + game.ExecutablePath);
         }
 
-        // Update realmlist if configured
-        if (!string.IsNullOrWhiteSpace(game.RealmlistAddress))
+        var realmlistResult = await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
+        if (!realmlistResult.Success)
         {
-            var realmlistResult = await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
-            if (!realmlistResult.Success)
-            {
-                return new LaunchResult(false, realmlistResult.Message);
-            }
+            return new LaunchResult(false, realmlistResult.Message);
         }
 
-        // Update config.txt with account name, realm name, and realmlist if configured
-        if (!string.IsNullOrWhiteSpace(game.AccountName) || !string.IsNullOrWhiteSpace(game.RealmName) || !string.IsNullOrWhiteSpace(game.RealmlistAddress))
+        var configResult = await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
+        if (!configResult.Success)
         {
-            var configResult = await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
-            if (!configResult.Success)
-            {
-                return new LaunchResult(false, configResult.Message);
-            }
+            return new LaunchResult(false, configResult.Message);
         }
 
-        // Get password from credential manager
         var password = _credentialService.GetCredential(game.CredentialTarget);
         if (string.IsNullOrEmpty(password))
         {
@@ -106,12 +89,11 @@ public class GameLauncherService
 
         try
         {
-            // Start the game process
             var startInfo = new ProcessStartInfo
             {
                 FileName = game.ExecutablePath,
                 UseShellExecute = true,
-                WorkingDirectory = System.IO.Path.GetDirectoryName(game.ExecutablePath)
+                WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath)
             };
 
             var process = Process.Start(startInfo);
@@ -120,7 +102,6 @@ public class GameLauncherService
                 return new LaunchResult(false, "Failed to start process");
             }
 
-            // Clipboard mode: copy password and return immediately
             if (game.InputMethod == PasswordInputMethod.Clipboard)
             {
                 CopyPasswordToClipboard(password);
@@ -133,7 +114,7 @@ public class GameLauncherService
             // message loop before we look for its window and start typing.
             try
             {
-                await Task.Run(() => process.WaitForInputIdle(15_000), cancellationToken);
+                await Task.Run(() => process.WaitForInputIdle(15_000));
             }
             catch
             {
@@ -145,28 +126,18 @@ public class GameLauncherService
             // Optional extra delay for games that need more time after their
             // message loop is idle (e.g., shader compilation, asset loading).
             if (game.StartupDelaySeconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds), cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
 
-            var automationResult = await _automationService.AutomatePasswordEntryAsync(
-                process.Id,
-                password,
-                game.WindowTitle,
-                cancellationToken: cancellationToken);
-
+            var automationResult = await _automationService.AutomatePasswordEntryAsync(process.Id, password, game.WindowTitle);
             if (automationResult.Success)
             {
                 return new LaunchResult(true, "Game launched and password entered automatically.", process.Id);
             }
 
-            // Fallback: copy to clipboard if SendKeys fails
             CopyPasswordToClipboard(password);
             return new LaunchResult(true,
                 $"Game launched. Auto-entry failed ({automationResult.Message}). Password copied to clipboard - press Ctrl+V to paste.",
                 process.Id);
-        }
-        catch (OperationCanceledException)
-        {
-            return new LaunchResult(false, "Launch operation was cancelled.");
         }
         catch (Exception ex)
         {
@@ -176,19 +147,22 @@ public class GameLauncherService
 
     private void CopyPasswordToClipboard(string password)
     {
-        // Cancel and dispose any previous clipboard-clear timer
-        var oldCts = Interlocked.Exchange(ref _clipboardClearCts, null);
-        oldCts?.Cancel();
-        oldCts?.Dispose();
+        CancelClipboardTimer();
 
-        var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        var dataPackage = new DataPackage();
         dataPackage.SetText(password);
-        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+        Clipboard.SetContent(dataPackage);
 
-        // Schedule clipboard clear after 30 seconds (cancellable)
         var cts = new CancellationTokenSource();
         _clipboardClearCts = cts;
         _ = ClearClipboardAfterDelayAsync(cts.Token);
+    }
+
+    private void CancelClipboardTimer()
+    {
+        var cts = Interlocked.Exchange(ref _clipboardClearCts, null);
+        cts?.Cancel();
+        cts?.Dispose();
     }
 
     private static async Task ClearClipboardAfterDelayAsync(CancellationToken token)
@@ -196,7 +170,7 @@ public class GameLauncherService
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(30), token);
-            Windows.ApplicationModel.DataTransfer.Clipboard.Clear();
+            Clipboard.Clear();
         }
         catch (OperationCanceledException)
         {

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -11,7 +10,6 @@ using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using WinRT.Interop;
 
 namespace iscLauncher.Controls;
 
@@ -27,21 +25,24 @@ public sealed partial class GameDetailControl : UserControl
     public IntPtr OwnerHwnd { get; set; }
 
     private GameEntry? _game;
-    private GameEntry? _editingGame;
-    private readonly HashSet<Guid> _runningGames = new();
+    private bool _isEditing;
     private readonly Dictionary<Guid, int> _runningProcessIds = new();
     private CancellationTokenSource? _syncCts;
-    private CancellationTokenSource? _statusHideCts;
+    private readonly StatusNotifier _status;
 
-    public bool IsEditing => _editingGame != null;
+    public bool IsEditing => _isEditing;
     public GameEntry? CurrentGame => _game;
 
-    public GameDetailControl() => InitializeComponent();
+    public GameDetailControl()
+    {
+        InitializeComponent();
+        _status = new StatusNotifier(StatusBar, StatusText);
+    }
 
     public void LoadGame(GameEntry game, string? statusMessage = null)
     {
         _game = game;
-        _editingGame = null;
+        _isEditing = false;
         SetEditMode(false);
 
         NameTextBox.Text = game.Name;
@@ -60,9 +61,6 @@ public sealed partial class GameDetailControl : UserControl
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
         SyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
-        AddonSyncTab.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
-        OpenRepoButton.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
-        OpenRepoLink.Visibility = Visibility.Collapsed;
         UpdateLastSyncedText(game);
 
         DetailPivot.SelectedIndex = 0;
@@ -83,74 +81,66 @@ public sealed partial class GameDetailControl : UserControl
         dialog.Content = "You have unsaved changes that will be lost. Discard them?";
         dialog.PrimaryButtonText = "Discard";
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
-        _editingGame = null;
+        _isEditing = false;
         return true;
     }
-
-    public async Task LaunchAsync(GameEntry game) => await LaunchGameAsync(game);
-
-    // ── Edit mode ─────────────────────────────────────────────────────────────
 
     private void OnEditClick(object sender, RoutedEventArgs e)
     {
         if (_game == null) return;
-        _editingGame = _game;
+        _isEditing = true;
         SetEditMode(true);
     }
 
     private void OnCancelEditClick(object sender, RoutedEventArgs e)
     {
         if (_game != null) LoadGame(_game);
-        _editingGame = null;
+        _isEditing = false;
     }
 
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (_editingGame == null) return;
+        if (!_isEditing || _game == null) return;
 
         if (string.IsNullOrWhiteSpace(NameTextBox.Text))
         { ShowStatus("Game name is required.", false); return; }
         if (string.IsNullOrWhiteSpace(ExecutableTextBox.Text))
         { ShowStatus("Executable path is required.", false); return; }
 
-        var oldPath = _editingGame.ExecutablePath;
-        var gameId = _editingGame.Id;
+        var game = _game;
+        var oldPath = game.ExecutablePath;
 
-        _editingGame.Name = NameTextBox.Text.Trim();
-        _editingGame.ExecutablePath = ExecutableTextBox.Text.Trim();
-        _editingGame.RealmlistAddress = NullIfBlank(RealmlistTextBox.Text);
-        _editingGame.AccountName = NullIfBlank(AccountTextBox.Text);
-        _editingGame.RealmName = NullIfBlank(RealmTextBox.Text);
-        _editingGame.WindowTitle = NullIfBlank(WindowTitleTextBox.Text);
-        _editingGame.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
+        game.Name = NameTextBox.Text.Trim();
+        game.ExecutablePath = ExecutableTextBox.Text.Trim();
+        game.RealmlistAddress = RealmlistTextBox.Text.NullIfBlank();
+        game.AccountName = AccountTextBox.Text.NullIfBlank();
+        game.RealmName = RealmTextBox.Text.NullIfBlank();
+        game.WindowTitle = WindowTitleTextBox.Text.NullIfBlank();
+        game.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
             ? 0 : (int)StartupDelayNumberBox.Value;
-        _editingGame.InputMethod = InputMethodComboBox.SelectedIndex switch
+        game.InputMethod = InputMethodComboBox.SelectedIndex switch
         {
             1 => PasswordInputMethod.Clipboard,
             _ => PasswordInputMethod.SendKeys
         };
-        _editingGame.SyncRepoUrl = NullIfBlank(SyncRepoUrlTextBox.Text);
-        _editingGame.SyncBranch = NullIfBlank(SyncBranchTextBox.Text);
+        game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
+        game.SyncBranch = SyncBranchTextBox.Text.NullIfBlank();
 
         if (!string.IsNullOrEmpty(PasswordBox.Password))
-            CredentialService!.SaveCredential(_editingGame.CredentialTarget, PasswordBox.Password);
+            CredentialService!.SaveCredential(game.CredentialTarget, PasswordBox.Password);
 
-        if (oldPath != _editingGame.ExecutablePath)
+        if (oldPath != game.ExecutablePath)
             IconExtractor.InvalidateCache(oldPath);
 
-        await GameRepository!.UpdateGameAsync(_editingGame);
+        await GameRepository!.UpdateGameAsync(game);
 
-        var saved = _editingGame;
-        _editingGame = null;
-        GameSaved?.Invoke(this, saved);
+        _isEditing = false;
+        GameSaved?.Invoke(this, game);
     }
 
     private async void OnBrowseExecutableClick(object sender, RoutedEventArgs e)
     {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        picker.FileTypeFilter.Add(".exe");
-        InitializeWithWindow.Initialize(picker, OwnerHwnd);
-        var file = await picker.PickSingleFileAsync();
+        var file = await FormHelpers.PickFileAsync(OwnerHwnd, ".exe");
         if (file != null) ExecutableTextBox.Text = file.Path;
     }
 
@@ -158,7 +148,6 @@ public sealed partial class GameDetailControl : UserControl
     {
         NameTextBox.IsEnabled = isEditing;
         ExecutableTextBox.IsEnabled = isEditing;
-        ExecutableTextBox.IsReadOnly = true;
         RealmlistTextBox.IsEnabled = isEditing;
         AccountTextBox.IsEnabled = isEditing;
         RealmTextBox.IsEnabled = isEditing;
@@ -183,7 +172,6 @@ public sealed partial class GameDetailControl : UserControl
             (_game?.HasSyncRepo == true ? Visibility.Visible : Visibility.Collapsed);
         OpenRepoButton.Visibility = isEditing ? Visibility.Collapsed :
             (_game?.HasSyncRepo == true ? Visibility.Visible : Visibility.Collapsed);
-        OpenRepoLink.Visibility = Visibility.Collapsed;
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -193,15 +181,13 @@ public sealed partial class GameDetailControl : UserControl
         args.Handled = true;
     }
 
-    // ── Launch ────────────────────────────────────────────────────────────────
-
     private async void OnLaunchClick(object sender, RoutedEventArgs e)
     {
         if (_game == null) return;
-        if (_runningGames.Contains(_game.Id) && _runningProcessIds.TryGetValue(_game.Id, out var pid))
+        if (_runningProcessIds.TryGetValue(_game.Id, out var pid))
             await SendPasswordAsync(_game, pid);
         else
-            await LaunchGameAsync(_game);
+            await LaunchAsync(_game);
     }
 
     private async Task SendPasswordAsync(GameEntry game, int processId)
@@ -212,15 +198,14 @@ public sealed partial class GameDetailControl : UserControl
         if (!result.Success)
         {
             // Process is gone — clean up running state
-            _runningGames.Remove(game.Id);
             _runningProcessIds.Remove(game.Id);
             if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
         }
     }
 
-    private async Task LaunchGameAsync(GameEntry game)
+    public async Task LaunchAsync(GameEntry game)
     {
-        if (_runningGames.Contains(game.Id))
+        if (_runningProcessIds.ContainsKey(game.Id))
         { ShowStatus($"{game.Name} is already running.", false); return; }
 
         ShowStatus($"Launching {game.Name}...", true);
@@ -232,13 +217,11 @@ public sealed partial class GameDetailControl : UserControl
             try
             {
                 var process = Process.GetProcessById(pid);
-                _runningGames.Add(game.Id);
                 _runningProcessIds[game.Id] = pid;
                 UpdateLaunchButtonState(game);
                 process.EnableRaisingEvents = true;
                 process.Exited += (s, e) => DispatcherQueue.TryEnqueue(() =>
                 {
-                    _runningGames.Remove(game.Id);
                     _runningProcessIds.Remove(game.Id);
                     if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
                 });
@@ -249,13 +232,10 @@ public sealed partial class GameDetailControl : UserControl
 
     private void UpdateLaunchButtonState(GameEntry game)
     {
-        var isRunning = _runningGames.Contains(game.Id);
-        LaunchButton.IsEnabled = true;
+        var isRunning = _runningProcessIds.ContainsKey(game.Id);
         LaunchButtonText.Text = isRunning ? "Send Password" : "Launch";
         LaunchButtonIcon.Text = isRunning ? "🔑" : "⚔";
     }
-
-    // ── Addon Sync ────────────────────────────────────────────────────────────
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
     {
@@ -321,11 +301,8 @@ public sealed partial class GameDetailControl : UserControl
         catch { ShowStatus("Could not open browser.", false); }
     }
 
-    public bool IsSyncing { get; private set; }
-
     private void SetSyncBusy(bool busy)
     {
-        IsSyncing = busy;
         SyncAddonsButton.IsEnabled = !busy;
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;
@@ -350,29 +327,10 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnComputerNameLostFocus(object sender, RoutedEventArgs e)
     {
-        var name = ComputerNameTextBox.Text?.Trim();
-        if (string.IsNullOrEmpty(name)) { ComputerNameTextBox.Text = Environment.MachineName; name = null; }
-        try { await GameRepository!.SetComputerNameAsync(name ?? ""); } catch { }
+        var name = ComputerNameTextBox.Text?.Trim() ?? "";
+        if (name.Length == 0) ComputerNameTextBox.Text = Environment.MachineName;
+        try { await GameRepository!.SetComputerNameAsync(name); } catch { }
     }
 
-    // ── Status ────────────────────────────────────────────────────────────────
-
-    private void ShowStatus(string message, bool isSuccess)
-    {
-        _statusHideCts?.Cancel(); _statusHideCts?.Dispose(); _statusHideCts = null;
-        StatusText.Text = message;
-        StatusBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
-        StatusBar.IsOpen = true;
-        if (isSuccess)
-        {
-            var cts = new CancellationTokenSource(); _statusHideCts = cts;
-            _ = Task.Delay(5000, cts.Token).ContinueWith(t =>
-            {
-                if (!t.IsCanceled) DispatcherQueue.TryEnqueue(() => StatusBar.IsOpen = false);
-            });
-        }
-    }
-
-    private static string? NullIfBlank(string? v) =>
-        string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+    private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
 }

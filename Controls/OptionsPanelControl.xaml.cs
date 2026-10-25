@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -31,10 +32,14 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private UpdateCheckResult? _pendingUpdate;
     private CancellationTokenSource? _updateCts;
-    private CancellationTokenSource? _statusHideCts;
     private bool _suppressSave;
+    private readonly StatusNotifier _status;
 
-    public OptionsPanelControl() => InitializeComponent();
+    public OptionsPanelControl()
+    {
+        InitializeComponent();
+        _status = new StatusNotifier(StatusBar, StatusText);
+    }
 
     public void Activate(bool checkUpdatesOnStartup)
     {
@@ -52,15 +57,11 @@ public sealed partial class OptionsPanelControl : UserControl
         _suppressSave = false;
     }
 
-    // ── Escape ────────────────────────────────────────────────────────────────
-
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         CloseRequested?.Invoke(this, EventArgs.Empty);
         args.Handled = true;
     }
-
-    // ── Updates ───────────────────────────────────────────────────────────────
 
     private async void OnCheckUpdatesClick(object sender, RoutedEventArgs e)
     {
@@ -132,14 +133,12 @@ public sealed partial class OptionsPanelControl : UserControl
         CheckUpdatesOnStartupChanged?.Invoke(this, newValue);
     }
 
-    // ── Data ──────────────────────────────────────────────────────────────────
-
     private void OnOpenDataFolderClick(object sender, RoutedEventArgs e)
     {
         try
         {
             Directory.CreateDirectory(Services.GameRepository.AppDataFolder);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            Process.Start(new ProcessStartInfo(
                 Services.GameRepository.AppDataFolder) { UseShellExecute = true });
         }
         catch { ShowStatus("Could not open data folder.", false); }
@@ -157,7 +156,7 @@ public sealed partial class OptionsPanelControl : UserControl
         try
         {
             var library = await GameRepository!.LoadAsync();
-            var json = JsonSerializer.Serialize(library, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(library, Services.GameRepository.JsonOptions);
             await File.WriteAllTextAsync(file.Path, json);
             ShowStatus($"Exported {library.Games.Count} game(s) successfully.", true);
         }
@@ -166,11 +165,7 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private async void OnImportClick(object sender, RoutedEventArgs e)
     {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        picker.FileTypeFilter.Add(".json");
-        picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
-        InitializeWithWindow.Initialize(picker, OwnerHwnd);
-        var file = await picker.PickSingleFileAsync();
+        var file = await FormHelpers.PickFileAsync(OwnerHwnd, ".json", Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary);
         if (file == null) return;
 
         GameLibrary? imported;
@@ -190,9 +185,8 @@ public sealed partial class OptionsPanelControl : UserControl
 
         try
         {
-            var destPath = Path.Combine(Services.GameRepository.AppDataFolder, "games.json");
             Directory.CreateDirectory(Services.GameRepository.AppDataFolder);
-            File.Copy(file.Path, destPath, overwrite: true);
+            File.Copy(file.Path, Services.GameRepository.GamesFilePath, overwrite: true);
             var reloaded = await GameRepository.LoadAsync();
 
             _suppressSave = true;
@@ -213,8 +207,6 @@ public sealed partial class OptionsPanelControl : UserControl
         ShowStatus("Icon cache cleared.", true);
     }
 
-    // ── Security ──────────────────────────────────────────────────────────────
-
     private async void OnRemoveAllPasswordsClick(object sender, RoutedEventArgs e)
     {
         if (Games == null || Games.Count == 0)
@@ -231,21 +223,5 @@ public sealed partial class OptionsPanelControl : UserControl
         ShowStatus($"Removed {removed} password(s).", true);
     }
 
-    // ── Status ────────────────────────────────────────────────────────────────
-
-    private void ShowStatus(string message, bool isSuccess)
-    {
-        _statusHideCts?.Cancel(); _statusHideCts?.Dispose(); _statusHideCts = null;
-        StatusText.Text = message;
-        StatusBar.Severity = isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error;
-        StatusBar.IsOpen = true;
-        if (isSuccess)
-        {
-            var cts = new CancellationTokenSource(); _statusHideCts = cts;
-            _ = Task.Delay(5000, cts.Token).ContinueWith(t =>
-            {
-                if (!t.IsCanceled) DispatcherQueue.TryEnqueue(() => StatusBar.IsOpen = false);
-            });
-        }
-    }
+    private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
 }

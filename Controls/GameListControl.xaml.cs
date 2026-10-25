@@ -40,48 +40,43 @@ public sealed partial class GameListControl : UserControl
     {
         foreach (var item in GameListView.Items)
         {
-            var container = GameListView.ContainerFromItem(item) as ListViewItem;
-            if (container == null) continue;
-            var border = FindVisualChild<Border>(container, "GameCardBorder");
-            if (border == null) continue;
+            if ((GameListView.ContainerFromItem(item) as ListViewItem)?.ContentTemplateRoot is not Border border)
+                continue;
             bool isSelected = item == GameListView.SelectedItem;
             if (isSelected)
             {
-                border.BorderBrush = (Brush)Application.Current.Resources["GoldBrush"];
+                border.BorderBrush = DialogHelper.Res<Brush>("GoldBrush");
                 border.BorderThickness = new Thickness(2);
-                border.Background = (Brush)Application.Current.Resources["Surface3Brush"];
-                border.Shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
+                border.Background = DialogHelper.Res<Brush>("Surface3Brush");
+                border.Shadow = new ThemeShadow();
                 border.Translation = new Vector3(0, 0, 8);
             }
             else
             {
-                border.BorderBrush = (Brush)Application.Current.Resources["BorderBrush"];
+                border.BorderBrush = DialogHelper.Res<Brush>("BorderBrush");
                 border.BorderThickness = new Thickness(1);
-                border.Background = (Brush)Application.Current.Resources["Surface2Brush"];
+                border.Background = DialogHelper.Res<Brush>("Surface2Brush");
                 border.Shadow = null;
                 border.Translation = new Vector3(0, 0, 0);
             }
         }
     }
 
-    public void SetAddGameHighlight(bool selected)
-    {
-        AddGameButton.BorderBrush = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "BorderBrush"];
-        AddGameButton.BorderThickness = new Thickness(selected ? 2 : 1);
-        AddGameButton.Background = selected
-            ? (Brush)Application.Current.Resources["Surface3Brush"]
-            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        AddGameButton.Foreground = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "TextMutedBrush"];
-    }
+    public void SetAddGameHighlight(bool selected) =>
+        AddGameButton.Foreground = ApplyHighlight(AddGameButton, selected);
 
-    public void SetOptionsHighlight(bool selected)
+    public void SetOptionsHighlight(bool selected) =>
+        OptionsButtonIcon.Foreground = ApplyHighlight(OptionsButton, selected);
+
+    /// <summary>Styles the button's frame and returns the foreground brush for its content.</summary>
+    private static Brush ApplyHighlight(Button button, bool selected)
     {
-        OptionsButton.BorderBrush = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "BorderBrush"];
-        OptionsButton.BorderThickness = new Thickness(selected ? 2 : 1);
-        OptionsButton.Background = selected
-            ? (Brush)Application.Current.Resources["Surface3Brush"]
+        button.BorderBrush = DialogHelper.Res<Brush>(selected ? "GoldBrush" : "BorderBrush");
+        button.BorderThickness = new Thickness(selected ? 2 : 1);
+        button.Background = selected
+            ? DialogHelper.Res<Brush>("Surface3Brush")
             : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        OptionsButtonIcon.Foreground = (Brush)Application.Current.Resources[selected ? "GoldBrush" : "TextMutedBrush"];
+        return DialogHelper.Res<Brush>(selected ? "GoldBrush" : "TextMutedBrush");
     }
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -123,17 +118,4 @@ public sealed partial class GameListControl : UserControl
 
     private void OnOptionsClick(object sender, RoutedEventArgs e) =>
         OptionsRequested?.Invoke(this, EventArgs.Empty);
-
-    private T? FindVisualChild<T>(DependencyObject parent, string name = "") where T : DependencyObject
-    {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T t && (string.IsNullOrEmpty(name) || (child as FrameworkElement)?.Name == name))
-                return t;
-            var result = FindVisualChild<T>(child, name);
-            if (result != null) return result;
-        }
-        return null;
-    }
 }

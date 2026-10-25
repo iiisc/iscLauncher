@@ -211,10 +211,6 @@
                                        FontStyle="Italic"
                                        Visibility="Collapsed"/>
 
-                            <HyperlinkButton x:Name="OpenRepoLink"
-                                             Click="OnOpenRepoClick"
-                                             Visibility="Collapsed"/>
-
                             <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
                                 <Button x:Name="SyncAddonsButton"
                                         Style="{StaticResource SecondaryButtonStyle}"

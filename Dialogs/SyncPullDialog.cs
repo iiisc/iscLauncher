@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using iscLauncher.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
 
@@ -20,32 +21,14 @@ public static class SyncPullDialog
         List<string> localAddons,
         int characterCount)
     {
-        var warningText = characterCount > 0
-            ? $"This will sync addons and restore {characterCount} character(s) from the repo snapshot. Continue?"
-            : "This will sync addons from the repo. Continue?";
-
         var contentPanel = new StackPanel { Spacing = 12 };
-        contentPanel.Children.Add(new TextBlock
-        {
-            Text = warningText,
-            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-            FontSize = 13,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextPrimaryBrush"],
-            TextWrapping = TextWrapping.Wrap
-        });
+        contentPanel.Children.Add(BodyText(characterCount > 0
+            ? $"This will sync addons and restore {characterCount} character(s) from the repo snapshot. Continue?"
+            : "This will sync addons from the repo. Continue?"));
 
         if (characterCount > 0)
-        {
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = "⚠ Local character settings will be overwritten for characters present in the repo snapshot.",
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
-                FontSize = 11,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldBrush"],
-                FontStyle = Windows.UI.Text.FontStyle.Italic,
-                TextWrapping = TextWrapping.Wrap
-            });
-        }
+            contentPanel.Children.Add(WarningText(
+                "⚠ Local character settings will be overwritten for characters present in the repo snapshot."));
 
         if (repoAddons.Count > 0)
         {
@@ -56,44 +39,37 @@ public static class SyncPullDialog
             contentPanel.Children.Add(new TextBlock
             {
                 Text = $"📦 INCLUDED ADDONS ({repoAddons.Count})",
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["DisplayFont"],
+                FontFamily = Res<FontFamily>("DisplayFont"),
                 FontSize = 10,
                 CharacterSpacing = 100,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["GoldDarkBrush"],
+                Foreground = Res<Brush>("GoldDarkBrush"),
                 Margin = new Thickness(0, 4, 0, 0)
             });
 
             if (newAddons.Count > 0)
                 contentPanel.Children.Add(BuildChangeSection(
-                    $"✚  NEW ({newAddons.Count})",
-                    newAddons,
-                    (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["EmeraldForegroundBrush"]));
+                    $"✚  NEW ({newAddons.Count})", newAddons, Res<Brush>("EmeraldForegroundBrush")));
 
             if (updatedAddons.Count > 0)
                 contentPanel.Children.Add(BuildChangeSection(
-                    $"↻  UPDATING ({updatedAddons.Count})",
-                    updatedAddons,
-                    (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextMutedBrush"]));
+                    $"↻  UPDATING ({updatedAddons.Count})", updatedAddons, Res<Brush>("TextMutedBrush")));
         }
 
-        var dialog = DialogHelper.CreateThemedDialog(xamlRoot, "⚔ Pull from Repo");
+        var dialog = CreateThemedDialog(xamlRoot, "⚔ Pull from Repo");
         dialog.Content = contentPanel;
         dialog.PrimaryButtonText = "Pull";
-        dialog.MinWidth = 500;
-        dialog.MaxWidth = 600;
-        dialog.Resources["ContentDialogMaxWidth"] = 600.0;
-        dialog.Resources["ContentDialogMinWidth"] = 500.0;
+        SetWidth(dialog, 500, 600);
 
         return await dialog.ShowAsync();
     }
 
-    private static StackPanel BuildChangeSection(string label, List<string> addons, Microsoft.UI.Xaml.Media.Brush labelForeground)
+    private static StackPanel BuildChangeSection(string label, List<string> addons, Brush labelForeground)
     {
         var section = new StackPanel { Spacing = 2 };
         section.Children.Add(new TextBlock
         {
             Text = label,
-            FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["DisplayFont"],
+            FontFamily = Res<FontFamily>("DisplayFont"),
             FontSize = 10,
             CharacterSpacing = 60,
             Foreground = labelForeground
@@ -104,9 +80,9 @@ public static class SyncPullDialog
             Content = new TextBlock
             {
                 Text = string.Join(",  ", addons),
-                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["BodyFont"],
+                FontFamily = Res<FontFamily>("BodyFont"),
                 FontSize = 11,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextDimBrush"],
+                Foreground = Res<Brush>("TextDimBrush"),
                 TextWrapping = TextWrapping.Wrap
             }
         });

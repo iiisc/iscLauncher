@@ -1,14 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using iscLauncher.Controls;
+using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
-using Microsoft.UI;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinRT.Interop;
 
@@ -32,7 +34,6 @@ public sealed partial class MainWindow : Window
 
         var hwnd = WindowNative.GetWindowHandle(this);
 
-        // Inject services
         GameList.SetGames(_games);
 
         GameDetail.GameRepository = _gameRepository;
@@ -51,7 +52,6 @@ public sealed partial class MainWindow : Window
         AddGamePanel.CredentialService = _credentialService;
         AddGamePanel.OwnerHwnd = hwnd;
 
-        // Wire events
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;
         GameList.DeleteConfirmed  += OnDeleteConfirmed;
@@ -72,73 +72,66 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
 
         GameList.Loaded += (_, _) =>
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-                () => GameList.UpdateSelectionVisuals());
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, GameList.UpdateSelectionVisuals);
 
-        SetWindowSize(900, 650);
+        SetWindowSize(hwnd, 900, 650);
         SetupCustomTitleBar();
         _ = LoadAsync();
     }
 
-    // ── Navigation ────────────────────────────────────────────────────────────
+    private void ShowPanel(UIElement panel)
+    {
+        EmptyState.Visibility   = panel == EmptyState   ? Visibility.Visible : Visibility.Collapsed;
+        GameDetail.Visibility   = panel == GameDetail   ? Visibility.Visible : Visibility.Collapsed;
+        OptionsPanel.Visibility = panel == OptionsPanel ? Visibility.Visible : Visibility.Collapsed;
+        AddGamePanel.Visibility = panel == AddGamePanel ? Visibility.Visible : Visibility.Collapsed;
+        GameList.SetAddGameHighlight(panel == AddGamePanel);
+        GameList.SetOptionsHighlight(panel == OptionsPanel);
+    }
 
     private void ShowDetail(GameEntry game, string? statusMessage = null)
     {
-        EmptyState.Visibility   = Visibility.Collapsed;
-        GameDetail.Visibility   = Visibility.Visible;
-        OptionsPanel.Visibility = Visibility.Collapsed;
-        AddGamePanel.Visibility = Visibility.Collapsed;
-        GameList.SetAddGameHighlight(false);
-        GameList.SetOptionsHighlight(false);
+        ShowPanel(GameDetail);
         GameDetail.LoadGame(game, statusMessage);
     }
 
-    private void ShowEmptyState()
-    {
-        EmptyState.Visibility   = Visibility.Visible;
-        GameDetail.Visibility   = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Collapsed;
-        AddGamePanel.Visibility = Visibility.Collapsed;
-        GameList.SetAddGameHighlight(false);
-        GameList.SetOptionsHighlight(false);
-    }
+    private void ShowEmptyState() => ShowPanel(EmptyState);
 
     private void ShowAddGame()
     {
-        EmptyState.Visibility   = Visibility.Collapsed;
-        GameDetail.Visibility   = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Collapsed;
-        AddGamePanel.Visibility = Visibility.Visible;
         GameList.SetSelectedGame(null);
-        GameList.SetAddGameHighlight(true);
-        GameList.SetOptionsHighlight(false);
+        ShowPanel(AddGamePanel);
         AddGamePanel.ClearAndFocus();
     }
 
     private void ShowOptions()
     {
-        EmptyState.Visibility   = Visibility.Collapsed;
-        GameDetail.Visibility   = Visibility.Collapsed;
-        OptionsPanel.Visibility = Visibility.Visible;
-        AddGamePanel.Visibility = Visibility.Collapsed;
-        GameList.SetOptionsHighlight(true);
-        GameList.SetAddGameHighlight(false);
+        ShowPanel(OptionsPanel);
         OptionsPanel.Activate(_checkUpdatesOnStartup);
     }
 
-    // ── Event handlers ────────────────────────────────────────────────────────
+    /// <summary>Asks to discard unsaved edits, then stops any sync tied to the current game.</summary>
+    private async Task<bool> TryLeaveDetailAsync()
+    {
+        if (GameDetail.Visibility == Visibility.Visible && !await GameDetail.ConfirmNavigateAwayAsync())
+            return false;
+        GameDetail.CancelSync();
+        return true;
+    }
+
+    private void ReplaceGames(IEnumerable<GameEntry> games)
+    {
+        _games.Clear();
+        foreach (var g in games) _games.Add(g);
+    }
 
     private async void OnGameSelected(object? sender, GameEntry? game)
     {
-        if (GameDetail.Visibility == Visibility.Visible && GameDetail.IsEditing)
+        if (!await TryLeaveDetailAsync())
         {
-            if (!await GameDetail.ConfirmNavigateAwayAsync())
-            {
-                GameList.SetSelectedGame(GameDetail.CurrentGame);
-                return;
-            }
+            GameList.SetSelectedGame(GameDetail.CurrentGame);
+            return;
         }
-        GameDetail.CancelSync();
         if (game == null) ShowEmptyState();
         else ShowDetail(game);
     }
@@ -158,32 +151,25 @@ public sealed partial class MainWindow : Window
 
     private async void OnAddGameRequested(object? sender, EventArgs e)
     {
-        if (GameDetail.Visibility == Visibility.Visible &&
-            GameDetail.IsEditing &&
-            !await GameDetail.ConfirmNavigateAwayAsync()) return;
-        GameDetail.CancelSync();
-        ShowAddGame();
+        if (await TryLeaveDetailAsync()) ShowAddGame();
     }
 
     private async void OnOptionsRequested(object? sender, EventArgs e)
     {
         if (OptionsPanel.Visibility == Visibility.Visible)
         { OnOptionsCloseRequested(sender, e); return; }
-        if (GameDetail.Visibility == Visibility.Visible &&
-            GameDetail.IsEditing &&
-            !await GameDetail.ConfirmNavigateAwayAsync()) return;
-        GameDetail.CancelSync();
-        ShowOptions();
+        if (await TryLeaveDetailAsync()) ShowOptions();
     }
 
-    private async void OnGameSaved(object? sender, GameEntry savedGame)
+    private void OnGameSaved(object? sender, GameEntry savedGame)
     {
-        // Reload from disk so computed properties (ExecutableDisplayPath etc.) refresh
-        var library = await _gameRepository.LoadAsync();
-        _games.Clear();
-        foreach (var g in library.Games) _games.Add(g);
-        var refreshed = _games.FirstOrDefault(g => g.Id == savedGame.Id);
-        if (refreshed != null) { GameList.SetSelectedGame(refreshed); ShowDetail(refreshed, "Game updated successfully!"); }
+        // The card's x:Bind values are one-time, so re-insert the edited entry to re-template its row
+        var index = _games.IndexOf(savedGame);
+        if (index < 0) return;
+        _games.RemoveAt(index);
+        _games.Insert(index, savedGame);
+        GameList.SetSelectedGame(savedGame);
+        ShowDetail(savedGame, "Game updated successfully!");
     }
 
     private void OnGameAdded(object? sender, GameEntry game)
@@ -201,8 +187,6 @@ public sealed partial class MainWindow : Window
 
     private void OnOptionsCloseRequested(object? sender, EventArgs e)
     {
-        GameList.SetOptionsHighlight(false);
-        OptionsPanel.Visibility = Visibility.Collapsed;
         if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
         else ShowEmptyState();
     }
@@ -210,19 +194,13 @@ public sealed partial class MainWindow : Window
     private void OnLibraryImported(object? sender, LibraryImportedEventArgs e)
     {
         _checkUpdatesOnStartup = e.CheckUpdatesOnStartup;
-        _games.Clear();
-        foreach (var g in e.Games) _games.Add(g);
+        ReplaceGames(e.Games);
         GameList.SetSelectedGame(null);
         ShowEmptyState();
     }
 
-    private void OnIconCacheCleared(object? sender, EventArgs e)
-    {
-        // Force ListView to re-evaluate icons by bouncing the collection
-        var snapshot = _games.ToList();
-        _games.Clear();
-        foreach (var g in snapshot) _games.Add(g);
-    }
+    // Re-adding every item makes the ListView re-run each icon's Loaded handler
+    private void OnIconCacheCleared(object? sender, EventArgs e) => ReplaceGames(_games.ToList());
 
     private void OnDetailEscapeRequested(object? sender, EventArgs e)
     {
@@ -230,24 +208,20 @@ public sealed partial class MainWindow : Window
         ShowEmptyState();
     }
 
-    // ── Startup ───────────────────────────────────────────────────────────────
-
     private async Task LoadAsync()
     {
         try
         {
             var library = await _gameRepository.LoadAsync();
-            _games.Clear();
-            foreach (var g in library.Games) _games.Add(g);
-            GameDetail.SetComputerName(string.IsNullOrWhiteSpace(library.ComputerName)
-                ? Environment.MachineName : library.ComputerName);
+            ReplaceGames(library.Games);
+            GameDetail.SetComputerName(library.EffectiveComputerName);
             _checkUpdatesOnStartup = library.CheckUpdatesOnStartup;
             if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
             if (_checkUpdatesOnStartup) _ = CheckForUpdatesSilentlyAsync();
         }
         catch (Exception ex)
         {
-            var d = Helpers.DialogHelper.CreateThemedDialog(Content.XamlRoot, "Load Error");
+            var d = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Load Error");
             d.Content = $"Failed to load games: {ex.Message}";
             _ = d.ShowAsync();
         }
@@ -267,28 +241,19 @@ public sealed partial class MainWindow : Window
         catch { }
     }
 
-    // ── Window setup ──────────────────────────────────────────────────────────
-
-    private void SetWindowSize(int width, int height)
+    private void SetWindowSize(IntPtr hwnd, int width, int height)
     {
-        var hwnd = WindowNative.GetWindowHandle(this);
-        var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-        var appWindow = AppWindow.GetFromWindowId(windowId);
-        if (appWindow != null)
-        {
-            var dpi = GetDpiForWindow(hwnd);
-            var scale = dpi / 96.0;
-            appWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
-        }
+        var scale = GetDpiForWindow(hwnd) / 96.0;
+        AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     private void SetupCustomTitleBar()
     {
         ExtendsContentIntoTitleBar = true;
-        if (AppTitleBar != null) SetTitleBar(AppTitleBar);
+        SetTitleBar(AppTitleBar);
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (File.Exists(iconPath))

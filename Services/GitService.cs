@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
@@ -13,47 +14,47 @@ public record GitCommitEntry(string Hash, string Message, string Body = "", stri
 
 public class GitService
 {
-    private static readonly string SyncCacheRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "IscLauncher", "SyncCache");
+    private static readonly string SyncCacheRoot = Path.Combine(GameRepository.AppDataFolder, "SyncCache");
+
+    // Only a positive result is cached, so installing git mid-session is picked up on the next check
+    private static bool _gitFound;
 
     public string GetLocalCachePath(GameEntry game) =>
         Path.Combine(SyncCacheRoot, game.Id.ToString());
 
     public async Task<bool> IsGitInstalledAsync(CancellationToken ct = default)
     {
-        var result = await RunGitAsync("--version", workingDir: null, ct);
-        return result.Success;
+        if (!_gitFound)
+            _gitFound = (await RunGitAsync("--version", ct)).Success;
+        return _gitFound;
     }
 
     public async Task<GitResult> CloneAsync(string repoUrl, string branch, string targetDir, CancellationToken ct = default, IProgress<string>? progress = null)
     {
-        var branchArg = string.IsNullOrWhiteSpace(branch) ? "main" : branch;
-        var result = await RunGitAsync($"clone --progress --branch \"{branchArg}\" \"{repoUrl}\" \"{targetDir}\"", workingDir: null, ct, progress);
+        var result = await RunGitAsync($"clone --progress --branch \"{branch}\" \"{repoUrl}\" \"{targetDir}\"", ct, progress);
         if (result.Success)
             return result;
 
         // Empty repos have no branches — clone without --branch
         if (Directory.Exists(targetDir))
             ForceDeleteDirectory(targetDir);
-        return await RunGitAsync($"clone --progress \"{repoUrl}\" \"{targetDir}\"", workingDir: null, ct, progress);
+        return await RunGitAsync($"clone --progress \"{repoUrl}\" \"{targetDir}\"", ct, progress);
     }
 
     public async Task<GitResult> PullAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" pull", workingDir: null, ct);
+        await RunGitAsync($"-C \"{repoDir}\" pull", ct);
 
     public async Task<GitResult> AddAllAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" add -A", workingDir: null, ct);
+        await RunGitAsync($"-C \"{repoDir}\" add -A", ct);
 
     public async Task<GitResult> CommitAsync(string repoDir, string message, CancellationToken ct = default)
     {
         var msgFile = Path.Combine(repoDir, ".git", "COMMIT_MSG_TMP");
         try
         {
-            await File.WriteAllTextAsync(msgFile, message, new System.Text.UTF8Encoding(false), ct);
+            await File.WriteAllTextAsync(msgFile, message, new UTF8Encoding(false), ct);
             return await RunGitAsync(
-                $"-C \"{repoDir}\" -c user.name=\"iscLauncher\" -c user.email=\"noreply\" -c i18n.commitEncoding=utf-8 commit --file=\"{msgFile}\"",
-                workingDir: null, ct);
+                $"-C \"{repoDir}\" -c user.name=\"iscLauncher\" -c user.email=\"noreply\" -c i18n.commitEncoding=utf-8 commit --file=\"{msgFile}\"", ct);
         }
         finally
         {
@@ -62,17 +63,17 @@ public class GitService
     }
 
     public async Task<GitResult> PushAsync(string repoDir, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" push -u origin HEAD", workingDir: null, ct);
+        await RunGitAsync($"-C \"{repoDir}\" push -u origin HEAD", ct);
 
     public async Task<string?> GetRemoteUrlAsync(string repoDir, CancellationToken ct = default)
     {
-        var result = await RunGitAsync($"-C \"{repoDir}\" remote get-url origin", workingDir: null, ct);
+        var result = await RunGitAsync($"-C \"{repoDir}\" remote get-url origin", ct);
         return result.Success ? result.Output.Trim() : null;
     }
 
     public async Task<bool> IsStatusCleanAsync(string repoDir, CancellationToken ct = default)
     {
-        var result = await RunGitAsync($"-C \"{repoDir}\" status --porcelain", workingDir: null, ct);
+        var result = await RunGitAsync($"-C \"{repoDir}\" status --porcelain", ct);
         return result.Success && string.IsNullOrWhiteSpace(result.Output);
     }
 
@@ -82,7 +83,7 @@ public class GitService
         const char rs = '\x1e';
         const char us = '\x1f';
         var format = $"--format={rs}%h{us}%s{us}%b{us}%ai";
-        var result = await RunGitAsync($"-C \"{repoDir}\" -c i18n.logOutputEncoding=utf-8 log {format} -n {count}", workingDir: null, ct);
+        var result = await RunGitAsync($"-C \"{repoDir}\" -c i18n.logOutputEncoding=utf-8 log {format} -n {count}", ct);
         var entries = new List<GitCommitEntry>();
         if (!result.Success)
             return entries;
@@ -104,9 +105,9 @@ public class GitService
     }
 
     public async Task<GitResult> CheckoutCommitFilesAsync(string repoDir, string commitHash, CancellationToken ct = default) =>
-        await RunGitAsync($"-C \"{repoDir}\" checkout {commitHash} -- .", workingDir: null, ct);
+        await RunGitAsync($"-C \"{repoDir}\" checkout {commitHash} -- .", ct);
 
-    private static async Task<GitResult> RunGitAsync(string arguments, string? workingDir, CancellationToken ct, IProgress<string>? progress = null)
+    private static async Task<GitResult> RunGitAsync(string arguments, CancellationToken ct, IProgress<string>? progress = null)
     {
         try
         {
@@ -118,16 +119,13 @@ public class GitService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                StandardOutputEncoding = System.Text.Encoding.UTF8,
-                StandardErrorEncoding = System.Text.Encoding.UTF8
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
             };
-
-            if (!string.IsNullOrEmpty(workingDir))
-                psi.WorkingDirectory = workingDir;
 
             using var process = new Process { StartInfo = psi };
 
-            var stderrBuilder = new System.Text.StringBuilder();
+            var stderrBuilder = new StringBuilder();
 
             if (progress != null)
             {
@@ -179,7 +177,7 @@ public class GitService
         }
     }
 
-    private static void ForceDeleteDirectory(string path)
+    internal static void ForceDeleteDirectory(string path)
     {
         foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
             File.SetAttributes(file, FileAttributes.Normal);

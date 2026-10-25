@@ -16,10 +16,7 @@ public class RealmlistService
     /// Scans all locale subdirectories under {executableDirectory}\Data\ for existing files.
     /// Falls back to creating Data\enUS\realmlist.wtf if none are found.
     /// </summary>
-    /// <param name="executablePath">Full path to the game executable</param>
-    /// <param name="realmlistAddress">The server address (e.g., "logon.warmane.com")</param>
-    /// <returns>Result indicating success or failure</returns>
-    public async Task<RealmlistResult> UpdateRealmlistAsync(string executablePath, string realmlistAddress)
+    public async Task<RealmlistResult> UpdateRealmlistAsync(string executablePath, string? realmlistAddress)
     {
         if (string.IsNullOrWhiteSpace(realmlistAddress))
         {
@@ -38,7 +35,6 @@ public class RealmlistService
             var content = $"set realmlist {realmlistAddress}";
             var filesUpdated = 0;
 
-            // Scan all locale subdirectories for existing realmlist.wtf files
             if (Directory.Exists(dataDir))
             {
                 foreach (var localeDir in Directory.GetDirectories(dataDir))
@@ -52,7 +48,6 @@ public class RealmlistService
                 }
             }
 
-            // Fallback: create in Data\enUS if no existing file was found
             if (filesUpdated == 0)
             {
                 var fallbackDir = Path.Combine(executableDirectory, "Data", "enUS");
@@ -73,14 +68,9 @@ public class RealmlistService
     }
 
     /// <summary>
-    /// Updates the config.txt file with the account name, realm name, and optionally the realmlist.
-    /// The file is expected at: {executableDirectory}\WTF\config.txt
+    /// Updates the config file with the account name, realm name, and optionally the realmlist.
+    /// Looks for {executableDirectory}\WTF\Config.wtf, then WTF\config.txt.
     /// </summary>
-    /// <param name="executablePath">Full path to the game executable</param>
-    /// <param name="accountName">The account name to set</param>
-    /// <param name="realmName">The realm/server name to set</param>
-    /// <param name="realmlistAddress">Optional realmlist address to also update in config.txt</param>
-    /// <returns>Result indicating success or failure</returns>
     public async Task<RealmlistResult> UpdateConfigAsync(string executablePath, string? accountName, string? realmName, string? realmlistAddress)
     {
         if (string.IsNullOrWhiteSpace(accountName) && string.IsNullOrWhiteSpace(realmName) && string.IsNullOrWhiteSpace(realmlistAddress))
@@ -97,74 +87,21 @@ public class RealmlistService
             }
 
             var configPath = Path.Combine(executableDirectory, "WTF", "Config.wtf");
-
-            // Try alternative filename if Config.wtf doesn't exist
             if (!File.Exists(configPath))
             {
                 configPath = Path.Combine(executableDirectory, "WTF", "config.txt");
             }
 
-            // Check if config file exists
             if (!File.Exists(configPath))
             {
                 return new RealmlistResult(false, $"Config file not found in WTF folder. Looked for Config.wtf and config.txt");
             }
 
             var content = await File.ReadAllTextAsync(configPath);
-            var updated = false;
-
-            // Update accountName if provided
-            if (!string.IsNullOrWhiteSpace(accountName))
-            {
-                var accountPattern = new Regex(@"^SET accountName ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                var replaced = accountPattern.Replace(content, $@"SET accountName ""{accountName}""", 1);
-                if (replaced != content)
-                {
-                    content = replaced;
-                }
-                else
-                {
-                    content += $@"{Environment.NewLine}SET accountName ""{accountName}""";
-                }
-                updated = true;
-            }
-
-            // Update realmName in config.txt if provided
-            if (!string.IsNullOrWhiteSpace(realmName))
-            {
-                var realmNamePattern = new Regex(@"^SET realmName ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                var replaced = realmNamePattern.Replace(content, $@"SET realmName ""{realmName}""", 1);
-                if (replaced != content)
-                {
-                    content = replaced;
-                }
-                else
-                {
-                    content += $@"{Environment.NewLine}SET realmName ""{realmName}""";
-                }
-                updated = true;
-            }
-
-            // Update realmList in config.txt if provided
-            if (!string.IsNullOrWhiteSpace(realmlistAddress))
-            {
-                var realmPattern = new Regex(@"^SET realmList ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                var replaced = realmPattern.Replace(content, $@"SET realmList ""{realmlistAddress}""", 1);
-                if (replaced != content)
-                {
-                    content = replaced;
-                }
-                else
-                {
-                    content += $@"{Environment.NewLine}SET realmList ""{realmlistAddress}""";
-                }
-                updated = true;
-            }
-
-            if (updated)
-            {
-                await File.WriteAllTextAsync(configPath, content);
-            }
+            content = SetConfigValue(content, "accountName", accountName);
+            content = SetConfigValue(content, "realmName", realmName);
+            content = SetConfigValue(content, "realmList", realmlistAddress);
+            await File.WriteAllTextAsync(configPath, content);
 
             return new RealmlistResult(true, $"Config updated successfully.");
         }
@@ -176,6 +113,18 @@ public class RealmlistService
         {
             return new RealmlistResult(false, $"Failed to update config: {ex.Message}");
         }
+    }
+
+    /// <summary>Replaces the first <c>SET key "..."</c> line, or appends one. Blank values leave the content untouched.</summary>
+    private static string SetConfigValue(string content, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return content;
+
+        var pattern = new Regex($@"^SET {key} ""[^""]*""", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        var line = $@"SET {key} ""{value}""";
+        var replaced = pattern.Replace(content, line, 1);
+        return replaced != content ? replaced : content + Environment.NewLine + line;
     }
 }
 

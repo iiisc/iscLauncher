@@ -13,9 +13,9 @@ public class GameRepository
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
 
-    private static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
+    internal static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
     };
@@ -47,86 +47,39 @@ public class GameRepository
         await File.WriteAllTextAsync(GamesFilePath, json);
     }
 
-    public async Task AddGameAsync(GameEntry game)
-    {
-        await _fileLock.WaitAsync();
-        try
-        {
-            var library = await LoadAsync();
-            library.Games.Add(game);
-            await SaveAsync(library);
-        }
-        finally
-        {
-            _fileLock.Release();
-        }
-    }
+    public Task AddGameAsync(GameEntry game) =>
+        MutateAsync(library => { library.Games.Add(game); return true; });
 
-    public async Task UpdateGameAsync(GameEntry game)
-    {
-        await _fileLock.WaitAsync();
-        try
+    public Task UpdateGameAsync(GameEntry game) =>
+        MutateAsync(library =>
         {
-            var library = await LoadAsync();
             var index = library.Games.FindIndex(g => g.Id == game.Id);
-            if (index >= 0)
-            {
-                library.Games[index] = game;
+            if (index < 0)
+                return false;
+            library.Games[index] = game;
+            return true;
+        });
+
+    public Task RemoveGameAsync(Guid gameId) =>
+        MutateAsync(library => { library.Games.RemoveAll(g => g.Id == gameId); return true; });
+
+    public async Task<string> GetComputerNameAsync() => (await LoadAsync()).EffectiveComputerName;
+
+    public Task SetComputerNameAsync(string name) =>
+        MutateAsync(library => { library.ComputerName = string.IsNullOrWhiteSpace(name) ? null : name.Trim(); return true; });
+
+    public Task SetCheckUpdatesOnStartupAsync(bool value) =>
+        MutateAsync(library => { library.CheckUpdatesOnStartup = value; return true; });
+
+    /// <summary>Load, apply <paramref name="change"/>, and save only if it returns true.</summary>
+    private async Task MutateAsync(Func<GameLibrary, bool> change)
+    {
+        await _fileLock.WaitAsync();
+        try
+        {
+            var library = await LoadAsync();
+            if (change(library))
                 await SaveAsync(library);
-            }
-        }
-        finally
-        {
-            _fileLock.Release();
-        }
-    }
-
-    public async Task RemoveGameAsync(Guid gameId)
-    {
-        await _fileLock.WaitAsync();
-        try
-        {
-            var library = await LoadAsync();
-            library.Games.RemoveAll(g => g.Id == gameId);
-            await SaveAsync(library);
-        }
-        finally
-        {
-            _fileLock.Release();
-        }
-    }
-
-    public async Task<string> GetComputerNameAsync()
-    {
-        var library = await LoadAsync();
-        return string.IsNullOrWhiteSpace(library.ComputerName)
-            ? Environment.MachineName
-            : library.ComputerName;
-    }
-
-    public async Task SetComputerNameAsync(string name)
-    {
-        await _fileLock.WaitAsync();
-        try
-        {
-            var library = await LoadAsync();
-            library.ComputerName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
-            await SaveAsync(library);
-        }
-        finally
-        {
-            _fileLock.Release();
-        }
-    }
-
-    public async Task SetCheckUpdatesOnStartupAsync(bool value)
-    {
-        await _fileLock.WaitAsync();
-        try
-        {
-            var library = await LoadAsync();
-            library.CheckUpdatesOnStartup = value;
-            await SaveAsync(library);
         }
         finally
         {

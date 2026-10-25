@@ -21,8 +21,10 @@ public class PasswordAutomationService
         string? windowTitlePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var (windowHandle, info) = await WaitForGameWindowAsync(
-            processId, windowTitlePattern, cancellationToken);
+        // The poll loop makes blocking Win32 calls (SendMessageTimeout can stall up to 1s
+        // while the game loads), so keep it off the caller's UI thread.
+        var (windowHandle, info) = await Task.Run(
+            () => WaitForGameWindowAsync(processId, windowTitlePattern, cancellationToken), cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
         {
@@ -123,12 +125,9 @@ public class PasswordAutomationService
             {
                 GetWindowThreadProcessId(hWnd, out uint windowPid);
 
-                if (!knownProcesses.ContainsKey(windowPid) || windowPid == currentPid)
-                    continue;
-
                 // Guard against PID reuse: verify the process behind this window
                 // is still the one we originally discovered in the tree.
-                if (!ValidateProcessIdentity(knownProcesses, windowPid))
+                if (windowPid == currentPid || !ValidateProcessIdentity(knownProcesses, windowPid))
                     continue;
 
                 var title = GetWindowTitle(hWnd);
@@ -192,9 +191,7 @@ public class PasswordAutomationService
 
         try
         {
-            var entry = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
-            if (!Process32First(snapshot, ref entry))
-                return;
+            var entry = new PROCESSENTRY32();
 
             // Multiple passes handle nested children (launcher → updater → game).
             bool added;
@@ -238,24 +235,13 @@ public class PasswordAutomationService
         if (expectedCreation == 0)
             return true;
 
-        long currentCreation = GetProcessCreationTime(pid);
+        // A current creation time of 0 means OpenProcess failed: the process exited,
+        // so a window still reporting this PID belongs to a reused PID.
+        if (GetProcessCreationTime(pid) == expectedCreation)
+            return true;
 
-        // Process has exited (OpenProcess failed). A dead process can't own
-        // windows, so this PID appearing in EnumerateVisibleWindows means
-        // it was reused.
-        if (currentCreation == 0)
-        {
-            knownProcesses.Remove(pid);
-            return false;
-        }
-
-        if (currentCreation != expectedCreation)
-        {
-            knownProcesses.Remove(pid);
-            return false;
-        }
-
-        return true;
+        knownProcesses.Remove(pid);
+        return false;
     }
 
     /// <summary>
