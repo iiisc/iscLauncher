@@ -39,12 +39,14 @@ public class AppUpdateService
 
     public async Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken ct = default)
     {
-        var url = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
-        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        var json = await _http.GetStringAsync($"https://api.github.com/repos/{Owner}/{Repo}/releases/latest", ct).ConfigureAwait(false);
+        return ParseRelease(json, CurrentVersion);
+    }
 
-        using var responseStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(responseStream, cancellationToken: ct).ConfigureAwait(false);
+    /// <summary>Reads GitHub's latest-release JSON: the version, the zip to download, its checksum and the notes.</summary>
+    internal static UpdateCheckResult ParseRelease(string json, string currentVersion)
+    {
+        using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
         var tagName = root.GetProperty("tag_name").GetString() ?? "0.0.0";
@@ -72,7 +74,7 @@ public class AppUpdateService
         }
 
         var notes = root.TryGetProperty("body", out var body) ? (body.GetString() ?? "").Trim() : "";
-        return new UpdateCheckResult(IsNewer(latestVersion, CurrentVersion), latestVersion, downloadUrl, assetName, sha256, notes);
+        return new UpdateCheckResult(IsNewer(latestVersion, currentVersion), latestVersion, downloadUrl, assetName, sha256, notes);
     }
 
     // Downloads the release asset and writes the swap script, then launches it.
@@ -85,9 +87,27 @@ public class AppUpdateService
 
         var tempDir = Path.Combine(Path.GetTempPath(), "iscLauncherUpdate");
         Directory.CreateDirectory(tempDir);
-        var destPath = Path.Combine(tempDir, update.AssetName!);
+        var zipPath = Path.Combine(tempDir, update.AssetName!);
 
-        using var response = await _http.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        await DownloadAsync(update.DownloadUrl!, zipPath, progress, ct).ConfigureAwait(false);
+        await VerifyAsync(zipPath, update.Sha256, ct).ConfigureAwait(false);
+
+        var currentExe = Environment.ProcessPath
+            ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
+        var scriptPath = await PrepareSwapAsync(zipPath, tempDir, currentExe, Environment.ProcessId, ct).ConfigureAwait(false);
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
+            UseShellExecute = true,
+            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+        });
+    }
+
+    private static async Task DownloadAsync(string url, string destPath, IProgress<double>? progress, CancellationToken ct)
+    {
+        using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1L;
@@ -112,22 +132,26 @@ public class AppUpdateService
                 }
             }
         }
-        fileStream.Close();
+    }
 
-        await using (var downloaded = File.OpenRead(destPath))
-        {
-            var actual = Convert.ToHexString(await SHA256.HashDataAsync(downloaded, ct).ConfigureAwait(false));
-            if (!actual.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("the download doesn't match GitHub's checksum, so nothing was installed. Try again.");
-        }
+    internal static async Task VerifyAsync(string path, string sha256, CancellationToken ct)
+    {
+        await using var file = File.OpenRead(path);
+        var actual = Convert.ToHexString(await SHA256.HashDataAsync(file, ct).ConfigureAwait(false));
+        if (!actual.Equals(sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("the download doesn't match GitHub's checksum, so nothing was installed. Try again.");
+    }
 
-        var currentExe = Environment.ProcessPath
-            ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
-
+    /// <summary>
+    /// Unpacks the release next to it and writes the script that, once process <paramref name="processId"/> has exited,
+    /// copies it over the app folder and restarts <paramref name="currentExe"/>. Returns the script's path.
+    /// </summary>
+    internal static async Task<string> PrepareSwapAsync(string zipPath, string tempDir, string currentExe, int processId, CancellationToken ct)
+    {
         var extractDir = Path.Combine(tempDir, "extracted");
         if (Directory.Exists(extractDir))
             Directory.Delete(extractDir, true);
-        await Task.Run(() => ZipFile.ExtractToDirectory(destPath, extractDir), ct).ConfigureAwait(false);
+        await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extractDir), ct).ConfigureAwait(false);
         // The app is the only exe at the top; the bundled Git's are in subfolders
         var newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.TopDirectoryOnly)
             .FirstOrDefault()
@@ -138,7 +162,7 @@ public class AppUpdateService
         // on the old version (or with no app running) and never finds out why
         var scriptPath = Path.Combine(tempDir, "update.ps1");
         var script = $$"""
-            Wait-Process -Id {{Environment.ProcessId}} -Timeout 30 -ErrorAction SilentlyContinue
+            Wait-Process -Id {{processId}} -Timeout 30 -ErrorAction SilentlyContinue
             $copied = $false
             for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
                 try {
@@ -159,14 +183,7 @@ public class AppUpdateService
             """;
         // Windows PowerShell reads BOM-less files as ANSI, which would mangle non-ASCII characters in the paths
         await File.WriteAllTextAsync(scriptPath, script, Encoding.UTF8, ct).ConfigureAwait(false);
-
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
-            UseShellExecute = true,
-            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-        });
+        return scriptPath;
     }
 
     // Single-quoted PowerShell strings are literal; a doubled quote escapes an apostrophe (e.g. C:\Users\O'Brien)
