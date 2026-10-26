@@ -190,13 +190,17 @@ public sealed class AddonSyncServiceTests : System.IDisposable
         Addon(download, "WeakAurasOptions", "5.21.8");
         Addon(download, "WeakAurasArchive", "5.22.1");
 
-        var downloaded = AddonFiles.GameAddOnsDir(download);
-        var preview = AddonFiles.Compare(downloaded, AddonFiles.GameAddOnsDir(Dir(game)), includeRemoved: false, clientMajor: 0, _ct);
-        var changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList();
-        Assert.Equal(("WeakAuras", "5.21.8", "5.22.1"), (Assert.Single(changed).Name, changed[0].TargetVersion, changed[0].SourceVersion));
+        var update = AddonUpdateService.Compare(game,
+            new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", "5.22.1", AddonFiles.GameAddOnsDir(download), [], [], null));
+        Assert.Equal(["WeakAuras", "WeakAurasOptions"], update.Installed);
+        var changed = Assert.Single(update.Changed);
+        Assert.Equal(("WeakAuras", "5.21.8", "5.22.1"), (changed.Name, changed.TargetVersion, changed.SourceVersion));
 
-        var message = await Sync.InstallUpdatesAsync(game, [new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", downloaded, ["WeakAuras", "WeakAurasOptions"], changed, null)], _ct);
-        Assert.Equal("Updated NoM0Re/WeakAuras-WotLK.", message);
+        Assert.Equal("Updated NoM0Re/WeakAuras-WotLK.", await Sync.InstallUpdatesAsync(game, [update], _ct));
+        // Compared again without downloading, the game now matches, and its files have a new fingerprint to match on
+        var after = AddonUpdateService.Compare(game, update);
+        Assert.Empty(after.Changed);
+        Assert.NotEqual(update.Files, after.Files);
 
         var addOns = AddonFiles.GameAddOnsDir(Dir(game));
         Assert.Contains("5.22.1", File.ReadAllText(Path.Combine(addOns, @"WeakAuras\WeakAuras.lua")));

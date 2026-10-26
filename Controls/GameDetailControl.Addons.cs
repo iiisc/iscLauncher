@@ -147,8 +147,16 @@ public sealed partial class GameDetailControl
     {
         var view = new InstalledAddonsView(game, _services.AddonUpdates) { IsBusy = _syncBusy };
         view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
-        view.UpdateRequested += async (_, picked) => await RunSyncAsync("Updating addons...",
-            async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct));
+        view.UpdateRequested += async (_, picked) =>
+        {
+            // Pushing is how the update reaches the other PCs, so it's offered while it's on the user's mind
+            if (await RunSyncAsync("Updating addons...", async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct))
+                && game.HasSyncRepo
+                && await DialogHelper.AskAsync(XamlRoot, "Push the Update?",
+                    $"Push {game.Name}'s updated addons now, so your other PCs get them when they pull?", "Push Now", closeText: "Later")
+                    == ContentDialogResult.Primary)
+                await PushAsync(game);
+        };
         AddonsHost.Child = view;
         _ = view.CheckAllAsync();
     }
@@ -186,8 +194,11 @@ public sealed partial class GameDetailControl
             "Continue Anyway") == ContentDialogResult.Primary;
     }
 
-    /// <summary>Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.</summary>
-    private async Task RunSyncAsync(string startMessage,
+    /// <summary>
+    /// Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.
+    /// Returns whether it succeeded.
+    /// </summary>
+    private async Task<bool> RunSyncAsync(string startMessage,
         Func<IProgress<string>, CancellationToken, Task<string?>> operation)
     {
         _syncCts?.Cancel(); _syncCts?.Dispose();
@@ -203,6 +214,7 @@ public sealed partial class GameDetailControl
             if (_game != null) UpdateSyncStatus(_game);
             // Pulls, rollbacks, restores and updates change the addons the list shows
             if (InstalledView is { } view) await view.RescanAsync();
+            return message != null;
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
         catch (AppException ex)
@@ -217,6 +229,7 @@ public sealed partial class GameDetailControl
             ShowStatus($"Failed: {ex.Message}", false);
         }
         finally { SetSyncBusy(false); }
+        return false;
     }
 
     private void OnCancelSyncClick(object sender, RoutedEventArgs e) => _syncCts?.Cancel();
@@ -256,7 +269,8 @@ public sealed partial class GameDetailControl
         SyncStatusPanel.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
         var lastSynced = game.LastSynced is DateTime ts ? $"last synced {Ago(DateTime.UtcNow - ts)}" : "not synced from this PC yet";
         var (glyph, brush, text) =
-            game.HasRemoteChanges ? ("", "GoldBrush", $"New from another PC: pull to get it ({lastSynced})")
+            _services.GitHub.SignInTurnedDown ? ("\uE7BA", "CrimsonBrush", "GitHub turned down this PC's sign-in, so it can't sync. Sign in again under Options.")
+            : game.HasRemoteChanges ? ("", "GoldBrush", $"New from another PC: pull to get it ({lastSynced})")
             : game.RemoteHead != null ? ("", "EmeraldForegroundBrush", $"Up to date with the repo ({lastSynced})")
             : ("", "TextMutedBrush", char.ToUpper(lastSynced[0]) + lastSynced[1..]);
         SyncStatusIcon.Glyph = glyph;

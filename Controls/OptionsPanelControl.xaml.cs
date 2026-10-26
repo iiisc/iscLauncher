@@ -51,11 +51,16 @@ public sealed partial class OptionsPanelControl : UserControl
         GitHubButtonText.Text = signedIn ? "Sign Out" : "Sign In";
         if (signedIn && await _services.GitHub.GetLoginAsync() is { } login)
             GitHubAccountText.Text = $"Signed in to GitHub as {login}";
+        else if (_services.GitHub.SignInTurnedDown)
+        {
+            GitHubAccountText.Text = "GitHub turned down this PC's sign-in. Sign in again.";
+            GitHubButtonText.Text = "Sign In";
+        }
     }
 
     private async void OnGitHubClick(object sender, RoutedEventArgs e)
     {
-        if (_services.GitHub.Token != null)
+        if (_services.GitHub.Token != null && !_services.GitHub.SignInTurnedDown)
         {
             _services.GitHub.SignOut();
             ShowStatus("Signed out of GitHub.", true);

@@ -142,6 +142,11 @@
                                             <TextBlock Text="New from another PC" Style="{StaticResource FieldLabelStyle}" Foreground="{StaticResource GoldBrush}" />
                                         </StackPanel>
                                     </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0"
+                                                Visibility="{x:Bind HasAddonUpdates, Mode=OneWay}">
+                                        <FontIcon Glyph="&#xE8FD;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                        <TextBlock Text="Addon updates" Style="{StaticResource FieldLabelStyle}" Foreground="{StaticResource GoldBrush}" />
+                                    </StackPanel>
                                 </StackPanel>
 
                             </Grid>

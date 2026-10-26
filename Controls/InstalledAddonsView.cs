@@ -40,7 +40,6 @@ public sealed class InstalledAddonsView : UserControl
     private readonly CancellationTokenSource _cts = new();
     private readonly Button _updateSelected = TextButton("Update Selected", "PrimaryButtonStyle");
     private readonly Button _updateAll = TextButton("Update All", "SecondaryButtonStyle");
-    private readonly Button _checkAgain = TextButton("Check Again", "SecondaryButtonStyle");
     private bool _busy;
 
     /// <summary>The updates the user picked, for the host to install and then <see cref="RescanAsync"/>.</summary>
@@ -54,22 +53,18 @@ public sealed class InstalledAddonsView : UserControl
         _game = game;
         _service = service;
         _addOnsDir = AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game));
-        (_installed, _toc) = ReadAddons(_addOnsDir);
-        // Until the user connects or removes one, the sources are the repos the addons' .toc files name
-        _sources = game.AddonSources ?? [.. _toc.Where(a => a.Value.Repo != null)
-            .GroupBy(a => a.Value.Repo!, IgnoreCase)
-            .Select(g => new AddonSource { Repo = g.Key, Addons = g.Select(a => a.Key).ToList() })];
+        _toc = AddonFiles.InstalledAddons(_addOnsDir);
+        _installed = [.. _toc.Keys];
+        _sources = AddonUpdateService.Sources(game, _toc);
         _message.Visibility = Visibility.Collapsed;
 
         _updateSelected.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => _ticked.Contains(u.Repo)).ToList());
         // An update made for another client stays out unless it's ticked and updated on its own
         _updateAll.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => Warning(u) == null).ToList());
-        _checkAgain.Click += async (_, _) => await CheckAllAsync();
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         buttons.Children.Add(_updateSelected);
         buttons.Children.Add(_updateAll);
-        buttons.Children.Add(_checkAgain);
         var header = new StackPanel { Spacing = 10 };
         header.Children.Add(_summary);
         header.Children.Add(_message);
@@ -101,19 +96,20 @@ public sealed class InstalledAddonsView : UserControl
     /// <summary>Lists the game's addons again and compares them with the downloads, after something changed them.</summary>
     public async Task RescanAsync()
     {
-        var checkedRepos = _results.Values.ToList();
-        var (installed, toc, updates) = await Task.Run(() =>
+        var downloaded = _results.Values.Where(u => u.Dir != null).ToList();
+        var (toc, compared) = await Task.Run(() =>
+            (AddonFiles.InstalledAddons(_addOnsDir), downloaded.Select(u => AddonUpdateService.Compare(_game, u)).ToList()));
+        _toc = toc;
+        _installed = [.. toc.Keys];
+        foreach (var update in compared)
         {
-            var (i, t) = ReadAddons(_addOnsDir);
-            return (i, t, checkedRepos.Select(u => AddonUpdateService.Compare(_game, u)).ToList());
-        });
-        (_installed, _toc) = (installed, toc);
-        foreach (var update in updates)
-        {
-            if (_sources.FirstOrDefault(s => IgnoreCase.Equals(s.Repo, update.Repo)) is { } source)
+            if (Source(update.Repo) is { } source)
                 Apply(source, update);
         }
         Render();
+        // The rest weren't downloaded because nothing had changed. Checking them again downloads only those whose files
+        // the change touched; it runs on its own so the operation that called this isn't kept waiting.
+        _ = CheckAsync([.. _sources.Where(s => _results.GetValueOrDefault(s.Repo) is { Dir: null, Error: null })]);
     }
 
     /// <summary>Disables the buttons while the host runs something that changes the game's files.</summary>
@@ -122,11 +118,7 @@ public sealed class InstalledAddonsView : UserControl
         set { _busy = value; UpdateButtons(); }
     }
 
-    private static (List<string>, Dictionary<string, (string?, string?)>) ReadAddons(string addOnsDir)
-    {
-        var names = AddonFiles.AddonNames(addOnsDir);
-        return (names, names.ToDictionary(n => n, n => AddonFiles.AddonInfo(Path.Combine(addOnsDir, n)), IgnoreCase));
-    }
+    private AddonSource? Source(string repo) => _sources.FirstOrDefault(s => IgnoreCase.Equals(s.Repo, repo));
 
     private IEnumerable<AddonUpdate> Available =>
         _sources.Select(s => _results.GetValueOrDefault(s.Repo)).OfType<AddonUpdate>().Where(u => u.Changed.Count > 0);
@@ -135,6 +127,8 @@ public sealed class InstalledAddonsView : UserControl
 
     private async Task CheckAsync(IReadOnlyList<AddonSource> sources)
     {
+        if (sources.Count == 0)
+            return;
         _checking.UnionWith(sources.Select(s => s.Repo));
         Render();
         try
@@ -142,7 +136,7 @@ public sealed class InstalledAddonsView : UserControl
             // The checks download in parallel; each result is shown as it arrives, back on the UI thread
             await Task.WhenAll(sources.Select(async source =>
             {
-                Apply(source, await _service.CheckAsync(_game, source.Repo, _downloadDir, _cts.Token));
+                Apply(source, await _service.CheckAsync(_game, source, _downloadDir, _cts.Token));
                 Render();
             }));
         }
@@ -154,9 +148,13 @@ public sealed class InstalledAddonsView : UserControl
         var hadUpdate = _results.GetValueOrDefault(source.Repo)?.Changed.Count > 0;
         _results[source.Repo] = update;
         _checking.Remove(source.Repo);
-        if (update.Error == null && !source.Addons.SequenceEqual(update.Installed, IgnoreCase))
+        var matched = update.Error == null && update.Changed.Count == 0;
+        if ((update.Error == null && !source.Addons.SequenceEqual(update.Installed, IgnoreCase))
+            || (matched && (source.MatchedVersion != update.Latest || source.MatchedFiles != update.Files)))
         {
             source.Addons = update.Installed;
+            if (matched)
+                (source.MatchedVersion, source.MatchedFiles) = (update.Latest, update.Files);
             SaveSources();
         }
         // Ticked when an update first shows up; after that the user's choice stands
@@ -178,8 +176,14 @@ public sealed class InstalledAddonsView : UserControl
             _sources.Add(source);
 
         await CheckAsync([source]);
-        if (_results.GetValueOrDefault(repo) is not { } update || update.Installed.Intersect(family, IgnoreCase).Any())
+        if (_results.GetValueOrDefault(repo) is not { } update)
             return;
+        if (update.Installed.Intersect(family, IgnoreCase).Any())
+        {
+            if (_game.DisconnectedAddonSources?.RemoveAll(r => IgnoreCase.Equals(r, repo)) > 0)
+                SaveSources();
+            return;
+        }
 
         _message.Text = update.Error != null ? $"⚠ Couldn't connect {repo}: {update.Error.TrimEnd('.')}." : $"⚠ {repo} doesn't have {family[0]}, so it wasn't connected.";
         _message.Visibility = Visibility.Visible;
@@ -192,11 +196,12 @@ public sealed class InstalledAddonsView : UserControl
         _sources.Remove(source);
         _results.Remove(source.Repo);
         _ticked.Remove(source.Repo);
+        // Otherwise an addon whose .toc names it would connect it again
+        _game.DisconnectedAddonSources = [.. (_game.DisconnectedAddonSources ?? []).Append(source.Repo).Distinct(IgnoreCase)];
         SaveSources();
         Render();
     }
 
-    // Until this, the game's sources are the ones its .toc files name, found afresh each time
     private void SaveSources()
     {
         _game.AddonSources = _sources;
@@ -228,6 +233,8 @@ public sealed class InstalledAddonsView : UserControl
             : _sources.Count > 0 ? "No updates found."
             : "Connect an addon to its GitHub project to get its updates.";
         _summary.Text = $"{(_sources.Count + families.Count).Plural("addon")}, {_sources.Count} connected to GitHub. {status}";
+        if (_checking.Count == 0 && HasGame)
+            _game.HasAddonUpdates = updates > 0;
         UpdateButtons();
     }
 
@@ -235,7 +242,6 @@ public sealed class InstalledAddonsView : UserControl
     {
         _updateSelected.IsEnabled = !_busy && Available.Any(u => _ticked.Contains(u.Repo));
         _updateAll.IsEnabled = !_busy && Available.Any(u => Warning(u) == null);
-        _checkAgain.IsEnabled = !_busy && HasGame && _checking.Count == 0 && _sources.Count > 0;
     }
 
     private static Button TextButton(string text, string styleKey) => new() { Content = text, Style = Res<Style>(styleKey) };
@@ -355,14 +361,18 @@ public sealed class InstalledAddonsView : UserControl
         error.Visibility = Visibility.Collapsed;
         var connect = new Button { Content = "Connect", Style = Res<Style>("PrimaryButtonStyle") };
 
+        var matches = new StackPanel { Spacing = 4 };
+        matches.Children.Add(Dim("Looking on GitHub..."));
+
         var panel = new StackPanel { Spacing = 8, MaxWidth = 380 };
-        panel.Children.Add(BodyText($"Paste the link to {family[0]}'s project on GitHub."));
-        panel.Children.Add(Dim("Searching GitHub for the addon's name and your game version (such as 3.3.5) usually finds it. " +
-            "If the project holds other addons you have too, they're connected with it."));
+        panel.Children.Add(BodyText($"Pick {family[0]}'s project on GitHub, or paste its link."));
+        panel.Children.Add(matches);
         panel.Children.Add(box);
         panel.Children.Add(error);
         panel.Children.Add(connect);
-        var flyout = new Flyout { Content = panel };
+        panel.Children.Add(Dim("If the project holds other addons you have too, they're connected with it."));
+        var flyout = new Flyout { Content = new ScrollViewer { Content = panel, MaxHeight = 480 } };
+        _ = ShowMatchesAsync(matches, family, flyout);
 
         connect.Click += async (_, _) =>
         {
@@ -376,6 +386,54 @@ public sealed class InstalledAddonsView : UserControl
             await ConnectAsync(repo, family);
         };
         return flyout;
+    }
+
+    private async Task ShowMatchesAsync(StackPanel matches, List<string> family, Flyout flyout)
+    {
+        List<(string Repo, string Description, int Stars)> found;
+        try
+        {
+            found = await _service.FindReposAsync(family[0], _game, _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            matches.Children.Clear();
+            matches.Children.Add(Dim($"Couldn't search GitHub: {ex.Message.TrimEnd('.')}."));
+            return;
+        }
+
+        matches.Children.Clear();
+        if (found.Count == 0)
+        {
+            matches.Children.Add(Dim("Nothing turned up on GitHub."));
+            return;
+        }
+        // Search finds forks for every client, so it's for the user to pick; connecting checks the pick has the addon
+        matches.Children.Add(Dim("Found on GitHub. Make sure it's the one for your game version:"));
+        foreach (var (repo, description, stars) in found)
+        {
+            var content = new StackPanel { Spacing = 2 };
+            content.Children.Add(BodyText(repo));
+            content.Children.Add(Dim(description.Length == 0 ? $"★ {stars}" : $"★ {stars} · {description}"));
+            var pick = new Button
+            {
+                Content = content,
+                Style = Res<Style>("SecondaryButtonStyle"),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left
+            };
+            AutomationProperties.SetName(pick, $"Connect to {repo}");
+            pick.Click += async (_, _) =>
+            {
+                flyout.Hide();
+                await ConnectAsync(repo, family);
+            };
+            matches.Children.Add(pick);
+        }
     }
 
     private static Grid Row(CheckBox? tick, UIElement text, UIElement? status, UIElement action)

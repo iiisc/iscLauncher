@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace iscLauncher.Services;
@@ -15,6 +17,25 @@ public static partial class AddonFiles
     /// <summary>"owner/name" from a GitHub link or from "owner/name" itself, or null if it names no repo.</summary>
     public static string? GitHubRepo(string text) =>
         GitHubRepoPattern.Match(text.Trim()) is { Success: true } match ? $"{match.Groups[1].Value}/{match.Groups[2].Value}" : null;
+
+    /// <summary>Installed addons, in name order, with the version and GitHub home their .toc files give.</summary>
+    public static Dictionary<string, (string? Version, string? Repo)> InstalledAddons(string addOnsDir) =>
+        AddonNames(addOnsDir).ToDictionary(n => n, n => AddonInfo(Path.Combine(addOnsDir, n)), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Changes whenever a file in these addon folders is added, removed or rewritten, as a pull or a hand edit does.
+    /// Reads only names, sizes and times, not contents.
+    /// </summary>
+    public static string Fingerprint(string addOnsDir, IEnumerable<string> addons)
+    {
+        var text = new StringBuilder();
+        foreach (var dir in addons.Order(StringComparer.OrdinalIgnoreCase).Select(a => new DirectoryInfo(Path.Combine(addOnsDir, a))).Where(d => d.Exists))
+        {
+            foreach (var file in dir.EnumerateFiles("*", SearchOption.AllDirectories).OrderBy(f => f.FullName, StringComparer.Ordinal))
+                text.Append($"{Path.GetRelativePath(addOnsDir, file.FullName)}|{file.Length}|{file.LastWriteTimeUtc.Ticks}\n");
+        }
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+    }
 
     /// <summary>
     /// Unpacks a downloaded zip into <paramref name="addOnsDir"/> as addon folders, wherever they are in it: release zips

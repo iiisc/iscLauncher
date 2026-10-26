@@ -14,6 +14,12 @@ namespace iscLauncher.Services;
 
 public record DeviceSignIn(string UserCode, string VerificationUri, string DeviceCode, int IntervalSeconds, DateTime ExpiresAt);
 
+/// <param name="Id">The release's tag, or the commit's SHA.</param>
+/// <param name="Release">The release's tag, or null when the newest version is a commit.</param>
+/// <param name="Url">Where to download it.</param>
+/// <param name="Accept">The content type to ask for when downloading, if GitHub needs one.</param>
+public record GitHubVersion(string Id, string? Release, string Url, string? Accept);
+
 /// <summary>
 /// Signs in to GitHub with the device flow, so the user approves the app on github.com and no password passes through
 /// it, and creates the private repos used for sync. The token is kept in Windows Credential Manager.
@@ -31,6 +37,24 @@ public class GitHubService
     public GitHubService(CredentialService credentials) => _credentials = credentials;
 
     public string? Token => _credentials.GetCredential(TokenTarget);
+
+    /// <summary>
+    /// GitHub turned down the saved sign-in: it was revoked, or pushed out by newer sign-ins, since GitHub keeps only
+    /// the latest ten per app. Sync can't work until the user signs in again.
+    /// </summary>
+    public bool SignInTurnedDown
+    {
+        get => _signInTurnedDown;
+        private set
+        {
+            if (_signInTurnedDown == value) return;
+            _signInTurnedDown = value;
+            SignInTurnedDownChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+    private bool _signInTurnedDown;
+
+    public event EventHandler? SignInTurnedDownChanged;
 
     public async Task<DeviceSignIn> StartSignInAsync(CancellationToken ct)
     {
@@ -62,6 +86,7 @@ public class GitHubService
             if (json.TryGetProperty("access_token", out var token))
             {
                 _credentials.SaveCredential(TokenTarget, token.GetString()!);
+                SignInTurnedDown = false;
                 return await GetLoginAsync(ct) ?? "GitHub";
             }
 
@@ -92,7 +117,11 @@ public class GitHubService
         return doc.RootElement.GetProperty("login").GetString();
     }
 
-    public void SignOut() => _credentials.DeleteCredential(TokenTarget);
+    public void SignOut()
+    {
+        _credentials.DeleteCredential(TokenTarget);
+        SignInTurnedDown = false;
+    }
 
     /// <summary>The user's own private repos, most recently updated first, as name and clone URL.</summary>
     public async Task<List<(string Name, string CloneUrl)>> ListPrivateReposAsync(CancellationToken ct)
@@ -136,15 +165,13 @@ public class GitHubService
     }
 
     /// <summary>
-    /// Downloads a repo's newest release zip, or its default branch when no release has one: some addons only ever
-    /// publish code. Returns the release's tag, or null for the branch.
+    /// What a repo's newest version is: its newest release with a zip, or else its newest commit, since some addons only
+    /// ever publish code. Costs a request or two and downloads nothing.
     /// </summary>
-    public async Task<string?> DownloadLatestAsync(string repo, string zipPath, CancellationToken ct)
+    public async Task<GitHubVersion> GetLatestAsync(string repo, CancellationToken ct)
     {
-        var url = $"https://api.github.com/repos/{repo}/zipball";
-        string? tag = null;
-        // Not found means no releases, or no such repo, which the download then reports
-        using (var release = await GetAsync($"https://api.github.com/repos/{repo}/releases/latest", null, Token, ct))
+        // Not found means no releases, or no such repo, which the commit lookup then reports
+        using (var release = await GetAsync($"https://api.github.com/repos/{repo}/releases/latest", null, ct))
         {
             if (release.IsSuccessStatusCode)
             {
@@ -153,43 +180,67 @@ public class GitHubService
                     .FirstOrDefault(a => a.GetProperty("name").GetString()!.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
                 if (zip.ValueKind == JsonValueKind.Object)
                 {
-                    url = zip.GetProperty("url").GetString()!;
-                    tag = doc.RootElement.GetProperty("tag_name").GetString();
+                    var tag = doc.RootElement.GetProperty("tag_name").GetString()!;
+                    // GitHub hands out a release file only when asked for bytes
+                    return new GitHubVersion(tag, tag, zip.GetProperty("url").GetString()!, "application/octet-stream");
                 }
             }
+            else if (release.StatusCode != HttpStatusCode.NotFound)
+                throw Refused(release);
         }
 
-        // GitHub hands out a release file only when asked for bytes, but refuses that for a branch zip
-        using var response = await GetAsync(url, tag == null ? null : "application/octet-stream", Token, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new AppException(response.StatusCode switch
-            {
-                HttpStatusCode.NotFound => "not found on GitHub",
-                HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests =>
-                    "GitHub limits how often it's asked without a working sign-in. Sign in under Options, or try again in an hour",
-                _ => $"GitHub refused the download ({(int)response.StatusCode} {response.ReasonPhrase})"
-            });
-        }
-        await using var file = File.Create(zipPath);
-        await response.Content.CopyToAsync(file, ct);
-        return tag;
+        using var commit = await GetAsync($"https://api.github.com/repos/{repo}/commits/HEAD", "application/vnd.github.sha", ct);
+        if (!commit.IsSuccessStatusCode)
+            throw Refused(commit);
+        var sha = (await commit.Content.ReadAsStringAsync(ct)).Trim();
+        // Pinned to the commit, so the download is exactly the version that was looked up
+        return new GitHubVersion(sha, null, $"https://api.github.com/repos/{repo}/zipball/{sha}", null);
     }
 
-    // Public repos work signed out too, but signed in, GitHub allows far more requests an hour. A sign-in GitHub has
-    // since revoked gets 401 even for a public repo, so that's asked again without it.
-    private static async Task<HttpResponseMessage> GetAsync(string url, string? accept, string? token, CancellationToken ct)
+    public async Task DownloadAsync(GitHubVersion version, string zipPath, CancellationToken ct)
     {
+        using var response = await GetAsync(version.Url, version.Accept, ct);
+        if (!response.IsSuccessStatusCode)
+            throw Refused(response);
+        await using var file = File.Create(zipPath);
+        await response.Content.CopyToAsync(file, ct);
+    }
+
+    /// <summary>Repos matching a search, best match first, as name ("owner/repo"), description and stars.</summary>
+    public async Task<List<(string Repo, string Description, int Stars)>> SearchReposAsync(string query, CancellationToken ct)
+    {
+        using var response = await GetAsync($"https://api.github.com/search/repositories?per_page=5&q={Uri.EscapeDataString(query)}", null, ct);
+        if (!response.IsSuccessStatusCode)
+            throw Refused(response);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.GetProperty("items").EnumerateArray()
+            .Select(r => (r.GetProperty("full_name").GetString()!, r.GetProperty("description").GetString() ?? "", r.GetProperty("stargazers_count").GetInt32()))
+            .ToList();
+    }
+
+    private static AppException Refused(HttpResponseMessage response) => new(response.StatusCode switch
+    {
+        HttpStatusCode.NotFound => "not found on GitHub",
+        HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests =>
+            "GitHub limits how often it's asked without a working sign-in. Sign in under Options, or try again in an hour",
+        _ => $"GitHub refused ({(int)response.StatusCode} {response.ReasonPhrase})"
+    });
+
+    // Public repos work signed out too, but signed in, GitHub allows far more requests an hour. A turned-down sign-in
+    // gets 401 even for a public repo, so that's asked again without it, and it isn't sent again after that.
+    private async Task<HttpResponseMessage> GetAsync(string url, string? accept, CancellationToken ct, bool signedIn = true)
+    {
+        var token = signedIn && !SignInTurnedDown ? Token : null;
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (accept != null)
             request.Headers.Accept.ParseAdd(accept);
         if (token != null)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        if (token == null || response.StatusCode != HttpStatusCode.Unauthorized)
+        if (token == null || !IsTurnedDown(response))
             return response;
         response.Dispose();
-        return await GetAsync(url, accept, null, ct);
+        return await GetAsync(url, accept, ct, signedIn: false);
     }
 
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, HttpContent? content, CancellationToken ct)
@@ -198,7 +249,17 @@ public class GitHubService
             return null;
         using var request = new HttpRequestMessage(method, url) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return await Http.SendAsync(request, ct);
+        var response = await Http.SendAsync(request, ct);
+        IsTurnedDown(response);
+        return response;
+    }
+
+    private bool IsTurnedDown(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+            return false;
+        SignInTurnedDown = true;
+        return true;
     }
 
     private static async Task<string> CloneUrlAsync(HttpResponseMessage response, CancellationToken ct)

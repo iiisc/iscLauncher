@@ -69,11 +69,13 @@ WoW saves addon settings when you log out, which would undo changes made while i
 
 ## Updating addons
 
-The **Addons** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
+The **Addons** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it checks each connected project for a newer version, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, the app then offers to push, so your other PCs get the update when they pull.
 
-Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up), click **Connect** on the addon and paste the link. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out.
+When the app starts, it also checks quietly, and a game with updates waiting shows **Addon updates** in the list.
 
-A project's newest release is used when it has one with a zip; otherwise its newest code is.
+Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, click **Connect** on the addon: the app searches GitHub and lists what it finds, or you can paste a link. Searches turn up versions for every client, so pick the one for your game version; the app checks that it really has the addon before connecting it. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out. The ✕ on a project disconnects it for good, even if an addon's `.toc` names it.
+
+A project's newest release is used when it has one with a zip; otherwise its newest code is. It's only downloaded when it has changed, or when your copy of its addons has, for example after a pull.
 
 ## Backups and data
 
@@ -97,6 +99,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
 | "Git wasn't found" | Download the latest release, which includes Git, or install [Git for Windows](https://git-scm.com/download/win) |
 | Push or pull fails | Check the repo URL, and that you're signed in to GitHub under **Options** |
+| "GitHub turned down this PC's sign-in" | Sign in again under **Options**. GitHub drops a sign-in when you revoke it, or when you've signed in on more than ten PCs since |
 
 ## Uninstall
 

@@ -1,10 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
@@ -124,15 +120,7 @@ public sealed partial class GameListControl : UserControl
         var exe = game.ExecutablePath;
         if (BattleNetInstall.IsOfficial(exe))
             return "Battle.net";
-        try
-        {
-            // Private-server clients write the version as "3, 3, 5, 12340"
-            var parts = Regex.Matches(FileVersionInfo.GetVersionInfo(exe).FileVersion ?? "", @"\d+").Take(3).Select(m => m.Value).ToList();
-            if (parts.Count == 3)
-                return "WoW " + string.Join('.', parts);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or ArgumentException) { }
-        return game.ExecutableDisplayPath;
+        return AddonFiles.ClientVersion(exe) is { } version ? $"WoW {version}" : game.ExecutableDisplayPath;
     }
 
     private static async Task LoadIconAsync(Image image, GameEntry game)

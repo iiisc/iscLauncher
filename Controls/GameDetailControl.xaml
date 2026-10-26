@@ -129,13 +129,19 @@
                             </Button>
                         </Grid>
 
-                        <StackPanel x:Name="SyncStatusPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                        <!-- A grid, so a long status wraps instead of pushing the link out of sight -->
+                        <Grid x:Name="SyncStatusPanel" ColumnSpacing="8" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <FontIcon x:Name="SyncStatusIcon" FontSize="13" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="SyncStatusText" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                            <HyperlinkButton Content="Open on GitHub" Click="OnOpenRepoClick" Padding="4,0" FontSize="12"
+                            <TextBlock x:Name="SyncStatusText" Grid.Column="1" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <HyperlinkButton Grid.Column="2" Content="Open on GitHub" Click="OnOpenRepoClick" Padding="4,0" FontSize="12"
                                              Foreground="{StaticResource GoldBrush}" VerticalAlignment="Center"
                                              ToolTipService.ToolTip="Open this game's sync repo in your browser"/>
-                        </StackPanel>
+                        </Grid>
 
                         <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
                             <Button x:Name="SyncAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnSyncAddonsClick" AutomationProperties.Name="Pull">

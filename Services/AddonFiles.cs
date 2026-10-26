@@ -114,6 +114,21 @@ public static partial class AddonFiles
         }
     }
 
+    /// <summary>The client's version, e.g. "3.3.5", or null if the exe has none.</summary>
+    public static string? ClientVersion(string exePath)
+    {
+        try
+        {
+            // Private-server clients write it as "3, 3, 5, 12340"
+            var parts = Regex.Matches(FileVersionInfo.GetVersionInfo(exePath).FileVersion ?? "", @"\d+").Take(3).Select(m => m.Value).ToList();
+            return parts.Count == 3 ? string.Join('.', parts) : null;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     internal static void ForceDeleteDirectory(string path)
     {
         // Directory.Delete refuses read-only files, which git creates for its objects, and read-only folders,

@@ -163,6 +163,7 @@ public sealed partial class MainWindow : Window
             if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
             _ = CheckForUpdatesSilentlyAsync();
             _ = CheckForRemoteChangesAsync();
+            _ = CheckForAddonUpdatesAsync();
         }
         catch (Exception ex)
         {
@@ -175,11 +176,28 @@ public sealed partial class MainWindow : Window
     // Marks the games another PC has pushed to since this one last synced. Quiet: offline just shows nothing.
     private async Task CheckForRemoteChangesAsync()
     {
+        // Sync uses the GitHub sign-in, so one GitHub has turned down is worth saying before it fails a pull
+        if (_services.GitHub.Token != null)
+        {
+            try { await _services.GitHub.GetLoginAsync(); }
+            catch (Exception ex) { Log.Write($"Couldn't check the GitHub sign-in: {ex.Message}"); }
+        }
         foreach (var game in _services.Library.Games.Where(g => g.HasSyncRepo).ToList())
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             try { await _services.Sync.RefreshRemoteHeadAsync(game, timeout.Token); }
             catch (Exception ex) { Log.Write($"Couldn't check {game.Name}'s repo: {ex.Message}"); }
+        }
+    }
+
+    // Marks the games whose addons have a newer version on GitHub. Quiet, like the check above.
+    private async Task CheckForAddonUpdatesAsync()
+    {
+        foreach (var game in _services.Library.Games.Where(g => File.Exists(g.ExecutablePath)).ToList())
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            try { await _services.AddonUpdates.RefreshAsync(game, timeout.Token); }
+            catch (Exception ex) { Log.Write($"Couldn't check {game.Name}'s addons for updates: {ex.Message}"); }
         }
     }
 

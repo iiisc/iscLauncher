@@ -40,7 +40,11 @@ public sealed partial class GameDetailControl : UserControl
         StartupDelayNumberBox.ValueChanged += (_, _) => UpdateSaveButtons();
     }
 
-    public void Initialize(AppServices services) => _services = services;
+    public void Initialize(AppServices services)
+    {
+        _services = services;
+        services.GitHub.SignInTurnedDownChanged += (_, _) => DispatcherQueue.TryEnqueue(() => { if (_game != null) UpdateSyncStatus(_game); });
+    }
 
     public void LoadGame(GameEntry game, string? statusMessage = null)
     {

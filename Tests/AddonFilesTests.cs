@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using iscLauncher.Models;
 using iscLauncher.Services;
 using Xunit;
 using static iscLauncher.Tests.Sandbox;
@@ -159,6 +161,48 @@ public sealed class AddonFilesTests : IDisposable
         Assert.Equal(("10.1", "Zidras/DBM-Warmane"), AddonFiles.AddonInfo(Path.Combine(addOns, "DBM-Core")));
         Assert.Null(AddonFiles.AddonInfo(Path.Combine(addOns, "Author")).Repo);
         Assert.Null(AddonFiles.AddonInfo(Path.Combine(addOns, "Plain")).Repo);
+    }
+
+    [Fact]
+    public void TheFingerprintChangesWhenAFileIsRewrittenAddedOrRemoved()
+    {
+        var addOns = Path.Combine(_root, "AddOns");
+        Write(Path.Combine(addOns, @"Foo\Foo.toc"), "## Version: 1");
+        Write(Path.Combine(addOns, @"Other\Other.toc"), "not part of it");
+        var first = AddonFiles.Fingerprint(addOns, ["Foo", "Missing"]);
+        Assert.Equal(first, AddonFiles.Fingerprint(addOns, ["Foo", "Missing"]));
+
+        Write(Path.Combine(addOns, @"Other\Other.toc"), "changed, but not one of the addons asked about");
+        Assert.Equal(first, AddonFiles.Fingerprint(addOns, ["Foo"]));
+
+        File.SetLastWriteTimeUtc(Path.Combine(addOns, @"Foo\Foo.toc"), DateTime.UtcNow.AddMinutes(1));
+        var rewritten = AddonFiles.Fingerprint(addOns, ["Foo"]);
+        Assert.NotEqual(first, rewritten);
+        Write(Path.Combine(addOns, @"Foo\New.lua"), "");
+        Assert.NotEqual(rewritten, AddonFiles.Fingerprint(addOns, ["Foo"]));
+    }
+
+    [Fact]
+    public void AddonsAreConnectedToTheReposTheirTocNamesUnlessDisconnected()
+    {
+        var game = new GameEntry
+        {
+            AddonSources = [new AddonSource { Repo = "me/Picked", Addons = ["Clique"] }],
+            DisconnectedAddonSources = ["wrong/Retail"]
+        };
+        var installed = new Dictionary<string, (string? Version, string? Repo)>
+        {
+            ["Clique"] = ("1", null),
+            ["DBM-Core"] = ("10", "Zidras/DBM-Warmane"),
+            ["DBM-GUI"] = ("10", "zidras/dbm-warmane"),
+            ["WeakAuras"] = ("5", "wrong/Retail")
+        };
+
+        var sources = AddonUpdateService.Sources(game, installed);
+        Assert.Equal(["me/Picked", "Zidras/DBM-Warmane"], sources.Select(s => s.Repo));
+        Assert.Equal(["DBM-Core", "DBM-GUI"], sources[1].Addons);
+        // Found sources aren't kept until a check saves them
+        Assert.Single(game.AddonSources);
     }
 
     [Fact]

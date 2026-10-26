@@ -14,12 +14,15 @@ public record CharacterFolder(GameEntry Game, string Dir, string Label);
 public record BackupInfo(string Path, DateTime Created, List<string> Addons, bool HasSettings);
 
 /// <summary>A GitHub repo checked for addon updates.</summary>
-/// <param name="Release">The release downloaded, or null when it was the newest code.</param>
-/// <param name="Dir">Where its addons were unpacked.</param>
-/// <param name="Installed">The game's addon folders that the download has.</param>
+/// <param name="Latest">Its newest version: a release tag or a commit.</param>
+/// <param name="Release">The release's tag, or null when the newest version is a commit.</param>
+/// <param name="Dir">Where its addons were unpacked, or null if it wasn't downloaded because nothing had changed.</param>
+/// <param name="Installed">The game's addon folders that the repo has.</param>
 /// <param name="Changed">Those of them that differ from the download.</param>
 /// <param name="Error">Why it couldn't be checked.</param>
-public record AddonUpdate(string Repo, string? Release, string Dir, List<string> Installed, List<AddonDiff> Changed, string? Error);
+/// <param name="Files">A fingerprint of the installed folders when they were compared.</param>
+public record AddonUpdate(string Repo, string? Latest, string? Release, string? Dir, List<string> Installed, List<AddonDiff> Changed,
+    string? Error, string? Files = null);
 
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
@@ -182,11 +185,9 @@ public class AddonSyncService
             ChangeGameFiles(game, updates.SelectMany(u => u.Changed).Select(a => a.Name), includeWtf: false, null, () =>
             {
                 foreach (var update in updates)
-                    AddonFiles.ApplyAddons(update.Dir, addOns, update.Changed, CancellationToken.None);
+                    AddonFiles.ApplyAddons(update.Dir!, addOns, update.Changed, CancellationToken.None);
             }, ct);
-
-            var message = $"Updated {string.Join(", ", updates.Select(u => u.Repo))}.";
-            return game.HasSyncRepo ? $"{message} Push to send the update to your other PCs." : message;
+            return $"Updated {string.Join(", ", updates.Select(u => u.Repo))}.";
         }, ct);
 
     /// <summary>The game's backups, newest first.</summary>

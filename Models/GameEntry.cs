@@ -16,6 +16,16 @@ public class AddonSource
     /// <summary>The installed addon folders it held when last checked, so they're listed under it before the next check.</summary>
     [JsonPropertyName("addons")]
     public List<string> Addons { get; set; } = [];
+
+    /// <summary>
+    /// The repo's version (release tag or commit) when the installed addons last matched it, and a fingerprint of their
+    /// files then. While neither has changed, a check needn't download anything.
+    /// </summary>
+    [JsonPropertyName("matchedVersion")]
+    public string? MatchedVersion { get; set; }
+
+    [JsonPropertyName("matchedFiles")]
+    public string? MatchedFiles { get; set; }
 }
 
 public class GameEntry : INotifyPropertyChanged
@@ -81,9 +91,13 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("lastSyncedCommit")]
     public string? LastSyncedCommit { get; set; }
 
-    /// <summary>GitHub repos the addons are updated from, or null to use the ones the addons' .toc files name.</summary>
+    /// <summary>GitHub repos the addons are updated from. Repos an addon's .toc names are added as they're found.</summary>
     [JsonPropertyName("addonSources")]
     public List<AddonSource>? AddonSources { get; set; }
+
+    /// <summary>Repos the user disconnected, which stay that way even though an addon's .toc names them.</summary>
+    [JsonPropertyName("disconnectedAddonSources")]
+    public List<string>? DisconnectedAddonSources { get; set; }
 
     // Screen readers announce a list item by its ToString
     public override string ToString() => Name;
@@ -112,6 +126,20 @@ public class GameEntry : INotifyPropertyChanged
         set { _remoteHead = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasRemoteChanges))); }
     }
     private string? _remoteHead;
+
+    /// <summary>One of the addons' repos has a version they haven't matched, as last seen this session.</summary>
+    [JsonIgnore]
+    public bool HasAddonUpdates
+    {
+        get => _hasAddonUpdates;
+        set
+        {
+            if (_hasAddonUpdates == value) return;
+            _hasAddonUpdates = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasAddonUpdates)));
+        }
+    }
+    private bool _hasAddonUpdates;
 
     [JsonIgnore]
     public bool HasRemoteChanges => RemoteHead != null && !string.Equals(RemoteHead, LastSyncedCommit, StringComparison.OrdinalIgnoreCase);
