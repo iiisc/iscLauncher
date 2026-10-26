@@ -3,7 +3,6 @@ using System.Linq;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
@@ -76,13 +75,7 @@ public sealed class AddonChecklist
         };
 
         var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        line.Children.Add(new TextBlock
-        {
-            Text = addon.Name,
-            FontFamily = Res<FontFamily>("BodyFont"),
-            FontSize = 12,
-            Foreground = Res<Brush>("TextPrimaryBrush")
-        });
+        line.Children.Add(BodyText(addon.Name));
         if (!string.IsNullOrWhiteSpace(version))
             line.Children.Add(Dim(version));
 

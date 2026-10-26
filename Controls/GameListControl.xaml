@@ -77,42 +77,28 @@
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                                     <TextBlock Text="{x:Bind Name, Mode=OneWay}"
-                                               FontFamily="{StaticResource DisplayFont}"
                                                FontSize="13"
                                                Foreground="{StaticResource TextPrimaryBrush}" />
                                     <TextBlock Text="{x:Bind ExecutableDisplayPath, Mode=OneWay}"
-                                               FontFamily="{StaticResource BodyFont}"
-                                               FontSize="10"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               TextTrimming="CharacterEllipsis"
-                                               TextWrapping="NoWrap"
-                                               MaxLines="1" />
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               TextTrimming="CharacterEllipsis" />
                                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
                                                 Visibility="{x:Bind HasServerInfo, Mode=OneWay}">
                                         <StackPanel Orientation="Horizontal" Spacing="4"
                                                     Visibility="{x:Bind HasRealmName, Mode=OneWay}">
                                             <FontIcon Glyph="&#xE753;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                                            <TextBlock Text="{x:Bind RealmName, Mode=OneWay}"
-                                                       FontFamily="{StaticResource BodyFont}"
-                                                       FontSize="10"
-                                                       Foreground="{StaticResource TextMutedBrush}" />
+                                            <TextBlock Text="{x:Bind RealmName, Mode=OneWay}" Style="{StaticResource FieldLabelStyle}" />
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Spacing="4"
                                                     Visibility="{x:Bind HasAccountName, Mode=OneWay}">
                                             <FontIcon Glyph="&#xE77B;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                                            <TextBlock Text="{x:Bind AccountName, Mode=OneWay}"
-                                                       FontFamily="{StaticResource BodyFont}"
-                                                       FontSize="10"
-                                                       Foreground="{StaticResource TextMutedBrush}" />
+                                            <TextBlock Text="{x:Bind AccountName, Mode=OneWay}" Style="{StaticResource FieldLabelStyle}" />
                                         </StackPanel>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0"
                                                 Visibility="{x:Bind HasSyncRepo, Mode=OneWay}">
                                         <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                                        <TextBlock Text="Sync"
-                                                   FontFamily="{StaticResource BodyFont}"
-                                                   FontSize="10"
-                                                   Foreground="{StaticResource TextMutedBrush}" />
+                                        <TextBlock Text="Sync" Style="{StaticResource FieldLabelStyle}" />
                                     </StackPanel>
                                 </StackPanel>
 
@@ -148,14 +134,10 @@
             <Button Grid.Column="0"
                     x:Name="AddGameButton"
                     Click="OnAddGameClick"
-                    Style="{StaticResource AddGameButtonStyle}"
-                    Height="56">
+                    Style="{StaticResource AddGameButtonStyle}">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Text="+" FontSize="18" VerticalAlignment="Center" />
-                    <TextBlock Text="Add Game"
-                               FontFamily="{StaticResource DisplayFont}"
-                               FontSize="13"
-                               VerticalAlignment="Center" />
+                    <TextBlock Text="Add Game" VerticalAlignment="Center" />
                 </StackPanel>
                 <Button.KeyboardAccelerators>
                     <KeyboardAccelerator Key="N" Modifiers="Control" />
@@ -166,7 +148,6 @@
                     x:Name="OptionsButton"
                     Click="OnOptionsClick"
                     Style="{StaticResource AddGameButtonStyle}"
-                    Height="56"
                     ToolTipService.ToolTip="Options">
                 <Grid>
                     <FontIcon x:Name="OptionsButtonIcon" Glyph="&#xE713;" FontSize="16"/>

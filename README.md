@@ -1,6 +1,6 @@
 # iscLauncher
 
-> Unified launcher for World of Warcraft private servers.
+A Windows launcher for World of Warcraft that keeps your addons and settings in sync across PCs and game versions.
 
 [![Release](https://img.shields.io/github/v/release/iiisc/iscLauncher?style=flat-square&color=C9A84C&label=Release)](https://github.com/iiisc/iscLauncher/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/iiisc/iscLauncher/total?style=flat-square&color=3D7A5C&label=Downloads)](https://github.com/iiisc/iscLauncher/releases/latest)
@@ -8,92 +8,100 @@
 
 ![iscLauncher](Assets/iscLauncherScreenshot.png)
 
-Manage multiple WoW private server installations from one place. iscLauncher handles realmlist configuration, account pre-fill, and credential-secured auto-login — no manual file editing required.
+## What it does
 
----
+**Private servers**
+- Keeps a library of WoW installs, each with its own server address, account and realm.
+- Writes `realmlist.wtf` and `WTF\Config.wtf` before every launch, so you never edit them by hand.
+- Logs you in: your password is stored in Windows Credential Manager and typed into the login screen once the game is ready. If typing fails, it's copied to the clipboard instead and cleared again after 30 seconds.
 
-## Features
+**Official Blizzard installs**
+- Add any version under your `World of Warcraft` folder (Classic Era, beta, ...) by picking its exe.
+- Launch hands off to Blizzard's launcher, which handles login, so there's no password to store.
 
-- **Multi-server library** — each entry stores its own executable, server address, account, and realm
-- **Auto realmlist & config update** — `realmlist.wtf` and `WTF\Config.wtf` are written before every launch
-- **Auto-login** — passwords are kept in Windows Credential Manager and typed via `SendInput`, falling back to the clipboard
-- **Addon sync** — push/pull `Interface\AddOns` and `WTF` to a private GitHub repo, with rollback support
+**Addons and settings**
+- **Sync between PCs** through a private GitHub repo: push from one PC, pull on another.
+- **Copy Addons** from one game in your library to another, optionally with their settings.
+- **Copy Character Setup** gives other characters, in any game, the same enabled addons and per-character addon data as one character.
+- Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
----
-
-## Requirements
-
-- Windows 10 version 1809 (build 17763) or later · x86 / x64 / ARM64
-- No runtime install needed — the release is self-contained
-
----
-
-## Installation
+## Install
 
 1. Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest).
-2. Extract anywhere and run **iscLauncher.exe**.
+2. Extract it anywhere and run `iscLauncher.exe`. Nothing else needs installing.
 
-> **SmartScreen:** The binary is self-signed. Click **More info → Run anyway** if prompted.
+Requires 64-bit Windows 10 version 1809 or later. If SmartScreen warns on first launch, choose **More info → Run anyway**.
 
----
+The app checks for a new version when it starts. When one is ready, a dot appears on the ⚙ Options button; install it from there.
 
-## Uninstallation
+## Getting started
 
-1. Delete the folder you extracted iscLauncher into.
-2. Open **Credential Manager** (Control Panel → Credential Manager → Windows Credentials) and remove any entries prefixed with `IscLauncher`.
+1. Click **+ Add Game** and pick the game's `.exe`.
+   - **Private server:** fill in the realmlist address, account and realm, and set your password under **Automation**.
+   - **Official install:** pick the exe inside the version folder, for example `World of Warcraft\_classic_era_\WowClassic.exe`. The app recognises it and hides the settings that don't apply.
+2. Click **Save Changes**, then **Launch**.
 
-No registry keys or other system locations are modified by iscLauncher.
+If the password gets typed before the login screen is ready, raise **Startup Delay** under **Automation**.
 
----
+## Syncing addons between PCs
 
-## Quick Start
+You need [Git for Windows](https://git-scm.com/download/win) and a **private** GitHub repo for each game. Git asks you to sign in to GitHub the first time.
 
-1. Click **+ Add Game**, select the WoW `.exe`, and fill in the server address, account, and realm.
-2. Enter your password — stored in Windows Credential Manager, never on disk.
-3. Click **Launch**. iscLauncher updates the config files, starts the game, and types the password when the login screen appears.
+1. Open the game, choose **Edit Settings**, and paste the repo URL under **Addons**.
+2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
+3. On another PC, add the same game with the same repo and **Pull**.
+4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
 
----
+Before anything is applied you see each addon as new, changed or removed, and can untick what you don't want. You also choose whether to include addon settings (shared by every character) and character settings (layouts, macros, keybinds and per-character addon data). If the repo has a push this PC hasn't pulled yet, Push warns you before overwriting it.
 
-## Addon Sync
+## Sharing addons between games
 
-Requires a **private** GitHub repository.
+**Copy Addons** copies addons from the open game into another game in your library, for example from Classic Era to a new beta install. Addons built for a different game version are flagged before you copy.
 
-1. Paste the repo URL into the **Addon Sync** tab of a game's settings.
-2. **Push** to upload addons and WTF settings. **Pull** to apply them on another machine.
-3. **Rollback** to revert to the previous commit if needed.
+**Copy Character Setup** takes one character as the template and gives the characters you pick, in any game, the same enabled addons (`AddOns.txt`) and per-character addon data. Keybinds, macros and UI layouts are already shared by the whole account, so they aren't part of this.
 
-Each commit message includes the computer's name, so you can tell which machine made the push.
+WoW saves addon settings when you log out, which would undo changes made while it's running. If the game is open, the app asks before Pull, Rollback, Copy Addons or Copy Character Setup.
 
----
+## Backups and data
+
+Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords:
+
+| What | Where |
+|------|-------|
+| Your game library | `games.json` |
+| Backups made before every pull, copy or rollback | `Backups` (the last 3 per game) |
+| Local copies of your sync repos | `SyncCache` |
+| Passwords | Windows Credential Manager, entries named `iscLauncher_...` |
+
+**Options → Open** takes you to the folder.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Problem | Fix |
 |---------|-----|
-| Password typed too early | Increase **Startup Delay** in Automation settings |
-| No password entered at all | Increase **Startup Delay** in Automation settings |
-| Auto-login fails on an elevated game | Run iscLauncher as administrator |
-| Addon sync fails | Check the repo URL, visibility (private), and Git credentials |
+| Password typed too early, or not at all | Raise **Startup Delay** under **Automation** |
+| Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
+| "Git is required for addon sync" | Install [Git for Windows](https://git-scm.com/download/win) |
+| Push or pull fails | Check the repo URL, that you have access to it, and that Git is signed in to GitHub |
 
----
+## Uninstall
 
-## Contributing
+1. Delete the folder you extracted iscLauncher into, and `%APPDATA%\IscLauncher`.
+2. In **Credential Manager → Windows Credentials**, remove the entries starting with `iscLauncher_`.
 
-Open an [issue](https://github.com/iiisc/iscLauncher/issues) or submit a pull request against the `master` branch.
+## Privacy
 
----
+iscLauncher talks to two places only: the GitHub API, to check for new versions, and the sync repos you enter. Passwords never leave your PC.
 
-## Code signing
+## Building from source
 
-Releases are self-signed. Windows SmartScreen may warn on first launch — click **More info → Run anyway** to proceed.
+Requires the .NET 10 SDK.
 
-**Privacy policy**
+```
+dotnet build -c Debug -p:Platform=x64
+```
 
-This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
-Addon sync communicates exclusively with the GitHub repository URL entered by the user.
-Passwords are stored locally in Windows Credential Manager and are never transmitted.
-
----
+To release, run the **Release** workflow from the Actions tab. It publishes the next patch version; to bump the minor or major version instead, push a tag such as `v1.2.0`.
 
 ## License
 

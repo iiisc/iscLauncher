@@ -109,14 +109,7 @@ public static class RollbackDialog
                 });
                 if (!string.IsNullOrEmpty(commit.DisplayDate))
                 {
-                    headerPanel.Children.Add(new TextBlock
-                    {
-                        Text = commit.DisplayDate,
-                        FontFamily = Res<FontFamily>("BodyFont"),
-                        FontSize = 10,
-                        Foreground = Res<Brush>("TextDimBrush"),
-                        VerticalAlignment = VerticalAlignment.Center
-                    });
+                    headerPanel.Children.Add(Dim(commit.DisplayDate));
                 }
 
                 commitListView.Items.Add(new ListViewItem
@@ -130,14 +123,7 @@ public static class RollbackDialog
                         Children =
                         {
                             headerPanel,
-                            new TextBlock
-                            {
-                                Text = commit.Message,
-                                FontFamily = Res<FontFamily>("BodyFont"),
-                                FontSize = 12,
-                                Foreground = Res<Brush>("TextPrimaryBrush"),
-                                TextWrapping = TextWrapping.Wrap
-                            }
+                            BodyText(commit.Message)
                         }
                     }
                 });
@@ -157,14 +143,12 @@ public static class RollbackDialog
         return (commitListView?.SelectedItem as ListViewItem)?.Tag as GitCommitEntry;
     }
 
-    private static TextBlock CenteredMessage(string text, string brushKey) => new()
+    private static TextBlock CenteredMessage(string text, string brushKey)
     {
-        Text = text,
-        FontFamily = Res<FontFamily>("BodyFont"),
-        FontSize = 13,
-        Foreground = Res<Brush>(brushKey),
-        HorizontalAlignment = HorizontalAlignment.Center,
-        TextAlignment = TextAlignment.Center,
-        TextWrapping = TextWrapping.Wrap
-    };
+        var block = BodyText(text);
+        block.Foreground = Res<Brush>(brushKey);
+        block.HorizontalAlignment = HorizontalAlignment.Center;
+        block.TextAlignment = TextAlignment.Center;
+        return block;
+    }
 }

@@ -31,56 +31,28 @@ public static class DialogHelper
 
     public static T Res<T>(string key) => (T)Application.Current.Resources[key];
 
-    public static TextBlock BodyText(string text) => new()
-    {
-        Text = text,
-        FontFamily = Res<FontFamily>("BodyFont"),
-        FontSize = 13,
-        Foreground = Res<Brush>("TextPrimaryBrush"),
-        TextWrapping = TextWrapping.Wrap
-    };
+    public static TextBlock StyledText(string text, string styleKey) => new() { Text = text, Style = Res<Style>(styleKey) };
 
-    public static TextBlock Dim(string text) => new()
-    {
-        Text = text,
-        FontFamily = Res<FontFamily>("BodyFont"),
-        FontSize = 11,
-        Foreground = Res<Brush>("TextDimBrush"),
-        TextWrapping = TextWrapping.Wrap,
-        VerticalAlignment = VerticalAlignment.Center
-    };
+    public static TextBlock BodyText(string text) => StyledText(text, "BodyTextStyle");
 
-    public static TextBlock WarningText(string text) => new()
+    public static TextBlock Dim(string text)
     {
-        Text = text,
-        FontFamily = Res<FontFamily>("BodyFont"),
-        FontSize = 11,
-        Foreground = Res<Brush>("GoldBrush"),
-        FontStyle = Windows.UI.Text.FontStyle.Italic,
-        TextWrapping = TextWrapping.Wrap
-    };
+        var block = StyledText(text, "HintTextStyle");
+        block.VerticalAlignment = VerticalAlignment.Center;
+        return block;
+    }
 
-    public static TextBlock SectionLabel(string text, string brushKey = "GoldDarkBrush") => new()
-    {
-        Text = text,
-        FontFamily = Res<FontFamily>("DisplayFont"),
-        FontSize = 10,
-        CharacterSpacing = 60,
-        Foreground = Res<Brush>(brushKey),
-        Margin = new Thickness(0, 4, 0, 0)
-    };
+    public static TextBlock WarningText(string text) => StyledText(text, "WarningTextStyle");
 
-    public static CheckBox Option(string text, bool isChecked) => new()
+    public static TextBlock SectionLabel(string text, string brushKey = "GoldDarkBrush")
     {
-        IsChecked = isChecked,
-        Content = new TextBlock
-        {
-            Text = text,
-            FontFamily = Res<FontFamily>("BodyFont"),
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap
-        }
-    };
+        var block = StyledText(text, "SectionHeaderStyle");
+        block.Foreground = Res<Brush>(brushKey);
+        block.Margin = new Thickness(0, 4, 0, 0);
+        return block;
+    }
+
+    public static CheckBox Option(string text, bool isChecked) => new() { IsChecked = isChecked, Content = BodyText(text) };
 
     public static void SetWidth(ContentDialog dialog, double min, double max)
     {
@@ -92,25 +64,7 @@ public static class DialogHelper
 
     private static void ApplyTheme(ContentDialog dialog)
     {
-        // Primary button — emerald green gradient matching PrimaryButtonStyle
-        var primaryStyle = new Style(typeof(Button));
-        primaryStyle.Setters.Add(new Setter(Button.BackgroundProperty,
-            new LinearGradientBrush
-            {
-                StartPoint = new Windows.Foundation.Point(0, 0),
-                EndPoint = new Windows.Foundation.Point(0, 1),
-                GradientStops =
-                {
-                    new GradientStop { Color = Res<Windows.UI.Color>("EmeraldColor"), Offset = 0 },
-                    new GradientStop { Color = Res<Windows.UI.Color>("EmeraldDarkColor"), Offset = 1 }
-                }
-            }));
-        primaryStyle.Setters.Add(new Setter(Button.ForegroundProperty, Res<Brush>("EmeraldForegroundBrush")));
-        primaryStyle.Setters.Add(new Setter(Button.BorderBrushProperty,
-            new SolidColorBrush { Color = Res<Windows.UI.Color>("EmeraldLightColor"), Opacity = 0.3 }));
-        primaryStyle.Setters.Add(new Setter(Button.CornerRadiusProperty, new CornerRadius(6)));
-        primaryStyle.Setters.Add(new Setter(Button.FontWeightProperty, new Windows.UI.Text.FontWeight(700)));
-        dialog.PrimaryButtonStyle = primaryStyle;
+        dialog.PrimaryButtonStyle = Res<Style>("PrimaryButtonStyle");
 
         // Default implicit button style — matches SecondaryButtonStyle for close/cancel buttons.
         dialog.Resources[typeof(Button)] = new Style(typeof(Button)) { BasedOn = Res<Style>("SecondaryButtonStyle") };

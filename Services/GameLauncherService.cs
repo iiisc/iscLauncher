@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
@@ -141,6 +142,26 @@ public class GameLauncherService
         catch (Exception ex)
         {
             return new LaunchResult(false, $"Failed to launch game: {ex.Message}");
+        }
+    }
+
+    /// <summary>True if this game's exe is running. Battle.net starts official games itself, so this checks by path, not by launch.</summary>
+    public bool IsRunning(GameEntry game)
+    {
+        var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(game.ExecutablePath));
+        try
+        {
+            return processes.Any(p =>
+            {
+                try { return string.Equals(p.MainModule?.FileName, game.ExecutablePath, StringComparison.OrdinalIgnoreCase); }
+                // Its path can't be read (e.g. it runs elevated); a process with the same exe name is reason enough to ask
+                catch { return true; }
+            });
+        }
+        finally
+        {
+            foreach (var process in processes)
+                process.Dispose();
         }
     }
 
