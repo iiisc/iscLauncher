@@ -51,7 +51,6 @@
       <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
       <SolidColorBrush x:Key="Surface3Brush" Color="{StaticResource Surface3Color}"/>
       <SolidColorBrush x:Key="GoldBrush" Color="{StaticResource GoldColor}"/>
-      <SolidColorBrush x:Key="GoldLightBrush" Color="{StaticResource GoldLightColor}"/>
       <SolidColorBrush x:Key="GoldDarkBrush" Color="{StaticResource GoldDarkColor}"/>
       <SolidColorBrush x:Key="EmeraldBrush" Color="{StaticResource EmeraldColor}"/>
       <SolidColorBrush x:Key="EmeraldForegroundBrush" Color="{StaticResource EmeraldForegroundColor}"/>
@@ -173,18 +172,6 @@
         <Setter Property="CornerRadius" Value="6"/>
         <Setter Property="Padding" Value="12,10"/>
         <Setter Property="Height" Value="40"/>
-      </Style>
-
-      <!-- ===== COMBO BOX STYLE ===== -->
-      <Style x:Key="ThemedComboBoxStyle" TargetType="ComboBox">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
-        <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="Height" Value="40"/>
-        <Setter Property="FontSize" Value="12"/>
       </Style>
 
       <!-- ===== FOCUS BORDER ===== -->

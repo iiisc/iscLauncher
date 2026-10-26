@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;

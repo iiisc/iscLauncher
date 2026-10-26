@@ -41,8 +41,7 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:GameEntry">
-                        <Border x:Name="GameCardBorder"
-                                Background="{StaticResource Surface2Brush}"
+                        <Border Background="{StaticResource Surface2Brush}"
                                 BorderBrush="{StaticResource BorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="6"
@@ -63,15 +62,13 @@
                                         <SolidColorBrush Color="{StaticResource GoldDarkColor}" Opacity="0.15"/>
                                     </Border.Background>
                                     <Grid>
-                                        <FontIcon x:Name="FallbackIcon"
-                                                  Glyph="&#xE72E;"
+                                        <FontIcon Glyph="&#xE72E;"
                                                   FontSize="20"
                                                   Foreground="{StaticResource GoldBrush}"
                                                   Opacity="0.5"
                                                   HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
-                                        <Image x:Name="GameIcon"
-                                               Width="40" Height="40"
+                                        <Image Width="40" Height="40"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Loaded="OnGameIconLoaded" />

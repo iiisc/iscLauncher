@@ -37,7 +37,6 @@ public sealed partial class GameDetailControl : UserControl
     private CancellationTokenSource? _syncCts;
     private readonly StatusNotifier _status;
 
-    public bool IsEditing => _isEditing;
     public GameEntry? CurrentGame => _game;
 
     public GameDetailControl()
@@ -88,7 +87,7 @@ public sealed partial class GameDetailControl : UserControl
 
     public async Task<bool> ConfirmNavigateAwayAsync()
     {
-        if (!IsEditing) return true;
+        if (!_isEditing) return true;
         var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Unsaved Changes");
         dialog.Content = "You have unsaved changes that will be lost. Discard them?";
         dialog.PrimaryButtonText = "Discard";
@@ -194,7 +193,7 @@ public sealed partial class GameDetailControl : UserControl
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (IsEditing) return;
+        if (_isEditing) return;
         EscapeRequested?.Invoke(this, EventArgs.Empty);
         args.Handled = true;
     }

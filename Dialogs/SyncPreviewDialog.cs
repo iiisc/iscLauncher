@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;

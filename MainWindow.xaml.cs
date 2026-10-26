@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using iscLauncher.Controls;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
