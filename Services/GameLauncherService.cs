@@ -42,7 +42,10 @@ public class GameLauncherService
         return await TypeOrCopyPasswordAsync(processId, password, "Password sent to running game.", "");
     }
 
-    /// <summary>Starts the game and logs in. Returns what happened; throws <see cref="AppException"/> if it couldn't launch.</summary>
+    /// <summary>
+    /// Starts the game and logs in, or for an official install opens it in Battle.net. Returns what happened; throws
+    /// <see cref="AppException"/> if it couldn't.
+    /// </summary>
     public async Task<string> LaunchGameAsync(GameEntry game)
     {
         if (!File.Exists(game.ExecutablePath))
@@ -52,12 +55,12 @@ public class GameLauncherService
         {
             try
             {
-                official.Launch();
-                return $"Starting {game.Name} through Battle.net...";
+                official.Open();
+                return $"Battle.net is open on {game.Name}. Press Play there to start it.";
             }
             catch (Exception ex)
             {
-                throw new AppException($"Couldn't start Battle.net: {ex.Message}");
+                throw new AppException($"Couldn't open Battle.net: {ex.Message}");
             }
         }
 

@@ -17,7 +17,7 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 
 **Official Blizzard installs**
 - Add any version under your `World of Warcraft` folder (Classic Era, beta, ...) by picking its exe.
-- Launch hands off to Blizzard's launcher, which handles login, so there's no password to store.
+- **Open in Battle.net** takes you to the game in Blizzard's launcher, where you press Play. Battle.net handles login, so there's no password to store. (Battle.net offers no way for another app to press Play.)
 
 **Addons and settings**
 - **Sync between PCs** through a private GitHub repo: push from one PC, pull on another.

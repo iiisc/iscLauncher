@@ -37,7 +37,8 @@ public sealed partial class GameDetailControl
         { ShowStatus("Wait for the addon sync to finish before launching.", false); return; }
         var launched = await WhileBusyAsync(game, async () =>
             await OfferPullBeforeLaunchAsync(game)
-            && await RunLauncherAsync($"Launching {game.Name}...", () => _services.Launcher.LaunchGameAsync(game)));
+            && await RunLauncherAsync(BattleNetInstall.IsOfficial(game.ExecutablePath) ? "Opening Battle.net..." : $"Launching {game.Name}...",
+                () => _services.Launcher.LaunchGameAsync(game)));
         if (launched)
             await AfterGameClosesAsync(game);
     }
@@ -121,7 +122,7 @@ public sealed partial class GameDetailControl
     /// <summary>Resets the Launch button when the game closes and, for a synced game, offers to push what changed while playing.</summary>
     private async Task AfterGameClosesAsync(GameEntry game)
     {
-        // Battle.net can take a while to start an official game, or wait on an update first
+        // An official game only starts once the user presses Play in Battle.net, perhaps after an update
         if (!await _services.Launcher.WaitForExitAsync(game, TimeSpan.FromMinutes(10)))
             return;
         if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
@@ -150,7 +151,9 @@ public sealed partial class GameDetailControl
     private void UpdateLaunchButtonState(GameEntry game)
     {
         var sendPassword = CanSendPassword(game);
-        LaunchButtonText.Text = sendPassword ? "Send Password" : "Launch";
+        LaunchButtonText.Text = sendPassword ? "Send Password"
+            : BattleNetInstall.IsOfficial(game.ExecutablePath) ? "Open in Battle.net"
+            : "Launch";
         LaunchButtonIcon.Text = sendPassword ? "🔑" : "⚔";
     }
 }

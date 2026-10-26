@@ -58,7 +58,7 @@
                         </StackPanel>
 
                         <TextBlock x:Name="OfficialNote"
-                                   Text="Official Blizzard install. Launch starts it through Battle.net, which handles login, so realm, account and password settings don't apply."
+                                   Text="Official Blizzard install. Open in Battle.net takes you to it there, where you press Play. Battle.net handles login, so realm, account and password settings don't apply."
                                    Style="{StaticResource HintTextStyle}"
                                    Visibility="Collapsed"/>
 

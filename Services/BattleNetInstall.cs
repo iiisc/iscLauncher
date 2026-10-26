@@ -12,7 +12,7 @@ namespace iscLauncher.Services;
 
 /// <summary>
 /// An official Blizzard install: one folder per game version (_classic_era_, _forever_, ...) under a root holding
-/// Blizzard's launcher. These log in through Battle.net, so they're started through it instead of with a password.
+/// Blizzard's launcher. These log in through Battle.net, so they're opened there instead of started with a password.
 /// </summary>
 public record BattleNetInstall(string LauncherPath, string? ProductCode)
 {
@@ -75,8 +75,11 @@ public record BattleNetInstall(string LauncherPath, string? ProductCode)
         return File.Exists(launcher) ? launcher : null;
     }
 
-    /// <summary>Opens Battle.net on this game version and starts it, the same way Blizzard's Start Menu shortcuts do.</summary>
-    public void Launch()
+    /// <summary>
+    /// Opens Battle.net on this game version, as Blizzard's Start Menu shortcut does. The user still presses Play:
+    /// Battle.net's --exec="launch ..." only switches pages, and its window exposes no buttons to UI Automation.
+    /// </summary>
+    public void Open()
     {
         var psi = new ProcessStartInfo(LauncherPath) { UseShellExecute = false };
         if (ProductCode != null)
