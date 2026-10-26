@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
@@ -27,6 +28,9 @@ public class GitService
     private static readonly string BundledGit = Path.Combine(AppContext.BaseDirectory, "git", "cmd", "git.exe");
 
     private readonly Func<string?> _gitHubToken;
+
+    // Of git's output only the transfer percentage means anything to the user
+    private static readonly Regex ProgressLine = new(@"^Receiving objects:\s+(\d+)%");
 
     // Only a successful lookup is kept, so installing Git mid-session is picked up on the next check
     private string? _git;
@@ -214,7 +218,8 @@ public class GitService
                     return;
                 lock (stderr)
                     stderr.AppendLine(args.Data);
-                progress?.Report(args.Data);
+                if (progress != null && ProgressLine.Match(args.Data) is { Success: true } line)
+                    progress.Report($"Downloading from the repo... {line.Groups[1].Value}%");
             };
 
             process.Start();

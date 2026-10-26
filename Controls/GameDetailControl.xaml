@@ -13,228 +13,213 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Pivot x:Name="DetailPivot" IsHeaderItemsCarouselEnabled="False" Margin="0,8,0,0">
+            <Pivot.Resources>
+                <SolidColorBrush x:Key="PivotHeaderItemBackgroundSelected" Color="Transparent"/>
+                <SolidColorBrush x:Key="PivotHeaderItemBackgroundPointerOver" Color="{StaticResource Surface3Color}"/>
+                <SolidColorBrush x:Key="PivotHeaderItemForegroundSelected" Color="{StaticResource GoldColor}"/>
+                <SolidColorBrush x:Key="PivotHeaderItemForegroundUnselected" Color="{StaticResource TextMutedColor}"/>
+                <SolidColorBrush x:Key="PivotHeaderItemForegroundUnselectedPointerOver" Color="{StaticResource GoldLightColor}"/>
+                <SolidColorBrush x:Key="PivotHeaderItemSelectedPipeFill" Color="{StaticResource GoldColor}"/>
+            </Pivot.Resources>
 
-            <StackPanel Grid.Row="0" Spacing="4" Padding="32,18,32,0">
-                <TextBlock Text="Game Name *" Style="{StaticResource FieldLabelStyle}"/>
-                <TextBox x:Name="NameTextBox" Style="{StaticResource InputStyle}" FontSize="13"/>
-            </StackPanel>
-
-            <InfoBar x:Name="StatusBar"
-                     Grid.Row="1"
-                     IsOpen="False"
-                     IsClosable="False"
-                     Severity="Success"
-                     Margin="32,8,32,0">
-                <InfoBar.Content>
-                    <TextBlock x:Name="StatusText" TextWrapping="Wrap" FontSize="12"/>
-                </InfoBar.Content>
-            </InfoBar>
-
-            <Pivot x:Name="DetailPivot"
-                   Grid.Row="2"
-                   IsHeaderItemsCarouselEnabled="False">
-                <Pivot.Resources>
-                    <SolidColorBrush x:Key="PivotHeaderItemBackgroundSelected" Color="Transparent"/>
-                    <SolidColorBrush x:Key="PivotHeaderItemBackgroundPointerOver" Color="{StaticResource Surface3Color}"/>
-                    <SolidColorBrush x:Key="PivotHeaderItemForegroundSelected" Color="{StaticResource GoldColor}"/>
-                    <SolidColorBrush x:Key="PivotHeaderItemForegroundUnselected" Color="{StaticResource TextMutedColor}"/>
-                    <SolidColorBrush x:Key="PivotHeaderItemForegroundUnselectedPointerOver" Color="{StaticResource GoldLightColor}"/>
-                    <SolidColorBrush x:Key="PivotHeaderItemSelectedPipeFill" Color="{StaticResource GoldColor}"/>
-                </Pivot.Resources>
-
-                <PivotItem>
-                    <PivotItem.Header>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE10F;" FontSize="12"/>
-                            <TextBlock Text="General" FontSize="12"/>
+            <PivotItem AutomationProperties.Name="General">
+                <PivotItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE10F;" FontSize="12"/>
+                        <TextBlock Text="General" FontSize="12"/>
+                    </StackPanel>
+                </PivotItem.Header>
+                <ScrollViewer Padding="32,14,32,14">
+                    <StackPanel Spacing="14">
+                        <StackPanel x:Name="FoundInstallsSection" Spacing="6" Visibility="Collapsed">
+                            <TextBlock Text="FOUND ON THIS PC" Style="{StaticResource SectionHeaderStyle}"/>
+                            <StackPanel x:Name="FoundInstallsPanel" Orientation="Horizontal" Spacing="8"/>
                         </StackPanel>
-                    </PivotItem.Header>
-                    <ScrollViewer Padding="32,14,32,14">
-                        <StackPanel Spacing="14">
-                            <StackPanel x:Name="FoundInstallsSection" Spacing="6" Visibility="Collapsed">
-                                <TextBlock Text="FOUND ON THIS PC" Style="{StaticResource SectionHeaderStyle}"/>
-                                <StackPanel x:Name="FoundInstallsPanel" Orientation="Horizontal" Spacing="8"/>
-                            </StackPanel>
 
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="EXECUTABLE" Style="{StaticResource SectionHeaderStyle}"/>
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="ExecutableTextBox" Style="{StaticResource InputStyle}" IsReadOnly="True"/>
-                                    <Button Grid.Column="1"
-                                            Click="OnBrowseExecutableClick"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Padding="10,0"
-                                            ToolTipService.ToolTip="Browse for the game's exe">
-                                        <FontIcon Glyph="&#xE8DA;" FontSize="11"/>
-                                    </Button>
-                                </Grid>
-                            </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="EXECUTABLE" Style="{StaticResource SectionHeaderStyle}"/>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ExecutableTextBox" Style="{StaticResource InputStyle}" IsReadOnly="True"
+                                         AutomationProperties.Name="Game executable"/>
+                                <Button Grid.Column="1"
+                                        Click="OnBrowseExecutableClick"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="10,0"
+                                        ToolTipService.ToolTip="Browse for the game's exe"
+                                        AutomationProperties.Name="Browse for the game's exe">
+                                    <FontIcon Glyph="&#xE8DA;" FontSize="11"/>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
 
-                            <TextBlock x:Name="OfficialNote"
-                                       Text="Official Blizzard install. Launch starts it through Battle.net, which handles login, so realm, account and password settings don't apply."
-                                       Style="{StaticResource HintTextStyle}"
-                                       Visibility="Collapsed"/>
+                        <TextBlock x:Name="OfficialNote"
+                                   Text="Official Blizzard install. Launch starts it through Battle.net, which handles login, so realm, account and password settings don't apply."
+                                   Style="{StaticResource HintTextStyle}"
+                                   Visibility="Collapsed"/>
 
-                            <StackPanel x:Name="ConnectionSection" Spacing="8">
-                                <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}"/>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Realmlist Address" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="RealmlistTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., logon.warmane.com"/>
+                        <TextBox x:Name="NameTextBox" Header="Game name" Style="{StaticResource InputStyle}"/>
+
+                        <StackPanel x:Name="ConnectionSection" Spacing="8">
+                            <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}"/>
+                            <TextBox x:Name="RealmlistTextBox" Header="Realmlist address" Style="{StaticResource InputStyle}" PlaceholderText="e.g., logon.warmane.com"/>
+                            <TextBox x:Name="AccountTextBox" Header="Account name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., myaccount"/>
+                            <TextBox x:Name="RealmTextBox" Header="Realm name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., ChromieCraft"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="RemoveGameSection" Spacing="6" Margin="0,10,0,0">
+                            <TextBlock Text="REMOVE" Style="{StaticResource SectionHeaderStyle}"/>
+                            <Button Click="OnRemoveGameClick"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    BorderBrush="{StaticResource CrimsonBrush}"
+                                    AutomationProperties.Name="Remove from Library">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{StaticResource CrimsonBrush}"/>
+                                    <TextBlock Text="Remove from Library" Foreground="{StaticResource CrimsonBrush}"/>
                                 </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Account Name" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="AccountTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., myaccount"/>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem x:Name="AutomationTab" AutomationProperties.Name="Automation">
+                <PivotItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE8D7;" FontSize="12"/>
+                        <TextBlock Text="Automation" FontSize="12"/>
+                    </StackPanel>
+                </PivotItem.Header>
+                <ScrollViewer Padding="32,14,32,14">
+                    <StackPanel Spacing="14">
+                        <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}"/>
+                        <StackPanel Spacing="4">
+                            <NumberBox x:Name="StartupDelayNumberBox"
+                                       Header="Startup delay (seconds)"
+                                       Style="{StaticResource InputBaseStyle}"
+                                       Width="180"
+                                       HorizontalAlignment="Left"
+                                       Minimum="0"
+                                       Maximum="30"
+                                       Value="0"
+                                       SpinButtonPlacementMode="Inline"
+                                       SmallChange="1"/>
+                            <TextBlock Text="Wait before typing the password. Increase for slow-starting games."
+                                       Style="{StaticResource HintTextStyle}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem AutomationProperties.Name="Addons">
+                <PivotItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE895;" FontSize="12"/>
+                        <TextBlock Text="Addons" FontSize="12"/>
+                    </StackPanel>
+                </PivotItem.Header>
+                <ScrollViewer Padding="32,14,32,14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="SYNC BETWEEN PCS" Style="{StaticResource SectionHeaderStyle}"/>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SyncRepoUrlTextBox" Style="{StaticResource InputStyle}" PlaceholderText="GitHub repo URL"
+                                     AutomationProperties.Name="GitHub repo URL"/>
+                            <Button x:Name="SetUpSyncButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Click="OnSetUpSyncClick"
+                                    ToolTipService.ToolTip="Pick or create a private repo on your GitHub account for this game"
+                                    AutomationProperties.Name="Set Up Sync">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                                    <TextBlock Text="Set Up Sync"/>
                                 </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Realm Name" Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="RealmTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., ChromieCraft"/>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock x:Name="LastSyncedText" Style="{StaticResource HintTextStyle}" Visibility="Collapsed"/>
+
+                        <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
+                            <Button x:Name="SyncAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnSyncAddonsClick" AutomationProperties.Name="Pull">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE896;" FontSize="14"/>
+                                    <TextBlock Text="Pull"/>
                                 </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-                </PivotItem>
-
-                <PivotItem x:Name="AutomationTab">
-                    <PivotItem.Header>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE8D7;" FontSize="12"/>
-                            <TextBlock Text="Automation" FontSize="12"/>
-                        </StackPanel>
-                    </PivotItem.Header>
-                    <ScrollViewer Padding="32,14,32,14">
-                        <StackPanel Spacing="8">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Password" Style="{StaticResource FieldLabelStyle}"/>
-                                <PasswordBox x:Name="PasswordBox" Style="{StaticResource InputStyle}" PlaceholderText="Enter password to update"/>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Startup Delay (seconds)" Style="{StaticResource FieldLabelStyle}"/>
-                                <NumberBox x:Name="StartupDelayNumberBox"
-                                           Style="{StaticResource InputBaseStyle}"
-                                           Minimum="0"
-                                           Maximum="30"
-                                           Value="0"
-                                           SpinButtonPlacementMode="Inline"
-                                           SmallChange="1"/>
-                                <TextBlock Text="Wait before typing the password. Increase for slow-starting games."
-                                           Style="{StaticResource HintTextStyle}"
-                                           Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-                </PivotItem>
-
-                <PivotItem>
-                    <PivotItem.Header>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE895;" FontSize="12"/>
-                            <TextBlock Text="Addons" FontSize="12"/>
-                        </StackPanel>
-                    </PivotItem.Header>
-                    <ScrollViewer Padding="32,14,32,14">
-                        <StackPanel Spacing="8">
-                            <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,0,0,12">
-                                <TextBlock Text="SHARE ADDONS" Style="{StaticResource SectionHeaderStyle}"/>
-                                <TextBlock Text="Copy addons and their settings into another game, or give your other characters the same addon setup as one character."
-                                           Style="{StaticResource HintTextStyle}"/>
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <Button x:Name="CopyAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyAddonsClick">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
-                                            <TextBlock Text="Copy Addons"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button x:Name="CopyCharacterSetupButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyCharacterSetupClick">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE77B;" FontSize="14"/>
-                                            <TextBlock Text="Copy Character Setup"/>
-                                        </StackPanel>
-                                    </Button>
+                            </Button>
+                            <Button x:Name="UploadAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnUploadAddonsClick" AutomationProperties.Name="Push">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE898;" FontSize="14"/>
+                                    <TextBlock Text="Push"/>
                                 </StackPanel>
-                            </StackPanel>
+                            </Button>
+                            <Button x:Name="RollbackButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnRollbackClick" AutomationProperties.Name="Rollback">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
+                                    <TextBlock Text="Rollback"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource SecondaryButtonStyle}"
+                                    Width="40" Padding="0"
+                                    Click="OnOpenRepoClick"
+                                    ToolTipService.ToolTip="Open repo in browser"
+                                    AutomationProperties.Name="Open repo in browser">
+                                <FontIcon Glyph="&#xE774;" FontSize="14"/>
+                            </Button>
+                        </StackPanel>
+                        <TextBlock x:Name="NoRepoHint"
+                                   Text="Click Set Up Sync to sync this game's addons and settings between your PCs, or paste a repo URL and save."
+                                   Style="{StaticResource HintTextStyle}"
+                                   Visibility="Collapsed"/>
 
-                            <TextBlock Text="SYNC BETWEEN PCS" Style="{StaticResource SectionHeaderStyle}"/>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="GitHub Repo URL" Style="{StaticResource FieldLabelStyle}"/>
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="SyncRepoUrlTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., https://github.com/user/wow-sync.git"/>
-                                    <Button x:Name="SetUpSyncButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Click="OnSetUpSyncClick"
-                                            ToolTipService.ToolTip="Pick or create a private repo on your GitHub account for this game">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
-                                            <TextBlock Text="Set Up Sync"/>
-                                        </StackPanel>
-                                    </Button>
-                                </Grid>
-                            </StackPanel>
+                        <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
+                            <ProgressRing x:Name="SyncProgressRing" IsActive="False" Width="24" Height="24"/>
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Click="OnCancelSyncClick" AutomationProperties.Name="Cancel sync">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                    <TextBlock Text="Cancel"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
 
-                            <TextBlock x:Name="LastSyncedText" Style="{StaticResource HintTextStyle}" Visibility="Collapsed"/>
-
-                            <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
-                                <Button x:Name="SyncAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnSyncAddonsClick">
+                        <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,20,0,0">
+                            <TextBlock Text="SHARE ADDONS" Style="{StaticResource SectionHeaderStyle}"/>
+                            <TextBlock Text="Copy addons and their settings into another game, or give your other characters the same addon setup as one character."
+                                       Style="{StaticResource HintTextStyle}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button x:Name="CopyAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyAddonsClick" AutomationProperties.Name="Copy Addons">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE896;" FontSize="14"/>
-                                        <TextBlock Text="Pull"/>
+                                        <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
+                                        <TextBlock Text="Copy Addons"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="UploadAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnUploadAddonsClick">
+                                <Button x:Name="CopyCharacterSetupButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyCharacterSetupClick" AutomationProperties.Name="Copy Character Setup">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE898;" FontSize="14"/>
-                                        <TextBlock Text="Push"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button x:Name="RollbackButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnRollbackClick">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
-                                        <TextBlock Text="Rollback"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource SecondaryButtonStyle}"
-                                        Width="40" Padding="0"
-                                        Click="OnOpenRepoClick"
-                                        ToolTipService.ToolTip="Open repo in browser">
-                                    <FontIcon Glyph="&#xE774;" FontSize="14"/>
-                                </Button>
-                            </StackPanel>
-                            <TextBlock x:Name="NoRepoHint"
-                                       Text="Click Set Up Sync to sync this game's addons and settings between your PCs, or paste a repo URL and save."
-                                       Style="{StaticResource HintTextStyle}"
-                                       Visibility="Collapsed"/>
-
-                            <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
-                                <ProgressRing x:Name="SyncProgressRing" IsActive="False" Width="24" Height="24"/>
-                                <Button Style="{StaticResource SecondaryButtonStyle}" Click="OnCancelSyncClick">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                                        <TextBlock Text="Cancel"/>
+                                        <FontIcon Glyph="&#xE77B;" FontSize="14"/>
+                                        <TextBlock Text="Copy Character Setup"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
                         </StackPanel>
-                    </ScrollViewer>
-                </PivotItem>
-            </Pivot>
-        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
 
-        <!-- Action bar -->
-        <Border Grid.Row="1" Background="{StaticResource BgBrush}" Padding="32,16">
-            <StackPanel MaxWidth="600" HorizontalAlignment="Left" Orientation="Horizontal" Spacing="12">
+        <!-- Action bar; status messages sit beside the buttons so they never push the page around -->
+        <Grid Grid.Row="1" Background="{StaticResource BgBrush}" Padding="32,16" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <Button x:Name="LaunchButton" Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnLaunchClick">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <Button x:Name="LaunchButton" Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnLaunchClick"
+                        AutomationProperties.Name="{x:Bind LaunchButtonText.Text, Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <TextBlock x:Name="LaunchButtonIcon" Text="⚔" FontSize="18"/>
                         <TextBlock x:Name="LaunchButtonText" Text="Launch"/>
@@ -242,7 +227,8 @@
                 </Button>
 
                 <StackPanel x:Name="EditModeButtons" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
-                    <Button Style="{StaticResource SecondaryButtonStyle}" Height="44" Padding="24,0" FontSize="13" Click="OnCancelEditClick">
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Height="44" Padding="24,0" FontSize="13" Click="OnCancelEditClick"
+                            AutomationProperties.Name="Cancel">
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator Key="Escape"/>
                         </Button.KeyboardAccelerators>
@@ -251,14 +237,26 @@
                             <TextBlock Text="Cancel"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnSaveClick">
+                    <Button Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnSaveClick"
+                            AutomationProperties.Name="{x:Bind SaveButtonText.Text, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE74E;" FontSize="16"/>
-                            <TextBlock Text="Save Changes"/>
+                            <TextBlock x:Name="SaveButtonText" Text="Save Changes"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
             </StackPanel>
-        </Border>
+
+            <InfoBar x:Name="StatusBar"
+                     Grid.Column="1"
+                     IsOpen="False"
+                     IsClosable="False"
+                     Severity="Success"
+                     VerticalAlignment="Center">
+                <InfoBar.Content>
+                    <TextBlock x:Name="StatusText" TextWrapping="Wrap" FontSize="12"/>
+                </InfoBar.Content>
+            </InfoBar>
+        </Grid>
     </Grid>
 </UserControl>

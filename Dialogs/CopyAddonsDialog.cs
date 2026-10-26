@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using static iscLauncher.Helpers.DialogHelper;
 
@@ -31,7 +32,9 @@ public static class CopyAddonsDialog
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(BodyText($"Copy addons from {source.Name} into another game. " +
             "Addons that get replaced, and the target's settings, are backed up first."));
-        panel.Children.Add(SectionLabel("COPY TO"));
+        var targetLabel = SectionLabel("COPY TO");
+        AutomationProperties.SetLabeledBy(targetBox, targetLabel);
+        panel.Children.Add(targetLabel);
         panel.Children.Add(targetBox);
         panel.Children.Add(settingsBox);
         panel.Children.Add(SectionLabel("ADDONS"));

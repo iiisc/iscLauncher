@@ -32,6 +32,9 @@ public sealed partial class GameDetailControl
     /// </summary>
     public async Task LaunchAsync(GameEntry game)
     {
+        // A sync may be writing the game's addon files right now
+        if (_syncBusy)
+        { ShowStatus("Wait for the addon sync to finish before launching.", false); return; }
         var launched = await WhileBusyAsync(game, async () =>
             await OfferPullBeforeLaunchAsync(game)
             && await RunLauncherAsync($"Launching {game.Name}...", () => GameLauncherService!.LaunchGameAsync(game)));
@@ -56,7 +59,7 @@ public sealed partial class GameDetailControl
 
     private async Task<bool> RunLauncherAsync(string startMessage, Func<Task<LaunchResult>> action)
     {
-        ShowStatus(startMessage, true);
+        ShowInfo(startMessage);
         var result = await action();
         ShowStatus(result.Message, result.Success);
         return result.Success;
@@ -76,7 +79,7 @@ public sealed partial class GameDetailControl
         // Being offline shouldn't hold up playing, so the check gives up quickly; Cancel skips it
         _syncCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         SetSyncBusy(true);
-        ShowStatus($"Checking {game.Name}'s repo for changes from your other PCs...", true);
+        ShowInfo($"Checking {game.Name}'s repo for changes from your other PCs...");
         try
         {
             var session = await AddonSyncService!.OpenAsync(game, null, _syncCts.Token);
@@ -117,7 +120,7 @@ public sealed partial class GameDetailControl
             return;
 
         var reminder = $"{game.Name} closed. Push from the Addons tab to share your changes with your other PCs.";
-        if (_syncBusy) { ShowStatus(reminder, true); return; }
+        if (_syncBusy) { ShowInfo(reminder); return; }
 
         var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Push Your Changes?");
         dialog.Content = $"You closed {game.Name}. Push its addons and settings so your other PCs get them?";
@@ -126,7 +129,7 @@ public sealed partial class GameDetailControl
         ContentDialogResult answer;
         // Only one dialog can be open at a time; if another is, the status message is the reminder
         try { answer = await dialog.ShowAsync(); }
-        catch (Exception) { ShowStatus(reminder, true); return; }
+        catch (Exception) { ShowInfo(reminder); return; }
         if (answer == ContentDialogResult.Primary)
             await PushAsync(game);
     }

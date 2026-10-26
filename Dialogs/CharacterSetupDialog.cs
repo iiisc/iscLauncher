@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using static iscLauncher.Helpers.DialogHelper;
 
@@ -43,7 +44,9 @@ public static class CharacterSetupDialog
         panel.Children.Add(BodyText("Give other characters the same addon setup as one character. " +
             "Keybinds, macros and UI layouts are already shared by the whole account, so they aren't copied here. " +
             "The receiving games' settings are backed up first."));
-        panel.Children.Add(SectionLabel("FROM"));
+        var fromLabel = SectionLabel("FROM");
+        AutomationProperties.SetLabeledBy(sourceBox, fromLabel);
+        panel.Children.Add(fromLabel);
         panel.Children.Add(sourceBox);
         panel.Children.Add(dataSummary);
         panel.Children.Add(SectionLabel("COPY"));

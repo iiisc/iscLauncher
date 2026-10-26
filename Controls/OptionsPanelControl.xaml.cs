@@ -84,7 +84,7 @@ public sealed partial class OptionsPanelControl : UserControl
         {
             CheckUpdatesButton.IsEnabled = false;
             UpdateAvailableText.Visibility = Visibility.Collapsed;
-            ShowStatus("Checking for updates...", true);
+            ShowInfo("Checking for updates...");
             try
             {
                 _updateCts?.Cancel(); _updateCts?.Dispose();
@@ -112,7 +112,7 @@ public sealed partial class OptionsPanelControl : UserControl
             CheckUpdatesButton.IsEnabled = false;
             UpdateProgressBar.Value = 0;
             UpdateProgressBar.Visibility = Visibility.Visible;
-            ShowStatus("Downloading update...", true);
+            ShowInfo("Downloading update...");
             try
             {
                 _updateCts?.Cancel(); _updateCts?.Dispose();
@@ -157,4 +157,6 @@ public sealed partial class OptionsPanelControl : UserControl
     }
 
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
+
+    private void ShowInfo(string message) => _status.ShowInfo(message);
 }

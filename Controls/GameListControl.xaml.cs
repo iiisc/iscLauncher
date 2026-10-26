@@ -6,6 +6,7 @@ using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -16,7 +17,6 @@ public sealed partial class GameListControl : UserControl
 {
     public event EventHandler<GameEntry?>? GameSelected;
     public event EventHandler<GameEntry>? LaunchRequested;
-    public event EventHandler<GameEntry>? DeleteConfirmed;
     public event EventHandler? AddGameRequested;
     public event EventHandler? OptionsRequested;
 
@@ -46,6 +46,7 @@ public sealed partial class GameListControl : UserControl
     {
         UpdateDot.Visibility = Visibility.Visible;
         ToolTipService.SetToolTip(OptionsButton, $"Options: version {version} is ready to install");
+        AutomationProperties.SetName(OptionsButton, $"Options, version {version} is ready to install");
     }
 
     /// <summary>Styles the button's frame and returns the foreground brush for its content.</summary>
@@ -69,16 +70,6 @@ public sealed partial class GameListControl : UserControl
     {
         if (GameListView.SelectedItem is GameEntry game)
             LaunchRequested?.Invoke(this, game);
-    }
-
-    private async void OnDeleteClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: GameEntry game }) return;
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Delete Game");
-        dialog.Content = $"Delete '{game.Name}'? This also removes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.";
-        dialog.PrimaryButtonText = "Delete";
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            DeleteConfirmed?.Invoke(this, game);
     }
 
     private void OnGameIconLoaded(object sender, RoutedEventArgs e)

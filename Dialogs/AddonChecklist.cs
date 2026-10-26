@@ -2,12 +2,13 @@ using System.Collections.Generic;
 using System.Linq;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
 
-/// <summary>Addon changes grouped by kind, one checkbox each, all ticked to start.</summary>
+/// <summary>Addon changes grouped by kind, one checkbox each, ticked to start unless flagged as incompatible.</summary>
 public sealed class AddonChecklist
 {
     public record Labels(string New, string Changed, string Removed);
@@ -57,7 +58,8 @@ public sealed class AddonChecklist
         group.Children.Add(SectionLabel($"{label} ({addons.Count})", brushKey));
         foreach (var addon in addons)
         {
-            var box = new CheckBox { IsChecked = true, Content = RowContent(addon), MinHeight = 28, Padding = new Thickness(6, 4, 0, 0) };
+            var box = new CheckBox { IsChecked = addon.Warning == null, Content = RowContent(addon), MinHeight = 28, Padding = new Thickness(6, 4, 0, 0) };
+            AutomationProperties.SetName(box, addon.Name);
             _rows.Add((box, addon));
             group.Children.Add(box);
         }

@@ -28,6 +28,9 @@ public static class AddonFiles
     private const string SavedVariables = "SavedVariables";
     private const int BackupsToKeep = 3;
     private const int CompareBufferSize = 64 * 1024;
+    // Older pushes let git convert line endings, so a repo's text files can differ from the game's only in CRLF vs LF.
+    // WoW reads both the same, so for these that doesn't count as a change; other files must match byte for byte.
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase) { ".lua", ".toc", ".xml", ".txt", ".md" };
 
     private static readonly HashSet<string> BackupExtensions = new(StringComparer.OrdinalIgnoreCase) { ".old", ".bak" };
     private static readonly Regex TocField = new(@"^##\s*(Interface|Version)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
@@ -234,7 +237,10 @@ public static class AddonFiles
     {
         try
         {
-            return FileVersionInfo.GetVersionInfo(exePath).FileMajorPart;
+            // Blizzard's official exes store 1.60.1 as file-version major 160, so the version text is what's reliable.
+            // Private-server clients write it as "3, 3, 5, 12340".
+            var match = Regex.Match(FileVersionInfo.GetVersionInfo(exePath).FileVersion ?? "", @"\d+");
+            return match.Success ? int.Parse(match.Value) : 0;
         }
         catch
         {
@@ -326,7 +332,7 @@ public static class AddonFiles
 
         foreach (var (relative, fileA) in filesA)
         {
-            if (!filesB.TryGetValue(relative, out var fileB) || fileA.Length != fileB.Length)
+            if (!filesB.TryGetValue(relative, out var fileB) || (fileA.Length != fileB.Length && !IsText(relative)))
                 return false;
         }
 
@@ -336,7 +342,10 @@ public static class AddonFiles
         foreach (var (relative, fileA) in filesA)
         {
             ct.ThrowIfCancellationRequested();
-            if (!ContentsEqual(fileA.FullName, filesB[relative].FullName, bufferA, bufferB))
+            var fileB = filesB[relative];
+            var equal = (fileA.Length == fileB.Length && ContentsEqual(fileA.FullName, fileB.FullName, bufferA, bufferB))
+                || (IsText(relative) && TextEqualIgnoringLineEndings(fileA.FullName, fileB.FullName));
+            if (!equal)
                 return false;
         }
         return true;
@@ -346,6 +355,24 @@ public static class AddonFiles
     private static Dictionary<string, FileInfo> RelativeFiles(string dir) =>
         new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(dir, f.FullName), StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsText(string path) => TextExtensions.Contains(Path.GetExtension(path));
+
+    private static bool TextEqualIgnoringLineEndings(string pathA, string pathB)
+    {
+        var a = File.ReadAllBytes(pathA);
+        var b = File.ReadAllBytes(pathB);
+        int i = 0, j = 0;
+        while (true)
+        {
+            while (i < a.Length && a[i] == '\r') i++;
+            while (j < b.Length && b[j] == '\r') j++;
+            if (i == a.Length || j == b.Length)
+                return i == a.Length && j == b.Length;
+            if (a[i++] != b[j++])
+                return false;
+        }
+    }
 
     private static bool ContentsEqual(string pathA, string pathB, byte[] bufferA, byte[] bufferB)
     {

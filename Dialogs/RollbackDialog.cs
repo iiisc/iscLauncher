@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using iscLauncher.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using static iscLauncher.Helpers.DialogHelper;
@@ -112,7 +113,7 @@ public static class RollbackDialog
                     headerPanel.Children.Add(Dim(commit.DisplayDate));
                 }
 
-                commitListView.Items.Add(new ListViewItem
+                var item = new ListViewItem
                 {
                     Tag = commit,
                     Padding = new Thickness(8, 6, 8, 6),
@@ -126,7 +127,9 @@ public static class RollbackDialog
                             BodyText(commit.Message)
                         }
                     }
-                });
+                };
+                AutomationProperties.SetName(item, $"{commit.Message}, {commit.DisplayDate}");
+                commitListView.Items.Add(item);
             }
             commitListView.SelectedIndex = 0;
             contentPanel.Children.Clear();

@@ -30,7 +30,7 @@ public sealed partial class GameDetailControl
             if (GitHub!.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, GitHub) == null)
                 return;
 
-            ShowStatus("Looking up your repos on GitHub...", true);
+            ShowInfo("Looking up your repos on GitHub...");
             var repos = await GitHub.ListPrivateReposAsync(CancellationToken.None);
             StatusBar.IsOpen = false;
 
@@ -39,7 +39,8 @@ public sealed partial class GameDetailControl
                 IsEditable = true,
                 ItemsSource = repos.Select(r => r.Name).ToList(),
                 Text = SuggestedRepoName(NameTextBox.Text),
-                HorizontalAlignment = HorizontalAlignment.Stretch
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Header = "Repo name"
             };
             var panel = new StackPanel { Spacing = 10 };
             panel.Children.Add(DialogHelper.BodyText("Pick the repo this game already syncs with on another PC, or type a name " +
@@ -53,7 +54,7 @@ public sealed partial class GameDetailControl
 
             var name = nameBox.Text.Trim();
             var isNew = !repos.Any(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            ShowStatus(isNew ? "Creating the repo on GitHub..." : "Linking the repo...", true);
+            ShowInfo(isNew ? "Creating the repo on GitHub..." : "Linking the repo...");
             SyncRepoUrlTextBox.Text = await GitHub.CreateRepoAsync(name, CancellationToken.None);
             if (await SaveAsync())
                 ShowStatus(isNew
@@ -173,10 +174,10 @@ public sealed partial class GameDetailControl
         _syncCts = new CancellationTokenSource();
         var ct = _syncCts.Token;
         SetSyncBusy(true);
-        ShowStatus(startMessage, true);
+        ShowInfo(startMessage);
         try
         {
-            var message = await operation(new Progress<string>(m => ShowStatus(m, true)), ct);
+            var message = await operation(new Progress<string>(ShowInfo), ct);
             if (message != null) ShowStatus(message, true);
             else StatusBar.IsOpen = false;
             if (_game != null) UpdateLastSyncedText(_game);
@@ -209,6 +210,7 @@ public sealed partial class GameDetailControl
         RollbackButton.IsEnabled = !busy;
         CopyAddonsButton.IsEnabled = !busy;
         CopyCharacterSetupButton.IsEnabled = !busy;
+        LaunchButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }

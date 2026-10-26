@@ -68,6 +68,9 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("lastSyncedCommit")]
     public string? LastSyncedCommit { get; set; }
 
+    // Screen readers announce a list item by its ToString
+    public override string ToString() => Name;
+
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";
 

@@ -48,12 +48,12 @@ public sealed partial class MainWindow : Window
 
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;
-        GameList.DeleteConfirmed  += OnDeleteConfirmed;
         GameList.AddGameRequested += OnAddGameRequested;
         GameList.OptionsRequested += OnOptionsRequested;
 
         GameDetail.GameSaved      += OnGameSaved;
         GameDetail.EscapeRequested += OnDetailEscapeRequested;
+        GameDetail.DeleteConfirmed += OnDeleteConfirmed;
 
         OptionsPanel.CloseRequested += OnOptionsCloseRequested;
 
@@ -122,8 +122,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnDeleteConfirmed(object? sender, GameEntry game)
     {
-        if (GameDetail.CurrentGame?.Id == game.Id)
-            GameDetail.CancelSync();
+        GameDetail.CancelSync();
         _credentialService.DeleteCredential(game.CredentialTarget);
         await _gameRepository.RemoveGameAsync(game.Id);
         // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete

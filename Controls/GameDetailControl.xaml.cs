@@ -16,6 +16,7 @@ namespace iscLauncher.Controls;
 public sealed partial class GameDetailControl : UserControl
 {
     public event EventHandler<GameEntry>? GameSaved;
+    public event EventHandler<GameEntry>? DeleteConfirmed;
     public event EventHandler? EscapeRequested;
 
     public GameRepository? GameRepository { get; set; }
@@ -60,6 +61,9 @@ public sealed partial class GameDetailControl : UserControl
         RealmTextBox.Text = game.RealmName ?? string.Empty;
         StartupDelayNumberBox.Value = game.StartupDelaySeconds;
         PasswordBox.Password = string.Empty;
+        PasswordBox.PlaceholderText = CredentialService!.GetCredential(game.CredentialTarget) != null
+            ? "A password is saved. Type a new one to replace it."
+            : "No password saved";
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
         UpdateLastSyncedText(game);
@@ -131,6 +135,8 @@ public sealed partial class GameDetailControl : UserControl
         var editing = _isNew || HasUnsavedChanges;
         LaunchButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+        SaveButtonText.Text = _isNew ? "Add Game" : "Save Changes";
+        RemoveGameSection.Visibility = _isNew ? Visibility.Collapsed : Visibility.Visible;
 
         SetUpSyncButton.Visibility = string.IsNullOrWhiteSpace(SyncRepoUrlTextBox.Text) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -200,7 +206,22 @@ public sealed partial class GameDetailControl : UserControl
         var official = BattleNetInstall.IsOfficial(exePath);
         OfficialNote.Visibility = official ? Visibility.Visible : Visibility.Collapsed;
         ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
-        AutomationTab.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
+        // A collapsed PivotItem still shows its header, so the tab is taken out of the Pivot instead
+        var hasTab = DetailPivot.Items.Contains(AutomationTab);
+        if (official && hasTab)
+            DetailPivot.Items.Remove(AutomationTab);
+        else if (!official && !hasTab)
+            DetailPivot.Items.Insert(1, AutomationTab);
+    }
+
+    private async void OnRemoveGameClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Remove Game");
+        dialog.Content = $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.";
+        dialog.PrimaryButtonText = "Remove";
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            DeleteConfirmed?.Invoke(this, game);
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -212,4 +233,6 @@ public sealed partial class GameDetailControl : UserControl
     }
 
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
+
+    private void ShowInfo(string message) => _status.ShowInfo(message);
 }

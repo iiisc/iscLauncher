@@ -20,7 +20,7 @@
       <!-- Accents -->
       <Color x:Key="GoldColor">#C9A84C</Color>
       <Color x:Key="GoldLightColor">#E8C97A</Color>
-      <Color x:Key="GoldDarkColor">#8A6E2F</Color>
+      <Color x:Key="GoldDarkColor">#A68A45</Color>
       <Color x:Key="EmeraldColor">#3D7A5C</Color>
       <Color x:Key="EmeraldLightColor">#5AAF85</Color>
       <Color x:Key="EmeraldDarkColor">#2D5A46</Color>
@@ -28,10 +28,10 @@
       <Color x:Key="EmeraldForegroundColor">#C8F0D8</Color>
       <Color x:Key="CrimsonColor">#9B3A3A</Color>
 
-      <!-- Text -->
+      <!-- Text. Muted and dim stay readable (4.5:1 or better) on the backgrounds they're used on -->
       <Color x:Key="TextPrimaryColor">#E8DCC8</Color>
-      <Color x:Key="TextMutedColor">#8A7A65</Color>
-      <Color x:Key="TextDimColor">#4A3F30</Color>
+      <Color x:Key="TextMutedColor">#B0A08A</Color>
+      <Color x:Key="TextDimColor">#948470</Color>
 
       <!-- Borders -->
       <Color x:Key="BorderColor">#2D2418</Color>
@@ -54,6 +54,16 @@
       <SolidColorBrush x:Key="BorderHighBrush" Color="{StaticResource BorderHighColor}"/>
 
       <!-- WinUI looks these up by name, so overriding them here restyles every control of that kind -->
+
+      <!-- The accent behind checkboxes, progress rings and selection: emerald instead of the Windows colour -->
+      <Color x:Key="SystemAccentColor">#3D7A5C</Color>
+      <Color x:Key="SystemAccentColorLight1">#4A9470</Color>
+      <Color x:Key="SystemAccentColorLight2">#5AAF85</Color>
+      <Color x:Key="SystemAccentColorLight3">#8FD0AE</Color>
+      <Color x:Key="SystemAccentColorDark1">#2D5A46</Color>
+      <Color x:Key="SystemAccentColorDark2">#1E4030</Color>
+      <Color x:Key="SystemAccentColorDark3">#142B20</Color>
+      <SolidColorBrush x:Key="TextControlHeaderForeground" Color="{StaticResource TextMutedColor}"/>
 
       <!-- Buttons: gold by default -->
       <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource GoldColor}"/>
@@ -153,9 +163,10 @@
       </Style>
 
       <!-- Text and password boxes; a NumberBox uses InputBaseStyle, since this padding would land on its inner text box -->
+      <!-- MinHeight, not Height: a Header label sits inside the control and needs room above the box -->
       <Style x:Key="InputStyle" TargetType="Control" BasedOn="{StaticResource InputBaseStyle}">
         <Setter Property="Padding" Value="12,10"/>
-        <Setter Property="Height" Value="40"/>
+        <Setter Property="MinHeight" Value="40"/>
       </Style>
 
       <!-- Panels -->

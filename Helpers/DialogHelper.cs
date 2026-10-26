@@ -1,5 +1,6 @@
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
@@ -52,7 +53,13 @@ public static class DialogHelper
         return block;
     }
 
-    public static CheckBox Option(string text, bool isChecked) => new() { IsChecked = isChecked, Content = BodyText(text) };
+    public static CheckBox Option(string text, bool isChecked)
+    {
+        var box = new CheckBox { IsChecked = isChecked, Content = BodyText(text) };
+        // A checkbox whose content isn't plain text has no name for screen readers otherwise
+        AutomationProperties.SetName(box, text);
+        return box;
+    }
 
     public static void SetWidth(ContentDialog dialog, double min, double max)
     {
