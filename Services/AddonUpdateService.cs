@@ -82,7 +82,7 @@ public class AddonUpdateService
 
     /// <summary>
     /// Compares a download with what the game has now, so a pull or an update shows without downloading again. Only
-    /// addons the game has are its update; the rest of the download is left out.
+    /// addons the game has, and new ones they need, are its update; the rest of the download is left out.
     /// </summary>
     public static AddonUpdate Compare(GameEntry game, AddonUpdate update)
     {
@@ -92,10 +92,11 @@ public class AddonUpdateService
         var downloaded = AddonFiles.AddonNames(update.Dir).ToHashSet(IgnoreCase);
         var installed = AddonFiles.AddonNames(gameAddOns).Where(downloaded.Contains).ToList();
         var preview = AddonFiles.Compare(update.Dir, gameAddOns, includeRemoved: false, AddonFiles.ClientMajorVersion(game.ExecutablePath), CancellationToken.None);
+        var needed = AddonFiles.Dependencies(update.Dir, installed);
         return update with
         {
             Installed = installed,
-            Changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList(),
+            Changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed || needed.Contains(d.Name)).ToList(),
             Files = AddonFiles.Fingerprint(gameAddOns, installed)
         };
     }

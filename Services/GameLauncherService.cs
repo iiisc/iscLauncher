@@ -69,7 +69,7 @@ public class GameLauncherService
 
         await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
         await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
-        var password = PasswordFor(game);
+        var password = _credentialService.GetCredential(game.CredentialTarget);
 
         Process process;
         try
@@ -85,6 +85,9 @@ public class GameLauncherService
         {
             throw new AppException($"Failed to launch game: {ex.Message}");
         }
+
+        if (string.IsNullOrEmpty(password))
+            return "Game launched. No password is saved, so log in yourself.";
 
         // Some games show their window well before the login screen accepts input
         if (game.StartupDelaySeconds > 0)

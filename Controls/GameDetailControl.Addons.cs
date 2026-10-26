@@ -138,18 +138,21 @@ public sealed partial class GameDetailControl
 
     private void ShowInstalledAddons(GameEntry game)
     {
-        var view = new InstalledAddonsView(game, _services.AddonUpdates) { IsBusy = _syncBusy };
-        view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
-        view.UpdateRequested += async (_, picked) =>
+        var view = new InstalledAddonsView(game, _services.AddonUpdates)
         {
-            // Pushing is how the update reaches the other PCs, so it's offered while it's on the user's mind
-            if (await RunSyncAsync("Updating addons...", async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct))
-                && game.HasSyncRepo
-                && await DialogHelper.AskAsync(XamlRoot, "Push the Update?",
-                    $"Push {game.Name}'s updated addons now, so your other PCs get them when they pull?", "Push Now", closeText: "Later")
-                    == ContentDialogResult.Primary)
-                await PushAsync(game);
+            IsBusy = _syncBusy,
+            InstallAsync = async picked =>
+            {
+                // Pushing is how the update reaches the other PCs, so it's offered while it's on the user's mind
+                if (await RunSyncAsync("Updating addons...", async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct))
+                    && game.HasSyncRepo
+                    && await DialogHelper.AskAsync(XamlRoot, "Push the Update?",
+                        $"Push {game.Name}'s updated addons now, so your other PCs get them when they pull?", "Push Now", closeText: "Later")
+                        == ContentDialogResult.Primary)
+                    await PushAsync(game);
+            }
         };
+        view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
         AddonsHost.Child = view;
         _ = view.CheckAllAsync();
     }

@@ -103,6 +103,43 @@ public sealed class AddonSyncServiceTests : System.IDisposable
     }
 
     [Fact]
+    public async Task PullingFromAnEmptyRepoIsRefused()
+    {
+        var remote = _sandbox.NewRemote();
+        var game = _sandbox.AddGame("pc", remote);
+        Addon(Dir(game), "Questie", "7.1");
+
+        // Every installed addon would show as not in the repo, ticked for removal
+        var session = await Sync.OpenAsync(game, null, _ct);
+        var error = await Assert.ThrowsAsync<AppException>(() => Sync.PreviewPullAsync(session, _ct));
+        Assert.Contains("empty", error.Message);
+        Assert.True(Directory.Exists(Path.Combine(Dir(game), @"Interface\AddOns\Questie")));
+    }
+
+    [Fact]
+    public async Task PushingNothingLeavesAnotherPcsPushUnpulled()
+    {
+        var remote = _sandbox.NewRemote();
+        var pcA = _sandbox.AddGame("pcA", remote);
+        var pcB = _sandbox.AddGame("pcB", remote);
+        Addon(Dir(pcA), "Questie", "7.1");
+        var session = await Sync.OpenAsync(pcA, null, _ct);
+        await Sync.PushAsync(session, (await Sync.PreviewPushAsync(session, _ct)).Diffs, new SyncOptions(false, false), null, _ct);
+        var firstPush = pcA.LastSyncedCommit;
+
+        Addon(Dir(pcB), "Questie", "7.1");
+        Addon(Dir(pcB), "Details", "1.0");
+        session = await Sync.OpenAsync(pcB, null, _ct);
+        await Sync.PushAsync(session, (await Sync.PreviewPushAsync(session, _ct)).Diffs, new SyncOptions(false, false), null, _ct);
+
+        // A unticks everything B changed, so nothing is pushed and A still hasn't got B's push
+        session = await Sync.OpenAsync(pcA, null, _ct);
+        Assert.Equal("Nothing to push — the repo already matches.", await Sync.PushAsync(session, [], new SyncOptions(false, false), null, _ct));
+        Assert.Equal(firstPush, pcA.LastSyncedCommit);
+        Assert.True(pcA.HasRemoteChanges);
+    }
+
+    [Fact]
     public async Task OpeningResetsALeftoverCacheToTheRemote()
     {
         var remote = _sandbox.NewRemote();
@@ -208,6 +245,31 @@ public sealed class AddonSyncServiceTests : System.IDisposable
         // Parts of the download that weren't installed stay out
         Assert.False(Directory.Exists(Path.Combine(addOns, "WeakAurasArchive")));
         Assert.Equal(["WeakAuras"], Assert.Single(Sync.ListBackups(game)).Addons);
+    }
+
+    [Fact]
+    public async Task AnUpdateBringsTheNewFoldersItsAddonsNeed()
+    {
+        var game = _sandbox.AddGame("game");
+        Addon(Dir(game), "WeakAuras", "5.21.8");
+        var download = Path.Combine(_sandbox.Root, "download");
+        var downloadAddOns = AddonFiles.GameAddOnsDir(download);
+        Addon(download, "WeakAuras", "5.22.1");
+        Write(Path.Combine(downloadAddOns, @"WeakAuras\WeakAuras.toc"), "## Interface: 30300\n## Version: 5.22.1\n## Dependencies: WeakAurasCore\nWeakAuras.lua\n");
+        Addon(download, "WeakAurasCore", "5.22.1");
+        Write(Path.Combine(downloadAddOns, @"WeakAurasCore\WeakAurasCore.toc"), "## Interface: 30300\n## RequiredDeps: LibCompress\n## OptionalDeps: WeakAurasArchive\n");
+        Addon(download, "LibCompress", "1.0");
+        Addon(download, "WeakAurasArchive", "5.22.1");
+
+        var update = AddonUpdateService.Compare(game, new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", "5.22.1", downloadAddOns, [], [], null));
+        Assert.Equal(["LibCompress", "WeakAuras", "WeakAurasCore"], update.Changed.Select(d => d.Name).Order());
+
+        await Sync.InstallUpdatesAsync(game, [update], _ct);
+        var addOns = AddonFiles.GameAddOnsDir(Dir(game));
+        Assert.True(Directory.Exists(Path.Combine(addOns, "WeakAurasCore")));
+        Assert.True(Directory.Exists(Path.Combine(addOns, "LibCompress")));
+        Assert.False(Directory.Exists(Path.Combine(addOns, "WeakAurasArchive")));
+        Assert.Empty(AddonUpdateService.Compare(game, update).Changed);
     }
 
     [Fact]

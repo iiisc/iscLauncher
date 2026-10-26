@@ -18,7 +18,7 @@ public record BackupInfo(string Path, DateTime Created, List<string> Addons, boo
 /// <param name="Release">The release's tag, or null when the newest version is a commit.</param>
 /// <param name="Dir">Where its addons were unpacked, or null if it wasn't downloaded because nothing had changed.</param>
 /// <param name="Installed">The game's addon folders that the repo has.</param>
-/// <param name="Changed">Those of them that differ from the download.</param>
+/// <param name="Changed">Those of them that differ from the download, and folders new in it that they need.</param>
 /// <param name="Error">Why it couldn't be checked.</param>
 /// <param name="Files">A fingerprint of the installed folders when they were compared.</param>
 public record AddonUpdate(string Repo, string? Latest, string? Release, string? Dir, List<string> Installed, List<AddonDiff> Changed,
@@ -76,9 +76,14 @@ public class AddonSyncService
         return new SyncSession(game, cachePath, head);
     }
 
-    public Task<AddonPreview> PreviewPullAsync(SyncSession s, CancellationToken ct) =>
-        Task.Run(() => AddonFiles.Compare(s.RepoAddOns, s.GameAddOns, includeRemoved: true,
+    public Task<AddonPreview> PreviewPullAsync(SyncSession s, CancellationToken ct)
+    {
+        // Every addon on this PC would show as not in the repo, ticked for removal
+        if (s.HeadCommit == null)
+            throw new AppException("The repo is empty, so there's nothing to pull. Push from a PC that has this game's addons first.");
+        return Task.Run(() => AddonFiles.Compare(s.RepoAddOns, s.GameAddOns, includeRemoved: true,
             AddonFiles.ClientMajorVersion(s.Game.ExecutablePath), ct) with { Characters = AddonFiles.CharacterCount(s.CachePath) }, ct);
+    }
 
     public Task<AddonPreview> PreviewPushAsync(SyncSession s, CancellationToken ct) =>
         Task.Run(() => AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct)
@@ -136,8 +141,11 @@ public class AddonSyncService
         var message = string.Join("\n", new[] { subject, "", "Addons:" }.Concat(repoAddons.Select(n => $"  - {n}")));
 
         var head = await CommitAndPushAsync(s, message, progress, ct);
+        // The repo's head may be another PC's push that the user left unticked, which this PC still hasn't got
+        if (head == s.HeadCommit)
+            return "Nothing to push — the repo already matches.";
         await MarkSyncedAsync(s.Game, head);
-        return head == s.HeadCommit ? "Nothing to push — the repo already matches." : $"Pushed. {Describe(addons, options)}";
+        return $"Pushed. {Describe(addons, options)}";
     }
 
     public async Task<List<GitCommitEntry>> GetCommitLogAsync(SyncSession s, CancellationToken ct) =>

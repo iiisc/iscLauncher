@@ -41,9 +41,10 @@ public sealed class InstalledAddonsView : UserControl
     private readonly Button _updateSelected = TextButton("Update Selected", "PrimaryButtonStyle");
     private readonly Button _updateAll = TextButton("Update All", "SecondaryButtonStyle");
     private bool _busy;
+    private Task _installing = Task.CompletedTask;
 
-    /// <summary>The updates the user picked, for the host to install and then <see cref="RescanAsync"/>.</summary>
-    public event EventHandler<List<AddonUpdate>>? UpdateRequested;
+    /// <summary>Installs the updates the user picked, then <see cref="RescanAsync"/>; set by the host.</summary>
+    public Func<List<AddonUpdate>, Task>? InstallAsync { get; init; }
 
     /// <summary>The game's sources changed: connected, removed, or found to hold other addons. The host saves them.</summary>
     public event EventHandler? SourcesChanged;
@@ -58,9 +59,9 @@ public sealed class InstalledAddonsView : UserControl
         _sources = AddonUpdateService.Sources(game, _toc);
         _message.Visibility = Visibility.Collapsed;
 
-        _updateSelected.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => _ticked.Contains(u.Repo)).ToList());
+        _updateSelected.Click += (_, _) => Install(Available.Where(u => _ticked.Contains(u.Repo)).ToList());
         // An update made for another client stays out unless it's ticked and updated on its own
-        _updateAll.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => Warning(u) == null).ToList());
+        _updateAll.Click += (_, _) => Install(Available.Where(u => Warning(u) == null).ToList());
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         buttons.Children.Add(_updateSelected);
@@ -90,7 +91,15 @@ public sealed class InstalledAddonsView : UserControl
     public void Close()
     {
         _cts.Cancel();
-        Task.Run(() => AddonUpdateService.Discard(_downloadDir));
+        // An install keeps going when the user moves to another game, and copies from the downloads until it's done
+        _installing.ContinueWith(_ => AddonUpdateService.Discard(_downloadDir), TaskScheduler.Default);
+    }
+
+    private async void Install(List<AddonUpdate> picked)
+    {
+        if (InstallAsync == null) return;
+        _installing = InstallAsync(picked);
+        await _installing;
     }
 
     /// <summary>Lists the game's addons again and compares them with the downloads, after something changed them.</summary>

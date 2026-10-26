@@ -18,6 +18,8 @@ public sealed partial class MainWindow : Window
 {
     private readonly AppServices _services;
     private UpdateCheckResult? _startupUpdate;
+    // The game to go back to when Options closes
+    private GameEntry? _gameBeforeOptions;
 
     public MainWindow()
     {
@@ -78,6 +80,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowOptions()
     {
+        // Left selected, the game's card couldn't be clicked to go back to it
+        _gameBeforeOptions = GameList.SelectedGame;
+        GameList.SetSelectedGame(null);
         ShowPanel(OptionsPanel);
         OptionsPanel.Activate();
         if (_startupUpdate != null)
@@ -145,7 +150,11 @@ public sealed partial class MainWindow : Window
 
     private void OnOptionsCloseRequested(object? sender, EventArgs e)
     {
-        if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
+        if (_gameBeforeOptions is { } game && _services.Library.Games.Contains(game))
+        {
+            GameList.SetSelectedGame(game);
+            ShowDetail(game);
+        }
         else ShowEmptyState();
     }
 

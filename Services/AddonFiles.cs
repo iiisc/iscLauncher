@@ -28,6 +28,8 @@ public static partial class AddonFiles
 
     private static readonly HashSet<string> BackupExtensions = new(StringComparer.OrdinalIgnoreCase) { ".old", ".bak" };
     private static readonly Regex TocField = new(@"^##\s*(Interface|Version)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
+    // WoW treats any field starting with "Dep" as a required dependency, as well as RequiredDeps
+    private static readonly Regex DependencyField = new(@"^##\s*(Dep\w*|RequiredDeps)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
 
     public static string GameAddOnsDir(string gameDir) => Path.Combine(gameDir, "Interface", "AddOns");
 
@@ -157,13 +159,33 @@ public static partial class AddonFiles
         addons.GroupBy(a => name(a).Split('_')[0], StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderBy(a => name(a).Length).ThenBy(name, StringComparer.OrdinalIgnoreCase).ToList());
 
-    private record TocInfo(string? Version, List<int> Interfaces, string? Repo);
+    /// <summary>The addons in <paramref name="addOnsDir"/> that <paramref name="addons"/> need to load, directly or through each other.</summary>
+    public static HashSet<string> Dependencies(string addOnsDir, IEnumerable<string> addons)
+    {
+        var needed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>(addons);
+        while (queue.TryDequeue(out var name))
+        {
+            var dir = Path.Combine(addOnsDir, name);
+            if (!Directory.Exists(dir))
+                continue;
+            foreach (var dependency in ReadToc(dir).Dependencies)
+            {
+                if (needed.Add(dependency))
+                    queue.Enqueue(dependency);
+            }
+        }
+        return needed;
+    }
+
+    private record TocInfo(string? Version, List<int> Interfaces, string? Repo, List<string> Dependencies);
 
     private static TocInfo ReadToc(string addonDir)
     {
         string? version = null;
         string? repo = null;
         var interfaces = new List<int>();
+        var dependencies = new List<string>();
         var name = Path.GetFileName(addonDir);
 
         // Addons can ship one .toc per client flavor (Name_Vanilla.toc, Name-Wrath.toc), so collect interfaces from all of them
@@ -175,6 +197,8 @@ public static partial class AddonFiles
                 // Only the header names a home; lines below it list the addon's files
                 if (line.StartsWith("##"))
                     repo ??= GitHubRepo(line);
+                if (DependencyField.Match(line) is { Success: true } dependency)
+                    dependencies.AddRange(dependency.Groups[2].Value.Split(',').Select(d => d.Trim()).Where(d => d.Length > 0));
                 var match = TocField.Match(line);
                 if (!match.Success)
                     continue;
@@ -186,7 +210,7 @@ public static partial class AddonFiles
                     version = value;
             }
         }
-        return new TocInfo(version, interfaces, repo);
+        return new TocInfo(version, interfaces, repo, dependencies);
     }
 
     private static string? CompatibilityWarning(List<int> interfaces, int clientMajor)
