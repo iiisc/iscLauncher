@@ -124,6 +124,61 @@ public sealed class AddonSyncServiceTests : System.IDisposable
     }
 
     [Fact]
+    public async Task AFileOpenElsewhereStopsTheCopyBeforeAnythingChanges()
+    {
+        var source = _sandbox.AddGame("source");
+        var target = _sandbox.AddGame("target");
+        Addon(Dir(source), "Questie", "7.3");
+        Addon(Dir(target), "Questie", "6.0");
+        var targetLua = Path.Combine(Dir(target), @"Interface\AddOns\Questie\Questie.lua");
+
+        var preview = await Sync.PreviewCopyAsync(source, target, _ct);
+        using (new FileStream(targetLua, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = await Assert.ThrowsAsync<AppException>(() => Sync.CopyToGameAsync(source, target, preview.Diffs, copySettings: false, _ct));
+            Assert.Contains(@"Questie\Questie.lua is open in another program", error.Message);
+        }
+
+        Assert.Contains("6.0", File.ReadAllText(targetLua));
+        Assert.Empty(Sync.ListBackups(target));
+    }
+
+    [Fact]
+    public async Task AFailureHalfwayKeepsEveryBackupAndSaysHowToRecover()
+    {
+        var source = _sandbox.AddGame("source");
+        var target = _sandbox.AddGame("target");
+        Write(Path.Combine(Dir(target), @"WTF\Account\ACC\SavedVariables\Questie.lua"), "settings");
+        Addon(Dir(target), "Questie", "6.0");
+
+        // Four successful copies leave the newest three backups
+        for (var i = 1; i <= 4; i++)
+        {
+            Addon(Dir(source), "Questie", $"7.{i}");
+            var diffs = (await Sync.PreviewCopyAsync(source, target, _ct)).Diffs;
+            await Sync.CopyToGameAsync(source, target, diffs, copySettings: true, _ct);
+        }
+        Assert.Equal(3, Sync.ListBackups(target).Count);
+
+        // A source file that can't be read fails the copy after the target's copy of the addon was already removed
+        Addon(Dir(source), "Questie", "8.0");
+        var preview = await Sync.PreviewCopyAsync(source, target, _ct);
+        using (new FileStream(Path.Combine(Dir(source), @"Interface\AddOns\Questie\Questie.lua"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var error = await Assert.ThrowsAsync<AppException>(() => Sync.CopyToGameAsync(source, target, preview.Diffs, copySettings: true, _ct));
+            Assert.Contains("Stopped partway", error.Message);
+            Assert.Contains("Restore a Backup", error.Message);
+            Assert.NotNull(error.InnerException);
+        }
+
+        // The backup from just before the failure holds what the game had, and nothing older was pruned for it
+        var backups = Sync.ListBackups(target);
+        Assert.Equal(4, backups.Count);
+        await Sync.RestoreBackupAsync(target, backups[0], _ct);
+        Assert.Contains("7.4", File.ReadAllText(Path.Combine(Dir(target), @"Interface\AddOns\Questie\Questie.lua")));
+    }
+
+    [Fact]
     public async Task CopyingToAnotherGameReplacesAddonsAndCopiesTheirSettings()
     {
         var source = _sandbox.AddGame("source");

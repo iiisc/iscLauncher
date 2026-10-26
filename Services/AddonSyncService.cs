@@ -94,16 +94,11 @@ public class AddonSyncService
     public async Task<string> PullAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
     {
         var settings = options.AddonSettings || options.CharacterSettings;
-
-        progress?.Report("Backing up...");
-        await Task.Run(() => Backup(s.Game, addons.Select(a => a.Name), includeWtf: settings, ct), ct);
-
-        progress?.Report("Applying...");
-        await Task.Run(() =>
+        await Task.Run(() => ChangeGameFiles(s.Game, addons.Select(a => a.Name), settings, progress, () =>
         {
-            AddonFiles.ApplyAddons(s.RepoAddOns, s.GameAddOns, addons, ct);
-            AddonFiles.CopyWtf(s.RepoWtfAccount, s.GameWtfAccount, options, mirror: false, ct);
-        }, ct);
+            AddonFiles.ApplyAddons(s.RepoAddOns, s.GameAddOns, addons, CancellationToken.None);
+            AddonFiles.CopyWtf(s.RepoWtfAccount, s.GameWtfAccount, options, mirror: false, CancellationToken.None);
+        }, ct), ct);
 
         await MarkSyncedAsync(s.Game, s.HeadCommit);
         return $"Pulled. {Describe(addons, options)}";
@@ -159,13 +154,16 @@ public class AddonSyncService
                 throw new AppException($"{target.Name}'s executable wasn't found.");
 
             var names = addons.Select(a => a.Name).ToList();
-            Backup(target, names, includeWtf: copySettings, ct);
-            AddonFiles.ApplyAddons(AddonFiles.GameAddOnsDir(GameDir(source)), AddonFiles.GameAddOnsDir(GameDir(target)), addons, ct);
+            string? skipped = null;
+            ChangeGameFiles(target, names, copySettings, null, () =>
+            {
+                AddonFiles.ApplyAddons(AddonFiles.GameAddOnsDir(GameDir(source)), AddonFiles.GameAddOnsDir(GameDir(target)), addons, CancellationToken.None);
+                if (copySettings)
+                    skipped = CopyAddonSettings(source, target, names);
+            }, ct);
 
             var message = $"Copied {addons.Count} addon(s) to {target.Name}.";
-            if (copySettings && CopyAddonSettings(source, target, names) is { } skipped)
-                message += $" Settings weren't copied: {skipped}.";
-            return message;
+            return skipped == null ? message : $"{message} Settings weren't copied: {skipped}.";
         }, ct);
 
     /// <summary>The game's backups, newest first.</summary>
@@ -185,18 +183,8 @@ public class AddonSyncService
     public Task<string> RestoreBackupAsync(GameEntry game, BackupInfo backup, CancellationToken ct) =>
         Task.Run(() =>
         {
-            // Restored from a copy: the backup made first can prune the oldest backup, which may be this one
-            var copy = Path.Combine(Path.GetTempPath(), $"iscLauncher-restore-{Guid.NewGuid():N}.zip");
-            File.Copy(backup.Path, copy);
-            try
-            {
-                Backup(game, backup.Addons, backup.HasSettings, ct);
-                AddonFiles.RestoreBackup(copy, GameDir(game), ct);
-            }
-            finally
-            {
-                File.Delete(copy);
-            }
+            ChangeGameFiles(game, backup.Addons, backup.HasSettings, null,
+                () => AddonFiles.RestoreBackup(backup.Path, GameDir(game), CancellationToken.None), ct);
             return $"Restored the backup from {backup.Created:g}. What it replaced was backed up first.";
         }, ct);
 
@@ -216,11 +204,12 @@ public class AddonSyncService
         {
             var data = addonData ? AddonFiles.CharacterAddonData(source.Dir) : [];
             foreach (var game in targets.Select(t => t.Game).Distinct())
-                Backup(game, [], includeWtf: true, ct);
-            foreach (var target in targets)
             {
-                ct.ThrowIfCancellationRequested();
-                AddonFiles.CopyCharacterSetup(source.Dir, target.Dir, enabledAddons, data);
+                ChangeGameFiles(game, [], includeWtf: true, null, () =>
+                {
+                    foreach (var target in targets.Where(t => t.Game == game))
+                        AddonFiles.CopyCharacterSetup(source.Dir, target.Dir, enabledAddons, data);
+                }, ct);
             }
             return $"Gave {targets.Count} character(s) {source.Label}'s addon setup.";
         }, ct);
@@ -265,8 +254,32 @@ public class AddonSyncService
 
     internal static string GameDir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath) ?? "";
 
-    private static void Backup(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, CancellationToken ct) =>
-        AddonFiles.Backup(BackupDir(game), GameDir(game), addonNames, includeWtf, ct);
+    /// <summary>
+    /// The one way a game's addons and settings get changed: check nothing they touch is open elsewhere, back them up,
+    /// then <paramref name="apply"/>. Once files start changing, finishing beats stopping halfway, so that part
+    /// ignores Cancel; if it fails anyway, the message says how to get back what was there.
+    /// </summary>
+    private static void ChangeGameFiles(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, IProgress<string>? progress,
+        Action apply, CancellationToken ct)
+    {
+        var names = addonNames.ToList();
+        var gameDir = GameDir(game);
+        progress?.Report("Backing up...");
+        AddonFiles.ThrowIfInUse(gameDir, names, includeWtf);
+        AddonFiles.Backup(BackupDir(game), gameDir, names, includeWtf, ct);
+
+        progress?.Report("Applying...");
+        try
+        {
+            apply();
+        }
+        catch (Exception ex) when (ex is not AppException)
+        {
+            throw new AppException($"Stopped partway through changing {game.Name}'s files: {ex.Message} " +
+                "Restore a Backup on the Addons tab puts back what was there before.", ex);
+        }
+        AddonFiles.PruneBackups(BackupDir(game));
+    }
 
     private static string BackupDir(GameEntry game) => Path.Combine(BackupRoot, game.Id.ToString());
 

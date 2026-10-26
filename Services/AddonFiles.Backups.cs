@@ -13,36 +13,79 @@ public static partial class AddonFiles
 
     /// <summary>
     /// Zips what an operation is about to overwrite in a game: its WTF\Account folder and the named addon folders.
-    /// Keeps the newest few in <paramref name="backupDir"/>. Throws on failure, since the caller is about to delete these files.
+    /// Throws on failure, since the caller is about to delete these files.
     /// </summary>
     public static void Backup(string backupDir, string gameDir, IEnumerable<string> addonNames, bool includeWtf, CancellationToken ct)
     {
-        var addOnsDir = GameAddOnsDir(gameDir);
-        var addons = addonNames.Where(n => Directory.Exists(Path.Combine(addOnsDir, n))).ToList();
-        var wtf = WtfAccountDir(gameDir);
-        includeWtf &= Directory.Exists(wtf);
-        if (addons.Count == 0 && !includeWtf)
+        var parts = PartsToChange(gameDir, addonNames, includeWtf);
+        if (parts.Count == 0)
             return;
 
         Directory.CreateDirectory(backupDir);
-        var zipPath = Path.Combine(backupDir, $"backup-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
+        var zipPath = Path.Combine(backupDir, $"backup-{DateTime.Now:yyyyMMdd-HHmmss-fff}.zip");
         try
         {
             using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
-            if (includeWtf)
-                AddToZip(zip, wtf, ZipSettings, ct);
-            foreach (var name in addons)
-                AddToZip(zip, Path.Combine(addOnsDir, name), $"{ZipAddOns}/{name}", ct);
+            foreach (var (dir, zipPrefix) in parts)
+                AddToZip(zip, dir, zipPrefix, ct);
         }
         catch
         {
             DeleteFile(zipPath);
             throw;
         }
+    }
 
+    /// <summary>
+    /// Keeps only the newest few backups. Called once an operation has succeeded: until then, the backup from before a
+    /// failed attempt may be the only one holding what the game had.
+    /// </summary>
+    public static void PruneBackups(string backupDir)
+    {
+        if (!Directory.Exists(backupDir))
+            return;
         // Pruning is housekeeping; a locked old backup shouldn't fail the operation
         foreach (var old in Directory.GetFiles(backupDir, "*.zip").OrderByDescending(File.GetCreationTimeUtc).Skip(BackupsToKeep))
             try { DeleteFile(old); } catch { }
+    }
+
+    /// <summary>
+    /// Throws if another program has open any file that an operation on these addons and settings would change, so it
+    /// can stop before changing anything instead of failing halfway through.
+    /// </summary>
+    public static void ThrowIfInUse(string gameDir, IEnumerable<string> addonNames, bool includeWtf)
+    {
+        foreach (var (dir, _) in PartsToChange(gameDir, addonNames, includeWtf))
+        {
+            foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    using var _ = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+                }
+                // 32 and 33 are Windows' sharing and lock violations: some other program has the file open
+                catch (IOException ex) when ((ex.HResult & 0xFFFF) is 32 or 33)
+                {
+                    throw new AppException($"{Path.GetRelativePath(gameDir, file)} is open in another program, so nothing was changed. " +
+                        "Close whatever is using it (the game, an editor, a virus scan) and try again.");
+                }
+            }
+        }
+    }
+
+    // The folders an operation on these addons and settings changes, each with where a backup zip keeps it
+    private static List<(string Dir, string ZipPrefix)> PartsToChange(string gameDir, IEnumerable<string> addonNames, bool includeWtf)
+    {
+        var parts = new List<(string, string)>();
+        if (includeWtf && Directory.Exists(WtfAccountDir(gameDir)))
+            parts.Add((WtfAccountDir(gameDir), ZipSettings));
+        foreach (var name in addonNames)
+        {
+            var dir = Path.Combine(GameAddOnsDir(gameDir), name);
+            if (Directory.Exists(dir))
+                parts.Add((dir, $"{ZipAddOns}/{name}"));
+        }
+        return parts;
     }
 
     // Where a backup zip keeps each part. Settings sat under Account/ at the root in older versions.
