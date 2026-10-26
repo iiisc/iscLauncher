@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -20,10 +19,8 @@ public record AddonPreview(List<AddonDiff> Diffs, int Unchanged, int Characters 
 public record SyncOptions(bool AddonSettings, bool CharacterSettings);
 
 /// <summary>Path-level addon and WTF operations shared by repo sync and game-to-game copy.</summary>
-public static class AddonFiles
+public static partial class AddonFiles
 {
-    private const string SavedVariables = "SavedVariables";
-    private const int BackupsToKeep = 3;
     private const int CompareBufferSize = 64 * 1024;
     // Older pushes let git convert line endings, so a repo's text files can differ from the game's only in CRLF vs LF.
     // WoW reads both the same, so for these that doesn't count as a change; other files must match byte for byte.
@@ -33,8 +30,6 @@ public static class AddonFiles
     private static readonly Regex TocField = new(@"^##\s*(Interface|Version)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
 
     public static string GameAddOnsDir(string gameDir) => Path.Combine(gameDir, "Interface", "AddOns");
-
-    public static string WtfAccountDir(string root) => Path.Combine(root, "WTF", "Account");
 
     /// <summary>Installed addon folder names. Blizzard_ folders ship with the client, so they're never compared or moved.</summary>
     public static List<string> AddonNames(string addOnsDir)
@@ -103,186 +98,6 @@ public static class AddonFiles
         }
     }
 
-    /// <summary>
-    /// Copies the chosen settings categories between two WTF\Account folders. With <paramref name="mirror"/>, target
-    /// content in those categories that the source doesn't have is deleted, so the repo matches what was pushed.
-    /// </summary>
-    public static void CopyWtf(string sourceAccountRoot, string targetAccountRoot, SyncOptions options, bool mirror, CancellationToken ct)
-    {
-        if (mirror)
-        {
-            foreach (var entry in SettingsEntries(targetAccountRoot, options).ToList())
-            {
-                if (Directory.Exists(entry))
-                    ForceDeleteDirectory(entry);
-                else
-                    DeleteFile(entry);
-            }
-            foreach (var account in AccountDirs(targetAccountRoot).Where(a => Directory.GetFileSystemEntries(a).Length == 0))
-                Directory.Delete(account);
-        }
-
-        foreach (var entry in SettingsEntries(sourceAccountRoot, options))
-        {
-            ct.ThrowIfCancellationRequested();
-            var target = Path.Combine(targetAccountRoot, Path.GetRelativePath(sourceAccountRoot, entry));
-            if (Directory.Exists(entry))
-                CopyDirectory(entry, target, skipBackups: true, ct);
-            else
-                CopyFile(entry, target, skipBackups: true);
-        }
-    }
-
-    /// <summary>Copies the SavedVariables files of the named addons between two account folders or two character folders.</summary>
-    public static void CopySavedVariables(string sourceDir, string targetDir, IEnumerable<string> addons)
-    {
-        foreach (var name in addons)
-        {
-            var file = Path.Combine(sourceDir, SavedVariables, name + ".lua");
-            if (File.Exists(file))
-                CopyFile(file, Path.Combine(targetDir, SavedVariables, name + ".lua"));
-        }
-    }
-
-    /// <summary>The WTF\Account folder matching <paramref name="accountName"/>, else the only one there is.</summary>
-    public static string? FindAccountDir(string gameDir, string? accountName)
-    {
-        var accounts = AccountDirs(WtfAccountDir(gameDir));
-        return accounts.FirstOrDefault(a => Path.GetFileName(a).Equals(accountName, StringComparison.OrdinalIgnoreCase))
-            ?? (accounts.Count == 1 ? accounts[0] : null);
-    }
-
-    /// <summary>
-    /// Character folders under <paramref name="root"/>\WTF\Account, with a display label. Older clients nest them as
-    /// Account\Realm\Name; newer ones as Account\&lt;number&gt;\Name-Suffix, where the folder name alone identifies the character.
-    /// </summary>
-    public static List<(string Dir, string Label)> Characters(string root)
-    {
-        var characters = new List<(string Dir, string Label)>();
-        foreach (var account in AccountDirs(WtfAccountDir(root)))
-        {
-            foreach (var group in Directory.GetDirectories(account).Where(d => !IsSavedVariables(d)))
-            {
-                var groupName = Path.GetFileName(group);
-                foreach (var character in Directory.GetDirectories(group))
-                {
-                    var name = Path.GetFileName(character);
-                    characters.Add((character, groupName.All(char.IsDigit) ? name : $"{name} ({groupName})"));
-                }
-            }
-        }
-        return characters;
-    }
-
-    public static int CharacterCount(string root) => Characters(root).Count;
-
-    /// <summary>Addons with per-character data in a character folder. Blizzard's own UI data stays with the character.</summary>
-    public static List<string> CharacterAddonData(string characterDir)
-    {
-        var dir = Path.Combine(characterDir, SavedVariables);
-        if (!Directory.Exists(dir))
-            return [];
-
-        return NonBlizzard(Directory.GetFiles(dir, "*.lua").Select(f => Path.GetFileNameWithoutExtension(f)));
-    }
-
-    /// <summary>Gives a character another's enabled-addon list (AddOns.txt) and/or its per-character data for the named addons.</summary>
-    public static void CopyCharacterSetup(string sourceCharacterDir, string targetCharacterDir, bool enabledAddons, IEnumerable<string> addonData)
-    {
-        var addOnsTxt = Path.Combine(sourceCharacterDir, "AddOns.txt");
-        if (enabledAddons && File.Exists(addOnsTxt))
-            CopyFile(addOnsTxt, Path.Combine(targetCharacterDir, "AddOns.txt"));
-        CopySavedVariables(sourceCharacterDir, targetCharacterDir, addonData);
-    }
-
-    /// <summary>
-    /// Zips what an operation is about to overwrite in a game: its WTF\Account folder and the named addon folders.
-    /// Keeps the newest few in <paramref name="backupDir"/>. Throws on failure, since the caller is about to delete these files.
-    /// </summary>
-    public static void Backup(string backupDir, string gameDir, IEnumerable<string> addonNames, bool includeWtf, CancellationToken ct)
-    {
-        var addOnsDir = GameAddOnsDir(gameDir);
-        var addons = addonNames.Where(n => Directory.Exists(Path.Combine(addOnsDir, n))).ToList();
-        var wtf = WtfAccountDir(gameDir);
-        includeWtf &= Directory.Exists(wtf);
-        if (addons.Count == 0 && !includeWtf)
-            return;
-
-        Directory.CreateDirectory(backupDir);
-        var zipPath = Path.Combine(backupDir, $"backup-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
-        try
-        {
-            using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
-            if (includeWtf)
-                AddToZip(zip, wtf, ZipSettings, ct);
-            foreach (var name in addons)
-                AddToZip(zip, Path.Combine(addOnsDir, name), $"{ZipAddOns}/{name}", ct);
-        }
-        catch
-        {
-            DeleteFile(zipPath);
-            throw;
-        }
-
-        // Pruning is housekeeping; a locked old backup shouldn't fail the operation
-        foreach (var old in Directory.GetFiles(backupDir, "*.zip").OrderByDescending(File.GetCreationTimeUtc).Skip(BackupsToKeep))
-            try { DeleteFile(old); } catch { }
-    }
-
-    // Where a backup zip keeps each part. Settings sat under Account/ at the root in older versions.
-    private const string ZipSettings = "WTF/Account";
-    private const string ZipAddOns = "AddOns";
-
-    /// <summary>The addons a backup holds, and whether it holds the WTF\Account settings.</summary>
-    public static (List<string> Addons, bool HasSettings) BackupContents(string zipPath)
-    {
-        using var zip = ZipFile.OpenRead(zipPath);
-        return BackupContents(zip);
-    }
-
-    private static (List<string> Addons, bool HasSettings) BackupContents(ZipArchive zip)
-    {
-        var addons = zip.Entries.Select(e => e.FullName.Split('/')).Where(p => p.Length > 2 && p[0] == ZipAddOns).Select(p => p[1])
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        return (addons, zip.Entries.Any(e => BackupSettingsPath(e.FullName) != null));
-    }
-
-    /// <summary>
-    /// Puts back what a backup holds: its WTF\Account replaces the game's, and each addon in it replaces the game's copy.
-    /// Addons installed after the backup was made are left alone, since the backup has nothing to say about them.
-    /// </summary>
-    public static void RestoreBackup(string zipPath, string gameDir, CancellationToken ct)
-    {
-        using var zip = ZipFile.OpenRead(zipPath);
-        var (addons, hasSettings) = BackupContents(zip);
-        // Cleared first, so files added since the backup don't linger among the restored ones
-        if (hasSettings && Directory.Exists(WtfAccountDir(gameDir)))
-            ForceDeleteDirectory(WtfAccountDir(gameDir));
-        foreach (var addon in addons.Select(a => Path.Combine(GameAddOnsDir(gameDir), a)).Where(Directory.Exists))
-            ForceDeleteDirectory(addon);
-
-        var root = Path.GetFullPath(gameDir) + Path.DirectorySeparatorChar;
-        foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0))
-        {
-            ct.ThrowIfCancellationRequested();
-            var relative = BackupSettingsPath(entry.FullName)
-                ?? (entry.FullName.StartsWith(ZipAddOns + "/") ? Path.Combine("Interface", entry.FullName) : null);
-            if (relative == null)
-                continue;
-            var target = Path.GetFullPath(Path.Combine(gameDir, relative));
-            // Never write outside the game folder, whatever the zip says
-            if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                continue;
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            entry.ExtractToFile(target, overwrite: true);
-        }
-    }
-
-    private static string? BackupSettingsPath(string entry) =>
-        entry.StartsWith(ZipSettings + "/") ? entry
-        : entry.StartsWith("Account/") ? Path.Combine("WTF", entry)
-        : null;
-
     /// <summary>Major client version from the game exe (1 = Vanilla, 3 = Wrath, ...), or 0 if it has none.</summary>
     public static int ClientMajorVersion(string exePath)
     {
@@ -309,33 +124,6 @@ public static class AddonFiles
         }
         Directory.Delete(path, true);
     }
-
-    /// <summary>
-    /// The WTF\Account entries in the chosen categories. Account-wide SavedVariables are addon settings; everything else
-    /// in an account (realm/character folders, macros, bindings) is character settings.
-    /// </summary>
-    private static IEnumerable<string> SettingsEntries(string accountRoot, SyncOptions options)
-    {
-        // Newer clients also keep a SavedVariables folder directly under Account, beside the account folders
-        var shared = Path.Combine(accountRoot, SavedVariables);
-        if (options.AddonSettings && Directory.Exists(shared))
-            yield return shared;
-
-        foreach (var account in AccountDirs(accountRoot))
-        {
-            foreach (var entry in Directory.GetFileSystemEntries(account))
-            {
-                if (IsSavedVariables(entry) ? options.AddonSettings : options.CharacterSettings)
-                    yield return entry;
-            }
-        }
-    }
-
-    private static List<string> AccountDirs(string accountRoot) =>
-        Directory.Exists(accountRoot) ? Directory.GetDirectories(accountRoot).Where(d => !IsSavedVariables(d)).ToList() : [];
-
-    private static bool IsSavedVariables(string path) =>
-        Path.GetFileName(path).Equals(SavedVariables, StringComparison.OrdinalIgnoreCase);
 
     private record TocInfo(string? Version, List<int> Interfaces);
 
@@ -468,14 +256,5 @@ public static class AddonFiles
             return;
         File.SetAttributes(path, FileAttributes.Normal);
         File.Delete(path);
-    }
-
-    private static void AddToZip(ZipArchive zip, string dir, string prefix, CancellationToken ct)
-    {
-        foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
-        {
-            ct.ThrowIfCancellationRequested();
-            zip.CreateEntryFromFile(file, $"{prefix}/{Path.GetRelativePath(dir, file).Replace('\\', '/')}", CompressionLevel.Fastest);
-        }
     }
 }
