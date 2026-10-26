@@ -58,6 +58,9 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      - name: Test
+        run: dotnet test Tests/iscLauncher.Tests.csproj -c Release
+
       # Unpackaged and self-contained come from the project file; these make it one compressed exe
       - name: Publish x64
         run: >

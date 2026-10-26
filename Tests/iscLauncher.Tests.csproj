@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- The app is a self-contained WinUI exe, which a test project can't reference cleanly, so the UI-free code under test is compiled in -->
+  <ItemGroup>
+    <Compile Include="..\Services\AddonFiles*.cs;..\Services\AddonSyncService.cs;..\Services\AppException.cs;..\Services\GameRepository.cs;..\Services\GitService.cs;..\Services\RealmlistService.cs;..\Models\GameEntry.cs;..\Models\GameLibrary.cs;..\Helpers\FormHelpers.cs" LinkBase="App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+</Project>

@@ -17,6 +17,8 @@
     <!-- Still needed although the app isn't packaged: the single-file release build uses it to embed resources.pri -->
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <!-- The test project lives inside this folder but builds on its own -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
