@@ -10,88 +10,49 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 
 ## What it does
 
-**Private servers**
-- Keeps a library of WoW installs, each with its own server address, account and realm.
-- Writes `realmlist.wtf` and `WTF\Config.wtf` before every launch, so you never edit them by hand.
-- Logs you in: your password is stored in Windows Credential Manager and typed into the login screen once the game is ready. If typing fails, it's copied to the clipboard instead and cleared again after 30 seconds.
+- **Private servers:** sets the realmlist and realm before every launch, and logs you in with a password kept in Windows Credential Manager.
+- **Official installs:** add any version (Classic Era, beta, ...) and open it in Battle.net, where you press Play.
+- **Sync between PCs:** push your addons and settings from one PC, pull them on another, through a private GitHub repo.
+- **Update addons** that are on GitHub, and see every addon you have installed.
+- **Copy addons** between games, or give your other characters the same addon setup as one character.
 
-**Official Blizzard installs**
-- Add any version under your `World of Warcraft` folder (Classic Era, beta, ...) by picking its exe.
-- **Open in Battle.net** takes you to the game in Blizzard's launcher, where you press Play. Battle.net handles login, so there's no password to store. (Battle.net offers no way for another app to press Play.)
-
-**Addons and settings**
-- **Sync between PCs** through a private GitHub repo: push from one PC, pull on another.
-- **Copy Addons** from one game in your library to another, optionally with their settings.
-- **Copy Character Setup** gives other characters, in any game, the same enabled addons and per-character addon data as one character.
-- **See every installed addon** and update the ones that are on GitHub, then push to send the update to your other PCs.
-- Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
+Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
 ## Install
 
-1. Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest).
-2. Extract it anywhere and run `iscLauncher.exe`. Nothing else needs installing.
+Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest), extract it anywhere and run `iscLauncher.exe`. It needs 64-bit Windows 10 1809 or later, and nothing else.
 
-Requires 64-bit Windows 10 version 1809 or later. If SmartScreen warns on first launch, choose **More info → Run anyway**. To find the app from the Start menu, use **Options → Add to Start Menu**.
-
-The app checks for a new version when it starts. When one is ready, a dot appears on the ⚙ Options button, where you can see what changed and install it. Downloads are checked against GitHub's checksum before anything is replaced.
+If SmartScreen warns on first launch, choose **More info → Run anyway**. **Options → Add to Start Menu** makes it easy to find again. When a new version is out, a dot appears on the ⚙ Options button, where you can install it.
 
 ## Getting started
 
-1. Click **+ Add Game**. Official versions on this PC are listed under **Found on this PC**, one click each; otherwise pick the game's `.exe`.
-   - **Private server:** fill in the realmlist address, account and realm, and set your password under **Automation**.
-   - **Official install:** pick the exe inside the version folder, for example `World of Warcraft\_classic_era_\WowClassic.exe`. The app recognises it and hides the settings that don't apply.
-2. Click **Save Changes**, then **Launch**.
+1. Click **+ Add Game**. Official versions on this PC are listed under **Found on this PC**; otherwise pick the game's `.exe`.
+2. For a private server, fill in the realmlist, account and realm, and set your password under **Automation**.
+3. Click **Save Changes**, then **Launch**.
 
 If the password gets typed before the login screen is ready, raise **Startup Delay** under **Automation**.
 
-To remove a game from the library, right-click its card (or select it and press Delete).
+## Syncing between PCs
 
-## Syncing addons between PCs
+Each game syncs with its own private repo on GitHub. Don't have a GitHub account? You can make a free one while you set up.
 
-Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
+1. Open the game's **Sync** tab and click **Set Up Sync**. The app walks you through signing in, making the repo and giving iscLauncher access to it.
+2. Click **Push** to upload this PC's addons and settings.
+3. On your other PC, add the same game, click **Set Up Sync**, pick the repo and click **Pull**.
 
-1. Open the game's **Sync** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
-   - New to GitHub? Create a free account from GitHub's sign-in page when the app sends you there. If that takes a while, the app swaps in a new code once the old one runs out.
-   - iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach. If you haven't given it one yet, or you click **Set Up a New Repo Instead**, the dialog walks you through making a private repo on GitHub and giving it to iscLauncher, then picks it once it shows up.
-2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
-3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
-4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
-
-You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played. A game with changes waiting shows **New from another PC** in the list.
-
-Before anything is applied you see each addon as new, changed or removed, and can untick what you don't want. You also choose whether to include addon settings (shared by every character) and character settings (layouts, macros, keybinds and per-character addon data). If the repo has a push this PC hasn't pulled yet, Push warns you before overwriting it.
-
-## Sharing addons between games
-
-**Copy Addons** copies addons from the open game into another game in your library, for example from Classic Era to a new beta install. Addons built for a different game version are flagged before you copy.
-
-**Copy Character Setup** takes one character as the template and gives the characters you pick, in any game, the same enabled addons (`AddOns.txt`) and per-character addon data. Keybinds, macros and UI layouts are already shared by the whole account, so they aren't part of this.
-
-WoW saves addon settings when you log out, which would undo changes made while it's running. If the game is open, the app asks before Pull, Rollback, Copy Addons or Copy Character Setup.
+After that you rarely need the buttons. The app offers to pull when you launch a game another PC has pushed to, and to push when the game closes. **Rollback** puts every PC back to an earlier push.
 
 ## Updating addons
 
-The **Addons** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it checks each connected project for a newer version, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, the app then offers to push, so your other PCs get the update when they pull.
+The **Addons** tab lists every addon and checks the ones on GitHub for updates. Tick the ones you want and click **Update Selected**, or **Update All**. Games with updates waiting show **Addon updates** in the list.
 
-When the app starts, it also checks quietly, and a game with updates waiting shows **Addon updates** in the list.
+Addons that name their GitHub project in their `.toc` are connected by themselves. For the others, click **Connect** and pick a match from GitHub, or paste a link.
 
-Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, click **Connect** on the addon: the app searches GitHub and lists what it finds, or you can paste a link. Searches turn up versions for every client, so pick the one for your game version; the app checks that it really has the addon before connecting it. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out. The ✕ on a project disconnects it for good, even if an addon's `.toc` names it.
+## Your data
 
-A project's newest release is used when it has one with a zip; otherwise its newest code is. It's only downloaded when it has changed, or when your copy of its addons has, for example after a pull.
+Everything lives in `%APPDATA%\IscLauncher` (**Options → Open Folder**): your library, backups (the last 3 per game, restored with **Sync → Restore a Backup**) and a log. Passwords and your GitHub sign-in are in Windows Credential Manager under `iscLauncher_...`.
 
-## Backups and data
-
-Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords:
-
-| What | Where |
-|------|-------|
-| Your game library | `games.json` |
-| Backups made before every pull, copy, rollback or update | `Backups` (the last 3 per game; put one back with **Sync → Restore a Backup**) |
-| Local copies of your sync repos | `SyncCache` |
-| A log of syncs, launches and errors, for when something goes wrong | `log.txt` (**Options → Open Log**) |
-| Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |
-
-**Options → Open Folder** takes you there.
+iscLauncher only talks to GitHub, and only to the repos you give it: it can't see your other projects, or change any repo's settings. Change its repos under **Options → Choose which repos it can use**. Game passwords never leave your PC.
 
 ## Troubleshooting
 
@@ -99,23 +60,12 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 |---------|-----|
 | Password typed too early, or not at all | Raise **Startup Delay** under **Automation** |
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
-| "Git wasn't found" | Download the latest release, which includes Git, or install [Git for Windows](https://git-scm.com/download/win) |
-| Push or pull fails | Check the repo URL, that you're signed in to GitHub under **Options**, and that the repo is one of those you've given iscLauncher (**Options → Choose which repos it can use**) |
-| "GitHub turned down this PC's sign-in" | Sign in again under **Options**. GitHub drops a sign-in when you revoke it, or when you've signed in on more than ten PCs since |
+| Push or pull fails | Check that you're signed in under **Options**, and that the repo is one you've given iscLauncher |
+| "GitHub turned down this PC's sign-in" | Sign in again under **Options** |
 
 ## Uninstall
 
-1. Delete the folder you extracted iscLauncher into, `%APPDATA%\IscLauncher`, and the Start menu shortcut if you added one.
-2. In **Credential Manager → Windows Credentials**, remove the entries starting with `iscLauncher_`.
-3. On GitHub, uninstall iscLauncher under **Settings → Applications → Installed GitHub Apps**.
-
-## Privacy
-
-iscLauncher only talks to GitHub: to check for new versions, to sign you in, to push and pull your sync repos, and to download addon updates. Game passwords never leave your PC.
-
-Signing in lets the app read and write the files of the repos you've given it, and nothing else: GitHub refuses it any other repo, and it can't change a repo's settings or delete one. You choose those repos on GitHub, and can change them any time under **Options → Choose which repos it can use**. To take the access back, sign out under **Options**, or uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
-
-Versions before the switch to these per-repo permissions asked GitHub for access to every repo. If you used one, the app asks you to sign in again; then revoke the old access under **Settings → Applications → Authorized OAuth Apps → iscLauncher**.
+Delete the app's folder, `%APPDATA%\IscLauncher` and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
 
 ## Building from source
 
@@ -125,7 +75,7 @@ Requires the .NET 10 SDK.
 dotnet build -c Debug -p:Platform=x64
 ```
 
-To release, run the **Release** workflow from the Actions tab. It publishes the next patch version; to bump the minor or major version instead, push a tag such as `v1.2.0`.
+To release, run the **Release** workflow from the Actions tab. It publishes the next patch version; to bump the minor or major version, push a tag such as `v1.2.0`.
 
 ## License
 
