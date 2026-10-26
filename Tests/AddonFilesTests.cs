@@ -78,6 +78,22 @@ public sealed class AddonFilesTests : IDisposable
     }
 
     [Fact]
+    public void ApplyingReplacesAReadOnlyAddonFolder()
+    {
+        var source = Path.Combine(_root, "source");
+        var target = Path.Combine(_root, "target");
+        Addon(source, "Foo", "2.0");
+        Addon(target, "Foo", "1.0");
+        var folder = Path.Combine(AddonFiles.GameAddOnsDir(target), "Foo");
+        File.SetAttributes(folder, File.GetAttributes(folder) | FileAttributes.ReadOnly);
+
+        var preview = AddonFiles.Compare(AddonFiles.GameAddOnsDir(source), AddonFiles.GameAddOnsDir(target), false, 0, default);
+        AddonFiles.ApplyAddons(AddonFiles.GameAddOnsDir(source), AddonFiles.GameAddOnsDir(target), preview.Diffs, default);
+
+        Assert.Contains("2.0", File.ReadAllText(Path.Combine(folder, "Foo.toc")));
+    }
+
+    [Fact]
     public void RestoringABackupPutsBackExactlyWhatItHolds()
     {
         var game = Path.Combine(_root, "game");

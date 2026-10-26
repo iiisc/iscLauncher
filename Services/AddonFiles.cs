@@ -116,11 +116,13 @@ public static partial class AddonFiles
 
     internal static void ForceDeleteDirectory(string path)
     {
-        // Directory.Delete refuses read-only files, which git creates for its objects
-        foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
+        // Directory.Delete refuses read-only files, which git creates for its objects, and read-only folders,
+        // which some addon downloads come with
+        var root = new DirectoryInfo(path);
+        foreach (var entry in root.EnumerateFileSystemInfos("*", SearchOption.AllDirectories).Append(root))
         {
-            if (file.Attributes.HasFlag(FileAttributes.ReadOnly))
-                file.Attributes = FileAttributes.Normal;
+            if (entry.Attributes.HasFlag(FileAttributes.ReadOnly))
+                entry.Attributes &= ~FileAttributes.ReadOnly;
         }
         Directory.Delete(path, true);
     }
