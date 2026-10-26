@@ -28,7 +28,6 @@ public sealed partial class GameDetailControl : UserControl
 
     private GameEntry? _game;
     private bool _isEditing;
-    private bool _isOfficial;
     private readonly Dictionary<Guid, int> _runningProcessIds = new();
     // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
     private readonly HashSet<Guid> _busyGames = new();
@@ -48,8 +47,12 @@ public sealed partial class GameDetailControl : UserControl
     {
         _game = game;
         _isEditing = false;
-        _isOfficial = BattleNetInstall.Find(game.ExecutablePath) != null;
         SetEditMode(false);
+
+        var official = BattleNetInstall.IsOfficial(game.ExecutablePath);
+        OfficialNote.Visibility = official ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
+        AutomationTab.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
 
         NameTextBox.Text = game.Name;
         ExecutableTextBox.Text = game.ExecutablePath;
@@ -170,10 +173,6 @@ public sealed partial class GameDetailControl : UserControl
         GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
         ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-
-        OfficialNote.Visibility = _isOfficial ? Visibility.Visible : Visibility.Collapsed;
-        ConnectionSection.Visibility = _isOfficial ? Visibility.Collapsed : Visibility.Visible;
-        AutomationTab.Visibility = _isOfficial ? Visibility.Collapsed : Visibility.Visible;
 
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
@@ -318,8 +317,8 @@ public sealed partial class GameDetailControl : UserControl
         if (sources.Count == 0)
         { ShowStatus("No characters found for this game yet. Log in once so the game creates its settings folders.", false); return; }
 
-        var games = new[] { game }.Concat(Games?.Where(g => g.Id != game.Id) ?? []);
-        var choice = await CharacterSetupDialog.ShowAsync(XamlRoot, sources, games.SelectMany(AddonSyncService.ListCharacters).ToList());
+        var targets = sources.Concat((Games ?? []).Where(g => g.Id != game.Id).SelectMany(AddonSyncService.ListCharacters)).ToList();
+        var choice = await CharacterSetupDialog.ShowAsync(XamlRoot, sources, targets);
         if (choice == null) return;
         await RunSyncAsync("Copying character setup...", async (_, ct) =>
             await AddonSyncService.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));

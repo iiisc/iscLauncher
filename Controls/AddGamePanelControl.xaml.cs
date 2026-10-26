@@ -53,7 +53,7 @@ public sealed partial class AddGamePanelControl : UserControl
 
         // SendKeys is the suggestion for every detected app type
         InputMethodComboBox.SelectedIndex = 0;
-        SetOfficial(BattleNetInstall.Find(file.Path) != null);
+        SetOfficial(BattleNetInstall.IsOfficial(file.Path));
         FormInfoBar.Severity = InfoBarSeverity.Informational;
         FormInfoBar.Message = _isOfficial
             ? "Official Blizzard install: it starts through Battle.net, which handles login, so no password, realm or account is needed."

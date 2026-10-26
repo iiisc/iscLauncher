@@ -42,12 +42,13 @@ public static class AddonFiles
         if (!Directory.Exists(addOnsDir))
             return [];
 
-        return Directory.GetDirectories(addOnsDir)
-            .Select(d => Path.GetFileName(d))
-            .Where(n => !n.StartsWith("Blizzard_", StringComparison.OrdinalIgnoreCase))
+        return NonBlizzard(Directory.GetDirectories(addOnsDir).Select(d => Path.GetFileName(d)));
+    }
+
+    private static List<string> NonBlizzard(IEnumerable<string> names) =>
+        names.Where(n => !n.StartsWith("Blizzard_", StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
-    }
 
     /// <summary>
     /// What would change if the addons in <paramref name="sourceDir"/> were applied to <paramref name="targetDir"/>.
@@ -182,11 +183,7 @@ public static class AddonFiles
         if (!Directory.Exists(dir))
             return [];
 
-        return Directory.GetFiles(dir, "*.lua")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .Where(n => !n.StartsWith("Blizzard_", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        return NonBlizzard(Directory.GetFiles(dir, "*.lua").Select(f => Path.GetFileNameWithoutExtension(f)));
     }
 
     /// <summary>Gives a character another's enabled-addon list (AddOns.txt) and/or its per-character data for the named addons.</summary>

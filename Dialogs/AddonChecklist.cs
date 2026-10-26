@@ -92,14 +92,4 @@ public sealed class AddonChecklist
             content.Children.Add(WarningText($"⚠ {addon.Warning}"));
         return content;
     }
-
-    private static TextBlock Dim(string text) => new()
-    {
-        Text = text,
-        FontFamily = Res<FontFamily>("BodyFont"),
-        FontSize = 11,
-        Foreground = Res<Brush>("TextDimBrush"),
-        TextWrapping = TextWrapping.Wrap,
-        VerticalAlignment = VerticalAlignment.Center
-    };
 }

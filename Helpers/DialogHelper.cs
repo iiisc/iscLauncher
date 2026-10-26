@@ -40,6 +40,16 @@ public static class DialogHelper
         TextWrapping = TextWrapping.Wrap
     };
 
+    public static TextBlock Dim(string text) => new()
+    {
+        Text = text,
+        FontFamily = Res<FontFamily>("BodyFont"),
+        FontSize = 11,
+        Foreground = Res<Brush>("TextDimBrush"),
+        TextWrapping = TextWrapping.Wrap,
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
     public static TextBlock WarningText(string text) => new()
     {
         Text = text,

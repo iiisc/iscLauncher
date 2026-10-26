@@ -13,7 +13,18 @@ public record BattleNetInstall(string LauncherPath, string? ProductCode)
 {
     private static readonly Regex ProductOrFolder = new(@"wow[a-z_]*|_[a-z_]+_");
 
+    public static bool IsOfficial(string exePath) => LauncherFor(exePath) != null;
+
     public static BattleNetInstall? Find(string exePath)
+    {
+        if (LauncherFor(exePath) is not { } launcher)
+            return null;
+
+        var versionFolder = Path.GetFileName(Path.GetDirectoryName(exePath)!);
+        return new BattleNetInstall(launcher, ReadProductCode(Path.Combine(Path.GetDirectoryName(launcher)!, ".product.db"), versionFolder));
+    }
+
+    private static string? LauncherFor(string exePath)
     {
         var versionDir = Path.GetDirectoryName(exePath);
         var root = string.IsNullOrEmpty(versionDir) ? null : Path.GetDirectoryName(versionDir);
@@ -21,10 +32,7 @@ public record BattleNetInstall(string LauncherPath, string? ProductCode)
             return null;
 
         var launcher = Path.Combine(root, "World of Warcraft Launcher.exe");
-        if (!File.Exists(launcher))
-            return null;
-
-        return new BattleNetInstall(launcher, ReadProductCode(Path.Combine(root, ".product.db"), Path.GetFileName(versionDir!)));
+        return File.Exists(launcher) ? launcher : null;
     }
 
     /// <summary>Opens Battle.net on this game version and starts it, the same way Blizzard's Start Menu shortcuts do.</summary>

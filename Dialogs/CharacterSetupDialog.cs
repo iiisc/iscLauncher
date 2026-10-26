@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
@@ -23,18 +22,12 @@ public static class CharacterSetupDialog
             SelectedIndex = 0,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        var dataSummary = new TextBlock
-        {
-            FontFamily = Res<FontFamily>("BodyFont"),
-            FontSize = 11,
-            Foreground = Res<Brush>("TextDimBrush"),
-            TextWrapping = TextWrapping.Wrap
-        };
+        var dataSummary = Dim("");
         var enabledBox = Option("Which addons are switched on (AddOns.txt)", true);
         var dataBox = Option("Per-character addon data", true);
 
         var targetRows = new List<(CheckBox Box, CharacterFolder Character)>();
-        var targetPanel = new StackPanel { Spacing = 0 };
+        var targetPanel = new StackPanel();
         foreach (var game in targets.GroupBy(t => t.Game))
         {
             targetPanel.Children.Add(SectionLabel(game.Key.Name.ToUpperInvariant(), "TextMutedBrush"));
@@ -66,7 +59,9 @@ public static class CharacterSetupDialog
 
         CharacterFolder Source() => sources[sourceBox.SelectedIndex];
 
-        void Refresh()
+        void UpdateCopyButton() => dialog.IsPrimaryButtonEnabled = targetRows.Any(r => r.Box.IsChecked == true);
+
+        void SourceChanged()
         {
             var source = Source();
             var data = AddonFiles.CharacterAddonData(source.Dir);
@@ -81,13 +76,13 @@ public static class CharacterSetupDialog
                 if (isSource)
                     box.IsChecked = false;
             }
-            dialog.IsPrimaryButtonEnabled = targetRows.Any(r => r.Box.IsChecked == true);
+            UpdateCopyButton();
         }
 
-        sourceBox.SelectionChanged += (_, _) => Refresh();
+        sourceBox.SelectionChanged += (_, _) => SourceChanged();
         foreach (var (box, _) in targetRows)
-            box.Click += (_, _) => Refresh();
-        Refresh();
+            box.Click += (_, _) => UpdateCopyButton();
+        SourceChanged();
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             return null;
