@@ -111,9 +111,11 @@ public class AppUpdateService
         if (Directory.Exists(extractDir))
             Directory.Delete(extractDir, true);
         await Task.Run(() => ZipFile.ExtractToDirectory(destPath, extractDir), ct).ConfigureAwait(false);
-        var newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories)
+        // The app is the only exe at the top; the bundled Git's are in subfolders
+        var newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.TopDirectoryOnly)
             .FirstOrDefault()
             ?? throw new FileNotFoundException("No executable found in the update package.");
+        var appDir = Path.GetDirectoryName(currentExe)!;
 
         // The script runs after this process exits, so it must report its own failure: otherwise the user is left
         // on the old version (or with no app running) and never finds out why
@@ -122,7 +124,13 @@ public class AppUpdateService
             Wait-Process -Id {{Environment.ProcessId}} -Timeout 30 -ErrorAction SilentlyContinue
             $copied = $false
             for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
-                try { Copy-Item -LiteralPath {{PsQuote(newExePath)}} -Destination {{PsQuote(currentExe)}} -Force -ErrorAction Stop; $copied = $true }
+                try {
+                    # Everything else in the release (the bundled Git) goes next to the app; robocopy merges folders
+                    robocopy {{PsQuote(extractDir)}} {{PsQuote(appDir)}} /E /XF {{PsQuote(Path.GetFileName(newExePath))}} /NJH /NJS /NFL /NDL /NP | Out-Null
+                    if ($LASTEXITCODE -ge 8) { throw "robocopy failed" }
+                    Copy-Item -LiteralPath {{PsQuote(newExePath)}} -Destination {{PsQuote(currentExe)}} -Force -ErrorAction Stop
+                    $copied = $true
+                }
                 catch { Start-Sleep -Milliseconds 500 }
             }
             if (-not $copied) {

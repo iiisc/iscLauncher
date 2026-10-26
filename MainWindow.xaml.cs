@@ -17,7 +17,8 @@ public sealed partial class MainWindow : Window
     private readonly GameRepository _gameRepository = new();
     private readonly CredentialService _credentialService = new();
     private readonly GameLauncherService _gameLauncherService;
-    private readonly AddonSyncService _addonSyncService = new(new GitService());
+    private readonly GitHubService _gitHub;
+    private readonly AddonSyncService _addonSyncService;
     private readonly AppUpdateService _updateService = new();
     private readonly ObservableCollection<GameEntry> _games = new();
     private UpdateCheckResult? _startupUpdate;
@@ -26,6 +27,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         _gameLauncherService = new GameLauncherService(_credentialService);
+        _gitHub = new GitHubService(_credentialService);
+        _addonSyncService = new AddonSyncService(new GitService(() => _gitHub.Token));
         VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
 
         var hwnd = WindowNative.GetWindowHandle(this);
@@ -36,10 +39,12 @@ public sealed partial class MainWindow : Window
         GameDetail.CredentialService = _credentialService;
         GameDetail.GameLauncherService = _gameLauncherService;
         GameDetail.AddonSyncService = _addonSyncService;
+        GameDetail.GitHub = _gitHub;
         GameDetail.OwnerHwnd = hwnd;
         GameDetail.Games = _games;
 
         OptionsPanel.AppUpdateService = _updateService;
+        OptionsPanel.GitHub = _gitHub;
 
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;

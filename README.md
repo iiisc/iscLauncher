@@ -45,11 +45,11 @@ If the password gets typed before the login screen is ready, raise **Startup Del
 
 ## Syncing addons between PCs
 
-You need [Git for Windows](https://git-scm.com/download/win) and a **private** GitHub repo for each game. Git asks you to sign in to GitHub the first time.
+Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
 
-1. Open the game, paste the repo URL under **Addons**, and click **Save Changes**.
+1. Open the game's **Addons** tab and click **Create Repo**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
-3. On another PC, add the same game with the same repo and **Pull**.
+3. On another PC, add the same game, click **Create Repo** with the same repo name, and **Pull**. The app finds the existing repo instead of making a new one.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
 
 You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played.
@@ -73,7 +73,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | Your game library | `games.json` |
 | Backups made before every pull, copy or rollback | `Backups` (the last 3 per game) |
 | Local copies of your sync repos | `SyncCache` |
-| Passwords | Windows Credential Manager, entries named `iscLauncher_...` |
+| Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |
 
 **Options → Open** takes you to the folder.
 
@@ -83,8 +83,8 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 |---------|-----|
 | Password typed too early, or not at all | Raise **Startup Delay** under **Automation** |
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
-| "Git is required for addon sync" | Install [Git for Windows](https://git-scm.com/download/win) |
-| Push or pull fails | Check the repo URL, that you have access to it, and that Git is signed in to GitHub |
+| "Git wasn't found" | Download the latest release, which includes Git, or install [Git for Windows](https://git-scm.com/download/win) |
+| Push or pull fails | Check the repo URL, and that you're signed in to GitHub under **Options** |
 
 ## Uninstall
 
@@ -93,7 +93,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 
 ## Privacy
 
-iscLauncher talks to two places only: the GitHub API, to check for new versions, and the sync repos you enter. Passwords never leave your PC.
+iscLauncher only talks to GitHub: to check for new versions, to sign you in and create sync repos, and to push and pull your sync repos. Game passwords never leave your PC. Signing in gives the app access to your repositories, which GitHub only offers as one permission; it only uses the repos you sync with. You can sign out under **Options**, or revoke access any time on GitHub under **Settings → Applications**.
 
 ## Building from source
 

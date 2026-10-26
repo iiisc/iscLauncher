@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
+using iscLauncher.Dialogs;
 using iscLauncher.Helpers;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
@@ -15,6 +17,7 @@ public sealed partial class OptionsPanelControl : UserControl
     public event EventHandler? CloseRequested;
 
     public AppUpdateService? AppUpdateService { get; set; }
+    public GitHubService? GitHub { get; set; }
 
     private UpdateCheckResult? _pendingUpdate;
     private CancellationTokenSource? _updateCts;
@@ -36,6 +39,37 @@ public sealed partial class OptionsPanelControl : UserControl
         CheckUpdatesText.Text = "Check for Updates";
         _pendingUpdate = null;
         _updateCts?.Cancel();
+        _ = ShowGitHubAccountAsync();
+    }
+
+    private async Task ShowGitHubAccountAsync()
+    {
+        var signedIn = GitHub!.Token != null;
+        GitHubAccountText.Text = signedIn ? "Signed in to GitHub" : "Not signed in";
+        GitHubButtonText.Text = signedIn ? "Sign Out" : "Sign In";
+        if (signedIn && await GitHub.GetLoginAsync() is { } login)
+            GitHubAccountText.Text = $"Signed in to GitHub as {login}";
+    }
+
+    private async void OnGitHubClick(object sender, RoutedEventArgs e)
+    {
+        if (GitHub!.Token != null)
+        {
+            GitHub.SignOut();
+            ShowStatus("Signed out of GitHub.", true);
+        }
+        else
+        {
+            GitHubButton.IsEnabled = false;
+            try
+            {
+                if (await GitHubSignInDialog.ShowAsync(XamlRoot, GitHub) is { } login)
+                    ShowStatus($"Signed in to GitHub as {login}.", true);
+            }
+            catch (Exception ex) { ShowStatus($"GitHub sign-in failed: {ex.Message}", false); }
+            finally { GitHubButton.IsEnabled = true; }
+        }
+        await ShowGitHubAccountAsync();
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

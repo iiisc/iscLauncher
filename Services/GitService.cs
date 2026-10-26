@@ -22,17 +22,30 @@ public class GitService
 {
     private static readonly string SyncCacheRoot = Path.Combine(GameRepository.AppDataFolder, "SyncCache");
 
-    // Only a positive result is cached, so installing git mid-session is picked up on the next check
-    private static bool _gitFound;
+    // Releases ship a portable Git next to the app, so nothing has to be installed. An installed Git goes first: its
+    // credential manager can still sign in to repos that the app's GitHub login doesn't cover.
+    private static readonly string BundledGit = Path.Combine(AppContext.BaseDirectory, "git", "cmd", "git.exe");
+
+    private readonly Func<string?> _gitHubToken;
+
+    // Only a successful lookup is kept, so installing Git mid-session is picked up on the next check
+    private string? _git;
+
+    public GitService(Func<string?> gitHubToken) => _gitHubToken = gitHubToken;
 
     public string GetLocalCachePath(GameEntry game) =>
         Path.Combine(SyncCacheRoot, game.Id.ToString());
 
     public async Task<bool> IsGitInstalledAsync(CancellationToken ct = default)
     {
-        if (!_gitFound)
-            _gitFound = (await RunGitAsync(["--version"], ct)).Success;
-        return _gitFound;
+        foreach (var candidate in new[] { "git", BundledGit })
+        {
+            if (_git != null)
+                break;
+            if ((await RunGitAsync(["--version"], ct, git: candidate)).Success)
+                _git = candidate;
+        }
+        return _git != null;
     }
 
     /// <summary>
@@ -137,7 +150,7 @@ public class GitService
         return entries;
     }
 
-    private static async Task<bool> IsMirrorOfAsync(string repoDir, string repoUrl, CancellationToken ct)
+    private async Task<bool> IsMirrorOfAsync(string repoDir, string repoUrl, CancellationToken ct)
     {
         if (!Directory.Exists(Path.Combine(repoDir, ".git")))
             return false;
@@ -150,7 +163,7 @@ public class GitService
             && autocrlf.Output.Trim() == "false";
     }
 
-    private static async Task<GitResult> RunStepsAsync(string repoDir, CancellationToken ct, params string[][] steps)
+    private async Task<GitResult> RunStepsAsync(string repoDir, CancellationToken ct, params string[][] steps)
     {
         foreach (var step in steps)
         {
@@ -161,11 +174,12 @@ public class GitService
         return new GitResult(true, "");
     }
 
-    private static async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null)
+    private async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null, string? git = null)
     {
+        git ??= _git ?? "git";
         var psi = new ProcessStartInfo
         {
-            FileName = "git",
+            FileName = git,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -176,6 +190,18 @@ public class GitService
         // ArgumentList quotes each value, so paths and URLs with spaces or quotes stay intact
         foreach (var arg in arguments)
             psi.ArgumentList.Add(arg);
+
+        // Signed in through the app: git gets the token through its environment, where it's neither saved in the repo's
+        // config nor visible in the process list
+        if (_gitHubToken() is { } token)
+        {
+            psi.Environment["GIT_CONFIG_COUNT"] = "1";
+            psi.Environment["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraheader";
+            psi.Environment["GIT_CONFIG_VALUE_0"] = "AUTHORIZATION: basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"x-access-token:{token}"));
+        }
+        // The portable Git has no credential manager, so without a token it would wait on a login prompt nobody can see
+        if (git == BundledGit)
+            psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
 
         using var process = new Process { StartInfo = psi };
         try

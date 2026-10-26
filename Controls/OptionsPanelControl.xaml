@@ -56,6 +56,26 @@
                 </StackPanel>
 
                 <StackPanel Spacing="12">
+                    <TextBlock Text="GITHUB" Style="{StaticResource SectionHeaderStyle}"/>
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock x:Name="GitHubAccountText" Text="Not signed in" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBlock Text="Lets the app sync addons between your PCs and create the sync repos for you."
+                                           Style="{StaticResource HintTextStyle}"/>
+                            </StackPanel>
+                            <Button x:Name="GitHubButton" Grid.Column="1" Click="OnGitHubClick" Style="{StaticResource SecondaryButtonStyle}">
+                                <TextBlock x:Name="GitHubButtonText" Text="Sign In"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Spacing="12">
                     <TextBlock Text="DATA" Style="{StaticResource SectionHeaderStyle}"/>
                     <Border Style="{StaticResource CardStyle}">
                         <Grid ColumnSpacing="12">

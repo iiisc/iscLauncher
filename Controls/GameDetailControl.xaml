@@ -161,7 +161,20 @@
                             <TextBlock Text="SYNC BETWEEN PCS" Style="{StaticResource SectionHeaderStyle}"/>
                             <StackPanel Spacing="4">
                                 <TextBlock Text="GitHub Repo URL" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBox x:Name="SyncRepoUrlTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., https://github.com/user/wow-sync.git"/>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SyncRepoUrlTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., https://github.com/user/wow-sync.git"/>
+                                    <Button x:Name="CreateRepoButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Click="OnCreateRepoClick"
+                                            ToolTipService.ToolTip="Create a private repo on your GitHub account for this game">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                                            <TextBlock Text="Create Repo"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                             </StackPanel>
 
                             <TextBlock x:Name="LastSyncedText" Style="{StaticResource HintTextStyle}" Visibility="Collapsed"/>
@@ -193,7 +206,7 @@
                                 </Button>
                             </StackPanel>
                             <TextBlock x:Name="NoRepoHint"
-                                       Text="Add a GitHub repo URL above and save to sync addons between PCs. Git must be installed."
+                                       Text="Click Create Repo to sync this game's addons and settings between your PCs, or paste the URL of a repo you already have and save."
                                        Style="{StaticResource HintTextStyle}"
                                        Visibility="Collapsed"/>
 

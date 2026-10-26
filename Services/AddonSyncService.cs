@@ -44,7 +44,7 @@ public class AddonSyncService
     {
         progress?.Report("Checking prerequisites...");
         if (!await _git.IsGitInstalledAsync(ct))
-            throw new SyncException("Git is required for addon sync. Install from git-scm.com.");
+            throw new SyncException("Git wasn't found. The release download includes it; otherwise install Git from git-scm.com.");
         if (string.IsNullOrWhiteSpace(game.SyncRepoUrl))
             throw new SyncException("No sync repo URL configured.");
         if (!File.Exists(game.ExecutablePath))
@@ -54,7 +54,7 @@ public class AddonSyncService
         var cachePath = _git.GetLocalCachePath(game);
         var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), SyncBranch, cachePath, progress, ct);
         if (!mirror.Success)
-            throw new SyncException($"Couldn't fetch from the repo: {mirror.Output.Trim()}");
+            throw new SyncException($"Couldn't fetch from the repo. Check the URL, and for a private repo that you're signed in to GitHub under Options. {mirror.Output.Trim()}");
 
         return new SyncSession(game, cachePath, await _git.GetHeadAsync(cachePath, ct));
     }

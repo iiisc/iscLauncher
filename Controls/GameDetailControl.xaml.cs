@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -24,6 +25,7 @@ public sealed partial class GameDetailControl : UserControl
     public CredentialService? CredentialService { get; set; }
     public GameLauncherService? GameLauncherService { get; set; }
     public AddonSyncService? AddonSyncService { get; set; }
+    public GitHubService? GitHub { get; set; }
     public IntPtr OwnerHwnd { get; set; }
     public IReadOnlyCollection<GameEntry>? Games { get; set; }
 
@@ -113,6 +115,8 @@ public sealed partial class GameDetailControl : UserControl
         LaunchButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
 
+        CreateRepoButton.Visibility = string.IsNullOrWhiteSpace(SyncRepoUrlTextBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         SyncButtonsPanel.Visibility = !editing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
@@ -125,14 +129,16 @@ public sealed partial class GameDetailControl : UserControl
         else if (_game != null) LoadGame(_game);
     }
 
-    private async void OnSaveClick(object sender, RoutedEventArgs e)
+    private async void OnSaveClick(object sender, RoutedEventArgs e) => await SaveAsync();
+
+    private async Task<bool> SaveAsync()
     {
-        if (_game == null) return;
+        if (_game == null) return false;
 
         if (string.IsNullOrWhiteSpace(NameTextBox.Text))
-        { ShowStatus("Game name is required.", false); return; }
+        { ShowStatus("Game name is required.", false); return false; }
         if (string.IsNullOrWhiteSpace(ExecutableTextBox.Text))
-        { ShowStatus("Executable path is required.", false); return; }
+        { ShowStatus("Executable path is required.", false); return false; }
 
         var game = _game;
         var oldPath = game.ExecutablePath;
@@ -158,6 +164,44 @@ public sealed partial class GameDetailControl : UserControl
         game.NotifyChanged();
 
         GameSaved?.Invoke(this, game);
+        return true;
+    }
+
+    /// <summary>Creates a private GitHub repo for this game, signing in first if needed, and saves the game with it.</summary>
+    private async void OnCreateRepoClick(object sender, RoutedEventArgs e)
+    {
+        if (_game == null) return;
+        CreateRepoButton.IsEnabled = false;
+        try
+        {
+            if (GitHub!.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, GitHub) == null)
+                return;
+
+            var nameBox = new TextBox { Text = SuggestedRepoName(NameTextBox.Text), Style = DialogHelper.Res<Style>("InputStyle") };
+            var panel = new StackPanel { Spacing = 10 };
+            panel.Children.Add(DialogHelper.BodyText("A private repo on your GitHub account will hold this game's addons and settings. " +
+                "Use the same name on your other PCs to sync with it."));
+            panel.Children.Add(nameBox);
+            var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Create Sync Repo");
+            dialog.Content = panel;
+            dialog.PrimaryButtonText = "Create";
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(nameBox.Text))
+                return;
+
+            ShowStatus("Creating the repo on GitHub...", true);
+            SyncRepoUrlTextBox.Text = await GitHub.CreateRepoAsync(nameBox.Text.Trim(), CancellationToken.None);
+            if (await SaveAsync())
+                ShowStatus("Sync is set up. Push to upload this PC's addons and settings.", true);
+        }
+        catch (Exception ex) { ShowStatus($"Couldn't create the repo: {ex.Message}", false); }
+        finally { CreateRepoButton.IsEnabled = true; }
+    }
+
+    // GitHub repo names allow letters, digits, '-', '_' and '.'; the game name is folded into that
+    private static string SuggestedRepoName(string gameName)
+    {
+        var slug = Regex.Replace(gameName.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return slug.Length == 0 ? "wow-sync" : $"wow-sync-{slug}";
     }
 
     private async void OnBrowseExecutableClick(object sender, RoutedEventArgs e)
