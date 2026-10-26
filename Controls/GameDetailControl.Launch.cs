@@ -57,12 +57,19 @@ public sealed partial class GameDetailControl
         }
     }
 
-    private async Task<bool> RunLauncherAsync(string startMessage, Func<Task<LaunchResult>> action)
+    private async Task<bool> RunLauncherAsync(string startMessage, Func<Task<string>> action)
     {
         ShowInfo(startMessage);
-        var result = await action();
-        ShowStatus(result.Message, result.Success);
-        return result.Success;
+        try
+        {
+            ShowStatus(await action(), true);
+            return true;
+        }
+        catch (AppException ex)
+        {
+            ShowStatus(ex.Message, false);
+            return false;
+        }
     }
 
     /// <summary>

@@ -32,97 +32,81 @@ public class GameLauncherService
             try { Clipboard.Clear(); } catch { }
     }
 
-    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game)
+    /// <summary>Types the password into a running game. Returns what happened; throws <see cref="AppException"/> if it couldn't start.</summary>
+    public async Task<string> SendPasswordToRunningGameAsync(GameEntry game)
     {
         if (FindRunningProcessId(game) is not int processId)
-            return new LaunchResult(false, $"{game.Name} isn't running.");
+            throw new AppException($"{game.Name} isn't running.");
 
-        var password = _credentialService.GetCredential(game.CredentialTarget);
-        if (string.IsNullOrEmpty(password))
-            return new LaunchResult(false, "Password not found in Credential Manager");
-
-        var result = await _automationService.AutomatePasswordEntryAsync(processId, password);
-        if (result.Success)
-            return new LaunchResult(true, "Password sent to running game.");
-
-        CopyPasswordToClipboard(password);
-        return new LaunchResult(true,
-            $"Auto-entry failed ({result.Message}). Password copied to clipboard - press Ctrl+V to paste.");
+        var password = PasswordFor(game);
+        return await TypeOrCopyPasswordAsync(processId, password, "Password sent to running game.", "");
     }
 
-    public async Task<LaunchResult> LaunchGameAsync(GameEntry game)
+    /// <summary>Starts the game and logs in. Returns what happened; throws <see cref="AppException"/> if it couldn't launch.</summary>
+    public async Task<string> LaunchGameAsync(GameEntry game)
     {
         if (!File.Exists(game.ExecutablePath))
-        {
-            return new LaunchResult(false, "Executable not found: " + game.ExecutablePath);
-        }
+            throw new AppException("Executable not found: " + game.ExecutablePath);
 
         if (BattleNetInstall.Find(game.ExecutablePath) is { } official)
         {
             try
             {
                 official.Launch();
-                return new LaunchResult(true, $"Starting {game.Name} through Battle.net...");
+                return $"Starting {game.Name} through Battle.net...";
             }
             catch (Exception ex)
             {
-                return new LaunchResult(false, $"Couldn't start Battle.net: {ex.Message}");
+                throw new AppException($"Couldn't start Battle.net: {ex.Message}");
             }
         }
 
         if (IsRunning(game))
-            return new LaunchResult(false, $"{game.Name} is already running. Use Send Password to log in.");
+            throw new AppException($"{game.Name} is already running. Use Send Password to log in.");
 
-        var realmlistResult = await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
-        if (!realmlistResult.Success)
-        {
-            return new LaunchResult(false, realmlistResult.Message);
-        }
+        await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
+        await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
+        var password = PasswordFor(game);
 
-        var configResult = await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
-        if (!configResult.Success)
-        {
-            return new LaunchResult(false, configResult.Message);
-        }
-
-        var password = _credentialService.GetCredential(game.CredentialTarget);
-        if (string.IsNullOrEmpty(password))
-        {
-            return new LaunchResult(false, "Password not found in Credential Manager");
-        }
-
+        Process process;
         try
         {
-            var startInfo = new ProcessStartInfo
+            process = Process.Start(new ProcessStartInfo
             {
                 FileName = game.ExecutablePath,
                 UseShellExecute = true,
                 WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath)
-            };
-
-            var process = Process.Start(startInfo);
-            if (process == null)
-            {
-                return new LaunchResult(false, "Failed to start process");
-            }
-
-            // Some games show their window well before the login screen accepts input
-            if (game.StartupDelaySeconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
-
-            var automationResult = await _automationService.AutomatePasswordEntryAsync(process.Id, password);
-            if (automationResult.Success)
-            {
-                return new LaunchResult(true, "Game launched and password entered automatically.");
-            }
-
-            CopyPasswordToClipboard(password);
-            return new LaunchResult(true,
-                $"Game launched. Auto-entry failed ({automationResult.Message}). Password copied to clipboard - press Ctrl+V to paste.");
+            }) ?? throw new AppException("Failed to start process");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not AppException)
         {
-            return new LaunchResult(false, $"Failed to launch game: {ex.Message}");
+            throw new AppException($"Failed to launch game: {ex.Message}");
+        }
+
+        // Some games show their window well before the login screen accepts input
+        if (game.StartupDelaySeconds > 0)
+            await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
+
+        return await TypeOrCopyPasswordAsync(process.Id, password, "Game launched and password entered automatically.", "Game launched. ");
+    }
+
+    private string PasswordFor(GameEntry game) =>
+        _credentialService.GetCredential(game.CredentialTarget) is { Length: > 0 } password
+            ? password
+            : throw new AppException("Password not found in Credential Manager");
+
+    // Typing can fail for reasons outside the app's control; the clipboard is the fallback, so that still counts as success
+    private async Task<string> TypeOrCopyPasswordAsync(int processId, string password, string typedMessage, string prefix)
+    {
+        try
+        {
+            await _automationService.AutomatePasswordEntryAsync(processId, password);
+            return typedMessage;
+        }
+        catch (AppException ex)
+        {
+            CopyPasswordToClipboard(password);
+            return $"{prefix}Auto-entry failed ({ex.Message}). Password copied to clipboard - press Ctrl+V to paste.";
         }
     }
 
@@ -231,5 +215,3 @@ public class GameLauncherService
         catch { }
     }
 }
-
-public record LaunchResult(bool Success, string Message);

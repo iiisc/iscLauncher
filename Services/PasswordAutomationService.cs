@@ -16,7 +16,8 @@ public class PasswordAutomationService
     private static readonly TimeSpan StabilizationDelay = TimeSpan.FromMilliseconds(1500);
     private const uint ResponsivenessProbeTimeoutMs = 1000;
 
-    public async Task<AutomationResult> AutomatePasswordEntryAsync(
+    /// <summary>Types the password into the game's login screen and presses Enter. Throws <see cref="AppException"/> saying why it couldn't.</summary>
+    public async Task AutomatePasswordEntryAsync(
         int processId,
         string password,
         CancellationToken cancellationToken = default)
@@ -27,62 +28,46 @@ public class PasswordAutomationService
             () => WaitForGameWindowAsync(processId, cancellationToken), cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
-        {
-            return new AutomationResult(false, $"No game window appeared within {WindowTimeout.TotalSeconds:0} seconds.");
-        }
+            throw new AppException($"No game window appeared within {WindowTimeout.TotalSeconds:0} seconds.");
 
-        return await TypePasswordAndSubmitAsync(windowHandle, password);
+        await TypePasswordAndSubmitAsync(windowHandle, password);
     }
 
-    private static async Task<AutomationResult> TypePasswordAndSubmitAsync(IntPtr windowHandle, string password)
+    private static async Task TypePasswordAndSubmitAsync(IntPtr windowHandle, string password)
     {
         try
         {
             // Run the entire focus + type sequence on a single thread to maintain
             // OS thread affinity required by AttachThreadInput and SendInput.
-            return await Task.Run(() =>
+            await Task.Run(() =>
             {
                 if (!ForceForegroundWindow(windowHandle))
-                {
-                    return new AutomationResult(false, "Could not bring game window to foreground.");
-                }
+                    throw new AppException("Could not bring game window to foreground.");
 
                 // Re-verify focus immediately before typing to prevent password
                 // from leaking to a different window that stole focus.
                 if (GetForegroundWindow() != windowHandle)
-                {
-                    return new AutomationResult(false, "Window lost focus before typing could begin.");
-                }
+                    throw new AppException("Window lost focus before typing could begin.");
 
                 // Windows can keep a keyboard layout per app, so map characters with the game's, not this app's
                 var layout = GetKeyboardLayout(GetWindowThreadProcessId(windowHandle, out _));
 
                 if (!SendKeystrokesForString(password, layout))
-                {
-                    return new AutomationResult(false,
-                        "SendInput failed to insert all key events. "
-                        + "The target window may be running elevated.");
-                }
+                    throw new AppException("SendInput failed to insert all key events. The target window may be running elevated.");
 
                 Thread.Sleep(30);
 
                 // Verify focus is still on the target before pressing Enter
                 if (GetForegroundWindow() != windowHandle)
-                {
-                    return new AutomationResult(false, "Window lost focus after typing password.");
-                }
+                    throw new AppException("Window lost focus after typing password.");
 
                 if (SendVirtualKey(VK_RETURN, layout) != 2)
-                {
-                    return new AutomationResult(false, "Failed to send Enter key.");
-                }
-
-                return new AutomationResult(true, "Password typed and Enter pressed.");
+                    throw new AppException("Failed to send Enter key.");
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not AppException)
         {
-            return new AutomationResult(false, $"SendKeys failed: {ex.Message}");
+            throw new AppException($"SendKeys failed: {ex.Message}");
         }
     }
 
@@ -530,5 +515,3 @@ public class PasswordAutomationService
 
     #endregion
 }
-
-public record AutomationResult(bool Success, string Message);

@@ -8,6 +8,7 @@ namespace iscLauncher.Services;
 /// <summary>
 /// Service to manage realmlist.wtf and config.txt files for WoW-style games.
 /// Updates configuration files to point to the correct server and account before launching.
+/// Failures throw <see cref="AppException"/>.
 /// </summary>
 public class RealmlistService
 {
@@ -16,22 +17,14 @@ public class RealmlistService
     /// Scans all locale subdirectories under {executableDirectory}\Data\ for existing files.
     /// Falls back to creating Data\enUS\realmlist.wtf if none are found.
     /// </summary>
-    public async Task<RealmlistResult> UpdateRealmlistAsync(string executablePath, string? realmlistAddress)
+    public async Task UpdateRealmlistAsync(string executablePath, string? realmlistAddress)
     {
         if (string.IsNullOrWhiteSpace(realmlistAddress))
-        {
-            return new RealmlistResult(true, "No realmlist configured, skipping.");
-        }
+            return;
 
         try
         {
-            var executableDirectory = Path.GetDirectoryName(executablePath);
-            if (string.IsNullOrEmpty(executableDirectory))
-            {
-                return new RealmlistResult(false, "Could not determine executable directory.");
-            }
-
-            var dataDir = Path.Combine(executableDirectory, "Data");
+            var dataDir = Path.Combine(ExecutableDirectory(executablePath), "Data");
             var content = $"set realmlist {realmlistAddress}";
             var filesUpdated = 0;
 
@@ -50,20 +43,18 @@ public class RealmlistService
 
             if (filesUpdated == 0)
             {
-                var fallbackDir = Path.Combine(executableDirectory, "Data", "enUS");
+                var fallbackDir = Path.Combine(dataDir, "enUS");
                 Directory.CreateDirectory(fallbackDir);
                 await File.WriteAllTextAsync(Path.Combine(fallbackDir, "realmlist.wtf"), content);
             }
-
-            return new RealmlistResult(true, $"Realmlist updated to {realmlistAddress}");
         }
         catch (UnauthorizedAccessException)
         {
-            return new RealmlistResult(false, "Access denied when updating realmlist.wtf. Try running as administrator.");
+            throw new AppException("Access denied when updating realmlist.wtf. Try running as administrator.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not AppException)
         {
-            return new RealmlistResult(false, $"Failed to update realmlist: {ex.Message}");
+            throw new AppException($"Failed to update realmlist: {ex.Message}");
         }
     }
 
@@ -71,22 +62,14 @@ public class RealmlistService
     /// Updates the config file with the account name, realm name, and optionally the realmlist.
     /// Uses {executableDirectory}\WTF\Config.wtf, else WTF\config.txt, and creates Config.wtf if neither exists.
     /// </summary>
-    public async Task<RealmlistResult> UpdateConfigAsync(string executablePath, string? accountName, string? realmName, string? realmlistAddress)
+    public async Task UpdateConfigAsync(string executablePath, string? accountName, string? realmName, string? realmlistAddress)
     {
         if (string.IsNullOrWhiteSpace(accountName) && string.IsNullOrWhiteSpace(realmName) && string.IsNullOrWhiteSpace(realmlistAddress))
-        {
-            return new RealmlistResult(true, "No config updates needed, skipping.");
-        }
+            return;
 
         try
         {
-            var executableDirectory = Path.GetDirectoryName(executablePath);
-            if (string.IsNullOrEmpty(executableDirectory))
-            {
-                return new RealmlistResult(false, "Could not determine executable directory.");
-            }
-
-            var wtfDir = Path.Combine(executableDirectory, "WTF");
+            var wtfDir = Path.Combine(ExecutableDirectory(executablePath), "WTF");
             var configPath = Path.Combine(wtfDir, "Config.wtf");
             var legacyConfigPath = Path.Combine(wtfDir, "config.txt");
             if (!File.Exists(configPath) && File.Exists(legacyConfigPath))
@@ -101,18 +84,21 @@ public class RealmlistService
             content = SetConfigValue(content, "realmName", realmName);
             content = SetConfigValue(content, "realmList", realmlistAddress);
             await File.WriteAllTextAsync(configPath, content);
-
-            return new RealmlistResult(true, $"Config updated successfully.");
         }
         catch (UnauthorizedAccessException)
         {
-            return new RealmlistResult(false, "Access denied when updating config.txt. Try running as administrator.");
+            throw new AppException("Access denied when updating config.txt. Try running as administrator.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not AppException)
         {
-            return new RealmlistResult(false, $"Failed to update config: {ex.Message}");
+            throw new AppException($"Failed to update config: {ex.Message}");
         }
     }
+
+    private static string ExecutableDirectory(string executablePath) =>
+        Path.GetDirectoryName(executablePath) is { Length: > 0 } dir
+            ? dir
+            : throw new AppException("Could not determine executable directory.");
 
     /// <summary>Replaces the first <c>SET key "..."</c> line, or appends one. Blank values leave the content untouched.</summary>
     private static string SetConfigValue(string content, string key, string? value)
@@ -128,5 +114,3 @@ public class RealmlistService
         return content.Length == 0 ? line : content + Environment.NewLine + line;
     }
 }
-
-public record RealmlistResult(bool Success, string Message);

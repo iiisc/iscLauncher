@@ -72,12 +72,12 @@ public class GitHubService
                     interval += 5;
                     break;
                 case "access_denied":
-                    throw new SyncException("Sign-in was cancelled on GitHub.");
+                    throw new AppException("Sign-in was cancelled on GitHub.");
                 default:
-                    throw new SyncException("The sign-in code expired. Try again.");
+                    throw new AppException("The sign-in code expired. Try again.");
             }
         }
-        throw new SyncException("The sign-in code expired. Try again.");
+        throw new AppException("The sign-in code expired. Try again.");
     }
 
     /// <summary>The signed-in GitHub username, or null if not signed in or the sign-in no longer works.</summary>
@@ -113,7 +113,7 @@ public class GitHubService
     {
         var content = JsonContent.Create(new { name, @private = true, description = "WoW addons and settings, synced by iscLauncher" });
         using var created = await SendAsync(HttpMethod.Post, "https://api.github.com/user/repos", content, ct)
-            ?? throw new SyncException("Sign in with GitHub first.");
+            ?? throw new AppException("Sign in with GitHub first.");
         if (created.IsSuccessStatusCode)
             return await CloneUrlAsync(created, ct);
 
@@ -126,11 +126,11 @@ public class GitHubService
                 using var doc = JsonDocument.Parse(await existing.Content.ReadAsStringAsync(ct));
                 // Settings can include account and character names, so they never go to a public repo
                 if (!doc.RootElement.GetProperty("private").GetBoolean())
-                    throw new SyncException($"You already have a public repo named {name}. Choose another name.");
+                    throw new AppException($"You already have a public repo named {name}. Choose another name.");
                 return doc.RootElement.GetProperty("clone_url").GetString()!;
             }
         }
-        throw new SyncException($"GitHub couldn't create the repo ({(int)created.StatusCode} {created.ReasonPhrase}).");
+        throw new AppException($"GitHub couldn't create the repo ({(int)created.StatusCode} {created.ReasonPhrase}).");
     }
 
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, HttpContent? content, CancellationToken ct)
@@ -157,7 +157,7 @@ public class GitHubService
             // GitHub explains a refusal in error_description, e.g. when the app's device flow is switched off
             string? reason = null;
             try { reason = JsonDocument.Parse(body).RootElement.GetProperty("error_description").GetString(); } catch { }
-            throw new SyncException($"GitHub refused the sign-in: {reason ?? $"{(int)response.StatusCode} {response.ReasonPhrase}"}.");
+            throw new AppException($"GitHub refused the sign-in: {reason ?? $"{(int)response.StatusCode} {response.ReasonPhrase}"}.");
         }
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.Clone();

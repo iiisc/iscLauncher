@@ -212,7 +212,7 @@ public sealed partial class GameDetailControl
             if (_game != null) UpdateLastSyncedText(_game);
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
-        catch (SyncException ex) { ShowStatus(ex.Message, false); }
+        catch (AppException ex) { ShowStatus(ex.Message, false); }
         // Addon and settings files are often locked by a running game or antivirus; report it rather than crash
         catch (Exception ex)
         {

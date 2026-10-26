@@ -19,9 +19,6 @@ public record AddonPreview(List<AddonDiff> Diffs, int Unchanged, int Characters 
 
 public record SyncOptions(bool AddonSettings, bool CharacterSettings);
 
-/// <summary>Thrown for expected sync failures; the message is shown to the user as-is.</summary>
-public class SyncException(string message) : Exception(message);
-
 /// <summary>Path-level addon and WTF operations shared by repo sync and game-to-game copy.</summary>
 public static class AddonFiles
 {

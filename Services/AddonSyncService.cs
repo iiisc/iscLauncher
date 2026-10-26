@@ -26,7 +26,7 @@ public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 /// <summary>
 /// Moves addons and WTF settings between a game folder and a git repo, or between two games. Repo operations open a
 /// session (fetch + reset to the remote), preview what would change, then apply only what the user picked.
-/// Failures throw <see cref="SyncException"/>.
+/// Failures throw <see cref="AppException"/>.
 /// </summary>
 public class AddonSyncService
 {
@@ -47,17 +47,17 @@ public class AddonSyncService
     {
         progress?.Report("Checking prerequisites...");
         if (!await _git.IsGitInstalledAsync(ct))
-            throw new SyncException("Git wasn't found. The release download includes it; otherwise install Git from git-scm.com.");
+            throw new AppException("Git wasn't found. The release download includes it; otherwise install Git from git-scm.com.");
         if (string.IsNullOrWhiteSpace(game.SyncRepoUrl))
-            throw new SyncException("No sync repo URL configured.");
+            throw new AppException("No sync repo URL configured.");
         if (!File.Exists(game.ExecutablePath))
-            throw new SyncException("Game executable not found.");
+            throw new AppException("Game executable not found.");
 
         progress?.Report("Fetching from repo...");
         var cachePath = _git.GetLocalCachePath(game);
         var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), SyncBranch, cachePath, progress, ct);
         if (!mirror.Success)
-            throw new SyncException($"Couldn't fetch from the repo. Check the URL, and for a private repo that you're signed in to GitHub under Options. {mirror.Output.Trim()}");
+            throw new AppException($"Couldn't fetch from the repo. Check the URL, and for a private repo that you're signed in to GitHub under Options. {mirror.Output.Trim()}");
 
         var head = await _git.GetHeadAsync(cachePath, ct);
         game.RemoteHead = head;
@@ -77,7 +77,7 @@ public class AddonSyncService
     {
         var result = await _git.RestoreTreeAsync(s.CachePath, commit, ct);
         if (!result.Success)
-            throw new SyncException($"Couldn't load that version: {result.Output.Trim()}");
+            throw new AppException($"Couldn't load that version: {result.Output.Trim()}");
         return await PreviewPullAsync(s, ct);
     }
 
@@ -156,7 +156,7 @@ public class AddonSyncService
         Task.Run(() =>
         {
             if (!File.Exists(target.ExecutablePath))
-                throw new SyncException($"{target.Name}'s executable wasn't found.");
+                throw new AppException($"{target.Name}'s executable wasn't found.");
 
             var names = addons.Select(a => a.Name).ToList();
             Backup(target, names, includeWtf: copySettings, ct);
@@ -231,18 +231,18 @@ public class AddonSyncService
         progress?.Report("Committing...");
         var add = await _git.AddAllAsync(s.CachePath, ct);
         if (!add.Success)
-            throw new SyncException($"Git add failed: {add.Output.Trim()}");
+            throw new AppException($"Git add failed: {add.Output.Trim()}");
         if (await _git.IsStatusCleanAsync(s.CachePath, ct))
             return s.HeadCommit;
 
         var commit = await _git.CommitAsync(s.CachePath, message, ct);
         if (!commit.Success)
-            throw new SyncException($"Git commit failed: {commit.Output.Trim()}");
+            throw new AppException($"Git commit failed: {commit.Output.Trim()}");
 
         progress?.Report("Pushing...");
         var push = await _git.PushAsync(s.CachePath, SyncBranch, ct);
         if (!push.Success)
-            throw new SyncException("Push failed. Check that you have write access to the repo, or try again if someone " +
+            throw new AppException("Push failed. Check that you have write access to the repo, or try again if someone " +
                 $"else pushed in the meantime. {push.Output.Trim()}");
 
         return await _git.GetHeadAsync(s.CachePath, ct);
