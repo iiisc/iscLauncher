@@ -86,9 +86,8 @@ public sealed class AddonChecklist
         });
     }
 
-    // Addons that ship as several folders (AtlasLoot, AtlasLoot_Crafting, ...) are updated together, so they share a row
     private static IEnumerable<List<AddonDiff>> Families(List<AddonDiff> addons) =>
-        addons.GroupBy(a => a.Name.Split('_')[0], StringComparer.OrdinalIgnoreCase)
+        addons.GroupBy(a => AddonFiles.Family(a.Name), StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderBy(a => a.Name.Length).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList());
 
     private static StackPanel RowContent(List<AddonDiff> family, string? warning)

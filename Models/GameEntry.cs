@@ -6,6 +6,18 @@ using System.Text.Json.Serialization;
 
 namespace iscLauncher.Models;
 
+/// <summary>A GitHub repo a game's addons are updated from.</summary>
+public class AddonSource
+{
+    /// <summary>"owner/name".</summary>
+    [JsonPropertyName("repo")]
+    public string Repo { get; set; } = string.Empty;
+
+    /// <summary>The installed addon folders it held when last checked, so they're listed under it before the next check.</summary>
+    [JsonPropertyName("addons")]
+    public List<string> Addons { get; set; } = [];
+}
+
 public class GameEntry : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -69,9 +81,9 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("lastSyncedCommit")]
     public string? LastSyncedCommit { get; set; }
 
-    /// <summary>GitHub repos ("owner/name") to check for addon updates, or null to use the ones the addons' .toc files name.</summary>
+    /// <summary>GitHub repos the addons are updated from, or null to use the ones the addons' .toc files name.</summary>
     [JsonPropertyName("addonSources")]
-    public List<string>? AddonSources { get; set; }
+    public List<AddonSource>? AddonSources { get; set; }
 
     // Screen readers announce a list item by its ToString
     public override string ToString() => Name;

@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
@@ -16,14 +17,20 @@ public static partial class AddonFiles
     public static string? GitHubRepo(string text) =>
         GitHubRepoPattern.Match(text.Trim()) is { Success: true } match ? $"{match.Groups[1].Value}/{match.Groups[2].Value}" : null;
 
-    /// <summary>The GitHub repos the installed addons' .toc files name as their home.</summary>
-    public static List<string> GitHubRepos(string addOnsDir) =>
-        AddonNames(addOnsDir)
-            .SelectMany(name => Directory.GetFiles(Path.Combine(addOnsDir, name), "*.toc"))
+    /// <summary>The GitHub repo an addon's .toc files name as its home, if any.</summary>
+    public static string? TocGitHubRepo(string addonDir) =>
+        Directory.GetFiles(addonDir, "*.toc")
             .SelectMany(toc => File.ReadLines(toc).Take(50).Where(line => line.StartsWith("##")))
             .Select(GitHubRepo)
-            .OfType<string>()
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(repo => repo != null);
+
+    /// <summary>A source for each repo the installed addons' .toc files name, holding the addons that name it.</summary>
+    public static List<AddonSource> TocGitHubSources(string addOnsDir) =>
+        AddonNames(addOnsDir)
+            .Select(name => (Name: name, Repo: TocGitHubRepo(Path.Combine(addOnsDir, name))))
+            .Where(a => a.Repo != null)
+            .GroupBy(a => a.Repo!, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new AddonSource { Repo = g.Key, Addons = g.Select(a => a.Name).ToList() })
             .ToList();
 
     /// <summary>
@@ -33,28 +40,41 @@ public static partial class AddonFiles
     /// </summary>
     public static List<string> ExtractAddons(string zipPath, string addOnsDir)
     {
-        var unpacked = addOnsDir + "-unpacked";
-        ZipFile.ExtractToDirectory(zipPath, unpacked);
-        Directory.CreateDirectory(addOnsDir);
+        // Each file is unpacked straight to where it belongs: moving a folder that was just unpacked fails while a virus
+        // scanner still has its files open
+        using var zip = ZipFile.OpenRead(zipPath);
+        var files = zip.Entries.Where(e => e.Name.Length > 0).Select(e => (Entry: e, Path: e.FullName.Replace('\\', '/'))).ToList();
+        var tocDirs = files.Where(f => f.Path.EndsWith(".toc", StringComparison.OrdinalIgnoreCase)).Select(f => Parent(f.Path)).Distinct().ToList();
+        // An addon's own libraries have .toc files too, so only the outermost folders with one are addons
+        var addonDirs = tocDirs.Where(dir => !tocDirs.Any(outer => outer != dir && IsUnder(dir, outer))).ToList();
+
+        var root = Path.GetFullPath(addOnsDir) + Path.DirectorySeparatorChar;
         var names = new List<string>();
-        foreach (var dir in AddonDirs(unpacked).ToList())
+        foreach (var dir in addonDirs)
         {
-            var tocs = Directory.GetFiles(dir, "*.toc").Select(t => Path.GetFileNameWithoutExtension(t)).ToList();
+            var tocs = files.Where(f => Parent(f.Path) == dir && f.Path.EndsWith(".toc", StringComparison.OrdinalIgnoreCase))
+                .Select(f => Path.GetFileNameWithoutExtension(f.Entry.Name)).ToList();
             // An addon's folder is named after its .toc (Name.toc, or flavors like Name_Wrath.toc); a repo's top folder isn't
-            var name = tocs.Any(t => t.StartsWith(Path.GetFileName(dir), StringComparison.OrdinalIgnoreCase))
-                ? Path.GetFileName(dir)
-                : tocs.MinBy(t => t.Length)!;
+            var folder = dir[(dir.LastIndexOf('/') + 1)..];
+            var name = folder.Length > 0 && tocs.Any(t => t.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) ? folder : tocs.MinBy(t => t.Length)!;
             if (names.Contains(name, StringComparer.OrdinalIgnoreCase))
                 continue;
-            Directory.Move(dir, Path.Combine(addOnsDir, name));
             names.Add(name);
+
+            foreach (var (entry, path) in files.Where(f => IsUnder(f.Path, dir)))
+            {
+                var target = Path.GetFullPath(Path.Combine(addOnsDir, name, dir.Length == 0 ? path : path[(dir.Length + 1)..]));
+                // A zip can name paths that climb out of the folder it's unpacked into
+                if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                entry.ExtractToFile(target, overwrite: true);
+            }
         }
-        if (Directory.Exists(unpacked))
-            ForceDeleteDirectory(unpacked);
         return names;
     }
 
-    // An addon's own libraries have .toc files too, so the search stops at the first folder with one
-    private static IEnumerable<string> AddonDirs(string dir) =>
-        Directory.EnumerateFiles(dir, "*.toc").Any() ? [dir] : Directory.GetDirectories(dir).SelectMany(AddonDirs);
+    private static string Parent(string path) => path.Contains('/') ? path[..path.LastIndexOf('/')] : "";
+
+    private static bool IsUnder(string path, string dir) => dir.Length == 0 || path.StartsWith(dir + "/", StringComparison.Ordinal);
 }

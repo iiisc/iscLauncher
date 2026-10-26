@@ -23,7 +23,7 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 - **Sync between PCs** through a private GitHub repo: push from one PC, pull on another.
 - **Copy Addons** from one game in your library to another, optionally with their settings.
 - **Copy Character Setup** gives other characters, in any game, the same enabled addons and per-character addon data as one character.
-- **Update addons** that are on GitHub, then push to send the update to your other PCs.
+- **See every installed addon** and update the ones that are on GitHub, then push to send the update to your other PCs.
 - Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
 ## Install
@@ -69,11 +69,11 @@ WoW saves addon settings when you log out, which would undo changes made while i
 
 ## Updating addons
 
-**Check for Updates** on the Addons tab downloads the newest version of each addon that's on GitHub and compares it with what you have installed. You pick which updates to install; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
+**Installed Addons** on the Addons tab lists every addon in the game and whether it's connected to its project on GitHub. As it opens, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
 
-Addons that name their GitHub project in their `.toc` file are found by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up) and add its link under **GitHub Sources**. Only addons you have installed are updated, so a repo that holds several addons is fine.
+Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up), click **Connect** on the addon and paste the link. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out.
 
-A repo's newest release is used when it has one with a zip; otherwise its newest code is.
+A project's newest release is used when it has one with a zip; otherwise its newest code is.
 
 ## Backups and data
 

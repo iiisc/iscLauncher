@@ -16,10 +16,10 @@ public record BackupInfo(string Path, DateTime Created, List<string> Addons, boo
 /// <summary>A GitHub repo checked for addon updates.</summary>
 /// <param name="Release">The release downloaded, or null when it was the newest code.</param>
 /// <param name="Dir">Where its addons were unpacked.</param>
-/// <param name="Changed">Installed addons that differ from the download.</param>
-/// <param name="UpToDate">Installed addons that already match it.</param>
+/// <param name="Installed">The game's addon folders that the download has.</param>
+/// <param name="Changed">Those of them that differ from the download.</param>
 /// <param name="Error">Why it couldn't be checked.</param>
-public record AddonUpdate(string Repo, string? Release, string Dir, List<AddonDiff> Changed, int UpToDate, string? Error);
+public record AddonUpdate(string Repo, string? Release, string Dir, List<string> Installed, List<AddonDiff> Changed, string? Error);
 
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)

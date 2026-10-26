@@ -127,6 +127,12 @@ public static partial class AddonFiles
         Directory.Delete(path, true);
     }
 
+    /// <summary>The version an addon's .toc gives, if any.</summary>
+    public static string? AddonVersion(string addonDir) => ReadToc(addonDir).Version;
+
+    /// <summary>Addons that ship as several folders (AtlasLoot, AtlasLoot_Crafting, ...) share this, so they're shown and updated together.</summary>
+    public static string Family(string addonName) => addonName.Split('_')[0];
+
     private record TocInfo(string? Version, List<int> Interfaces);
 
     private static TocInfo ReadToc(string addonDir)

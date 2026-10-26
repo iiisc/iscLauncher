@@ -195,7 +195,7 @@ public sealed class AddonSyncServiceTests : System.IDisposable
         var changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList();
         Assert.Equal(("WeakAuras", "5.21.8", "5.22.1"), (Assert.Single(changed).Name, changed[0].TargetVersion, changed[0].SourceVersion));
 
-        var message = await Sync.InstallUpdatesAsync(game, [new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", downloaded, changed, preview.Unchanged, null)], _ct);
+        var message = await Sync.InstallUpdatesAsync(game, [new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", downloaded, ["WeakAuras", "WeakAurasOptions"], changed, null)], _ct);
         Assert.Equal("Updated NoM0Re/WeakAuras-WotLK.", message);
 
         var addOns = AddonFiles.GameAddOnsDir(Dir(game));

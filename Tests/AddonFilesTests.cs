@@ -148,7 +148,7 @@ public sealed class AddonFilesTests : IDisposable
     public void ReadsARepoFromAGitHubLink(string text, string? repo) => Assert.Equal(repo, AddonFiles.GitHubRepo(text));
 
     [Fact]
-    public void FindsTheReposThatAddonsNameAsTheirHome()
+    public void GroupsAddonsUnderTheReposTheyNameAsTheirHome()
     {
         var addOns = Path.Combine(_root, "AddOns");
         Write(Path.Combine(addOns, @"DBM-Core\DBM-Core.toc"), "## Interface: 30300\n## X-Website: github.com/Zidras/DBM-Warmane/\n");
@@ -157,7 +157,9 @@ public sealed class AddonFilesTests : IDisposable
         // Only the header counts; a file listed below it isn't a link
         Write(Path.Combine(addOns, @"Plain\Plain.toc"), "## Title: Plain\nlibs/github.com/x/y.lua\n");
 
-        Assert.Equal(["Zidras/DBM-Warmane"], AddonFiles.GitHubRepos(addOns));
+        var source = Assert.Single(AddonFiles.TocGitHubSources(addOns));
+        Assert.Equal("Zidras/DBM-Warmane", source.Repo);
+        Assert.Equal(["DBM-Core", "DBM-GUI"], source.Addons);
     }
 
     [Fact]
@@ -183,6 +185,12 @@ public sealed class AddonFilesTests : IDisposable
         // A release zip has the addon folders at the top
         Assert.Equal(["WeakAuras", "WeakAurasOptions"], AddonFiles.ExtractAddons(Zip("release.zip",
             ("WeakAuras/WeakAuras.toc", ""), ("WeakAurasOptions/WeakAurasOptions.toc", "")), Path.Combine(_root, "release")).Order());
+
+        // An addon zipped without its folder, with a path that tries to climb out
+        var bare = Path.Combine(_root, "bare");
+        Assert.Equal(["Bare"], AddonFiles.ExtractAddons(Zip("bare.zip", ("Bare.toc", ""), ("Core.lua", ""), ("../../escaped.lua", "")), bare));
+        Assert.Equal(["Bare.toc", "Core.lua"], Directory.GetFiles(Path.Combine(bare, "Bare")).Select(Path.GetFileName).Order());
+        Assert.False(File.Exists(Path.Combine(_root, "escaped.lua")));
     }
 
     private string Zip(string name, params (string Entry, string Text)[] files)
