@@ -58,7 +58,7 @@ public sealed partial class OptionsPanelControl : UserControl
         if (_services.GitHub.Token != null)
         {
             _services.GitHub.SignOut();
-            ShowStatus("Signed out of _services.GitHub.", true);
+            ShowStatus("Signed out of GitHub.", true);
         }
         else
         {

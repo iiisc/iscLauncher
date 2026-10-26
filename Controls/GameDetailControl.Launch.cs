@@ -103,11 +103,9 @@ public sealed partial class GameDetailControl
         if (change == null)
             return true;
 
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Changes From Another PC");
-        dialog.Content = $"The repo has a push this PC hasn't pulled: “{change.Message}” ({change.DisplayDate}). Pull it before playing?";
-        dialog.PrimaryButtonText = "Pull First";
-        dialog.SecondaryButtonText = "Launch Anyway";
-        switch (await dialog.ShowAsync())
+        switch (await DialogHelper.AskAsync(XamlRoot, "Changes From Another PC",
+            $"The repo has a push this PC hasn't pulled: “{change.Message}” ({change.DisplayDate}). Pull it before playing?",
+            "Pull First", "Launch Anyway"))
         {
             case ContentDialogResult.Primary:
                 await PullAsync(game);
@@ -133,13 +131,13 @@ public sealed partial class GameDetailControl
         var reminder = $"{game.Name} closed. Push from the Addons tab to share your changes with your other PCs.";
         if (_syncBusy) { ShowInfo(reminder); return; }
 
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Push Your Changes?");
-        dialog.Content = $"You closed {game.Name}. Push its addons and settings so your other PCs get them?";
-        dialog.PrimaryButtonText = "Push";
-        dialog.CloseButtonText = "Not Now";
         ContentDialogResult answer;
         // Only one dialog can be open at a time; if another is, the status message is the reminder
-        try { answer = await dialog.ShowAsync(); }
+        try
+        {
+            answer = await DialogHelper.AskAsync(XamlRoot, "Push Your Changes?",
+                $"You closed {game.Name}. Push its addons and settings so your other PCs get them?", "Push", closeText: "Not Now");
+        }
         catch (Exception) { ShowInfo(reminder); return; }
         if (answer == ContentDialogResult.Primary)
             await PushAsync(game);

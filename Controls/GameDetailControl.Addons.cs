@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -30,31 +29,16 @@ public sealed partial class GameDetailControl
             if (_services.GitHub.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) == null)
                 return;
 
-            ShowInfo("Looking up your repos on _services.GitHub...");
+            ShowInfo("Looking up your repos on GitHub...");
             var repos = await _services.GitHub.ListPrivateReposAsync(CancellationToken.None);
             StatusBar.IsOpen = false;
 
-            var nameBox = new ComboBox
-            {
-                IsEditable = true,
-                ItemsSource = repos.Select(r => r.Name).ToList(),
-                Text = SuggestedRepoName(NameTextBox.Text),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Header = "Repo name"
-            };
-            var panel = new StackPanel { Spacing = 10 };
-            panel.Children.Add(DialogHelper.BodyText("Pick the repo this game already syncs with on another PC, or type a name " +
-                "to create a new private repo on your GitHub account."));
-            panel.Children.Add(nameBox);
-            var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Set Up Sync");
-            dialog.Content = panel;
-            dialog.PrimaryButtonText = "Use This Repo";
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(nameBox.Text))
+            var name = await SetUpSyncDialog.ShowAsync(XamlRoot, repos.Select(r => r.Name).ToList(), NameTextBox.Text);
+            if (name == null)
                 return;
 
-            var name = nameBox.Text.Trim();
             var isNew = !repos.Any(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            ShowInfo(isNew ? "Creating the repo on _services.GitHub..." : "Linking the repo...");
+            ShowInfo(isNew ? "Creating the repo on GitHub..." : "Linking the repo...");
             SyncRepoUrlTextBox.Text = await _services.GitHub.CreateRepoAsync(name, CancellationToken.None);
             if (await SaveAsync())
                 ShowStatus(isNew
@@ -63,13 +47,6 @@ public sealed partial class GameDetailControl
         }
         catch (Exception ex) { ShowStatus($"Couldn't set up sync: {ex.Message}", false); }
         finally { SetUpSyncButton.IsEnabled = true; }
-    }
-
-    // GitHub repo names allow letters, digits, '-', '_' and '.'; the game name is folded into that
-    private static string SuggestedRepoName(string gameName)
-    {
-        var slug = Regex.Replace(gameName.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
-        return slug.Length == 0 ? "wow-sync" : $"wow-sync-{slug}";
     }
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
@@ -160,26 +137,11 @@ public sealed partial class GameDetailControl
         if (backups.Count == 0)
         { ShowStatus($"There are no backups of {game.Name} yet.", false); return; }
 
-        var choices = new RadioButtons { ItemsSource = backups.Select(DescribeBackup).ToList(), SelectedIndex = 0 };
-        var panel = new StackPanel { Spacing = 10 };
-        panel.Children.Add(DialogHelper.BodyText("Pick a backup to put back. What it replaces is backed up first, so this can be undone too."));
-        panel.Children.Add(choices);
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, $"Restore {game.Name}");
-        dialog.Content = panel;
-        dialog.PrimaryButtonText = "Restore";
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary || !await ConfirmGamesClosedAsync([game]))
+        var backup = await RestoreBackupDialog.ShowAsync(XamlRoot, game.Name, backups);
+        if (backup == null || !await ConfirmGamesClosedAsync([game]))
             return;
 
-        var backup = backups[choices.SelectedIndex];
         await RunSyncAsync("Restoring the backup...", async (_, ct) => await _services.Sync.RestoreBackupAsync(game, backup, ct));
-    }
-
-    private static string DescribeBackup(BackupInfo backup)
-    {
-        var parts = new List<string>();
-        if (backup.HasSettings) parts.Add("settings");
-        if (backup.Addons.Count > 0) parts.Add($"{backup.Addons.Count} addon(s)");
-        return $"{backup.Created:g}: {string.Join(" and ", parts)}";
     }
 
     // WoW writes addon settings and AddOns.txt back when you log out, which would undo files changed while it runs
@@ -188,11 +150,10 @@ public sealed partial class GameDetailControl
         var running = games.Where(_services.Launcher.IsRunning).Select(g => g.Name).ToList();
         if (running.Count == 0) return true;
 
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Game Is Running");
-        dialog.Content = $"{string.Join(", ", running)} {(running.Count == 1 ? "is" : "are")} running. WoW saves addon settings when you log out, " +
-            "which may overwrite what you're about to change. Close the game first, or continue anyway?";
-        dialog.PrimaryButtonText = "Continue Anyway";
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        return await DialogHelper.AskAsync(XamlRoot, "Game Is Running",
+            $"{string.Join(", ", running)} {(running.Count == 1 ? "is" : "are")} running. WoW saves addon settings when you log out, " +
+            "which may overwrite what you're about to change. Close the game first, or continue anyway?",
+            "Continue Anyway") == ContentDialogResult.Primary;
     }
 
     /// <summary>Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.</summary>

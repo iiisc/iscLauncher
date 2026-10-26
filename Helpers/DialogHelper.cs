@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -28,6 +30,19 @@ public static class DialogHelper
         };
         ApplyTheme(dialog);
         return dialog;
+    }
+
+    /// <summary>Shows a message with a primary button, an optional secondary one and a close button.</summary>
+    public static async Task<ContentDialogResult> AskAsync(XamlRoot xamlRoot, string title, string message, string primaryText,
+        string? secondaryText = null, string closeText = "Cancel")
+    {
+        var dialog = CreateThemedDialog(xamlRoot, title);
+        dialog.Content = message;
+        dialog.PrimaryButtonText = primaryText;
+        if (secondaryText != null)
+            dialog.SecondaryButtonText = secondaryText;
+        dialog.CloseButtonText = closeText;
+        return await dialog.ShowAsync();
     }
 
     public static T Res<T>(string key) => (T)Application.Current.Resources[key];

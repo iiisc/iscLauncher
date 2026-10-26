@@ -105,10 +105,8 @@ public sealed partial class GameDetailControl : UserControl
     public async Task<bool> ConfirmNavigateAwayAsync()
     {
         if (!HasUnsavedChanges) return true;
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Unsaved Changes");
-        dialog.Content = "You have unsaved changes that will be lost. Discard them?";
-        dialog.PrimaryButtonText = "Discard";
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        return await DialogHelper.AskAsync(XamlRoot, "Unsaved Changes",
+            "You have unsaved changes that will be lost. Discard them?", "Discard") == ContentDialogResult.Primary;
     }
 
     private int StartupDelay => double.IsNaN(StartupDelayNumberBox.Value) ? 0 : (int)StartupDelayNumberBox.Value;
@@ -212,10 +210,9 @@ public sealed partial class GameDetailControl : UserControl
     private async void OnRemoveGameClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Remove Game");
-        dialog.Content = $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.";
-        dialog.PrimaryButtonText = "Remove";
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await DialogHelper.AskAsync(XamlRoot, "Remove Game",
+            $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.",
+            "Remove") == ContentDialogResult.Primary)
             DeleteConfirmed?.Invoke(this, game);
     }
 
