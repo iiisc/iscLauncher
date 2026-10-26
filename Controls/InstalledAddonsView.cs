@@ -13,13 +13,13 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using static iscLauncher.Helpers.DialogHelper;
 
-namespace iscLauncher.Dialogs;
+namespace iscLauncher.Controls;
 
 /// <summary>
-/// Every addon in a game: one row per GitHub repo it's connected to, the rest by name. Checks the repos for updates as it
-/// opens, lets the user connect addons to their repos, and returns the updates to install.
+/// The Installed tab: every addon in a game, one row per GitHub repo it's connected to and the rest by name. Checks the
+/// repos for updates, lets the user connect addons to their repos, and asks its host to install the updates picked.
 /// </summary>
-public sealed class InstalledAddonsDialog
+public sealed class InstalledAddonsView : UserControl
 {
     private static readonly StringComparer IgnoreCase = StringComparer.OrdinalIgnoreCase;
 
@@ -37,9 +37,18 @@ public sealed class InstalledAddonsDialog
     private readonly TextBlock _summary = BodyText("");
     private readonly TextBlock _message = WarningText("");
     private readonly CancellationTokenSource _cts = new();
-    private readonly ContentDialog _dialog;
+    private readonly Button _updateSelected = TextButton("Update Selected", "PrimaryButtonStyle");
+    private readonly Button _updateAll = TextButton("Update All", "SecondaryButtonStyle");
+    private readonly Button _checkAgain = TextButton("Check Again", "SecondaryButtonStyle");
+    private bool _busy;
 
-    private InstalledAddonsDialog(XamlRoot xamlRoot, GameEntry game, AddonUpdateService service)
+    /// <summary>The updates the user picked, for the host to install and then pass to <see cref="MarkInstalled"/>.</summary>
+    public event EventHandler<List<AddonUpdate>>? UpdateRequested;
+
+    /// <summary>The game's sources changed: connected, removed, or found to hold other addons. The host saves them.</summary>
+    public event EventHandler? SourcesChanged;
+
+    public InstalledAddonsView(GameEntry game, AddonUpdateService service)
     {
         _game = game;
         _service = service;
@@ -50,36 +59,54 @@ public sealed class InstalledAddonsDialog
         _sources = [.. AddonUpdateService.Sources(game)];
         _message.Visibility = Visibility.Collapsed;
 
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(_summary);
-        panel.Children.Add(_message);
-        panel.Children.Add(new ScrollViewer { Content = _list, MaxHeight = 420, Padding = new Thickness(0, 0, 12, 0) });
+        _updateSelected.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => _ticked.Contains(u.Repo)).ToList());
+        // An update made for another client stays out unless it's ticked and updated on its own
+        _updateAll.Click += (_, _) => UpdateRequested?.Invoke(this, Available.Where(u => Warning(u) == null).ToList());
+        _checkAgain.Click += async (_, _) => await CheckAllAsync();
 
-        _dialog = CreateThemedDialog(xamlRoot, $"⚔ Installed Addons in {game.Name}");
-        _dialog.Content = panel;
-        _dialog.PrimaryButtonText = "Update Selected";
-        _dialog.SecondaryButtonText = "Update All";
-        _dialog.CloseButtonText = "Close";
-        SetWidth(_dialog, 600, 720);
-        _dialog.Opened += async (_, _) => await CheckAsync([.. _sources]);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        buttons.Children.Add(_updateSelected);
+        buttons.Children.Add(_updateAll);
+        buttons.Children.Add(_checkAgain);
+
+        var layout = new Grid { RowSpacing = 10 };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var scroller = new ScrollViewer { Content = _list, Padding = new Thickness(0, 0, 12, 0) };
+        foreach (var (element, row) in new (FrameworkElement, int)[] { (_summary, 0), (_message, 1), (buttons, 2), (scroller, 3) })
+        {
+            Grid.SetRow(element, row);
+            layout.Children.Add(element);
+        }
+        Content = layout;
         Render();
     }
 
-    /// <returns>The updates to install; none if the user closed it.</returns>
-    public static async Task<List<AddonUpdate>> ShowAsync(XamlRoot xamlRoot, GameEntry game, AddonUpdateService service)
+    private bool HasGame => File.Exists(_game.ExecutablePath);
+
+    /// <summary>Checks every connected repo for updates.</summary>
+    public Task CheckAllAsync() => HasGame ? CheckAsync([.. _sources]) : Task.CompletedTask;
+
+    /// <summary>Stops any check, for when the tab moves on to another game.</summary>
+    public void Close() => _cts.Cancel();
+
+    /// <summary>Shows installed updates as up to date, without downloading them again.</summary>
+    public void MarkInstalled(IEnumerable<AddonUpdate> updates)
     {
-        var view = new InstalledAddonsDialog(xamlRoot, game, service);
-        var result = await view._dialog.ShowAsync();
-        view._cts.Cancel();
-        // Kept whichever button closed it: the repos connected or removed, and the addons each held at its check
-        game.AddonSources = view._sources;
-        return result switch
+        foreach (var update in updates)
         {
-            ContentDialogResult.Primary => view.Available.Where(u => view._ticked.Contains(u.Repo)).ToList(),
-            // An update made for another client stays out unless it's ticked and updated on its own
-            ContentDialogResult.Secondary => view.Available.Where(u => Warning(u) == null).ToList(),
-            _ => []
-        };
+            _results[update.Repo] = update with { Changed = [] };
+            _ticked.Remove(update.Repo);
+        }
+        Render();
+    }
+
+    /// <summary>Disables the buttons while the host runs something that changes the game's files.</summary>
+    public bool IsBusy
+    {
+        set { _busy = value; Render(); }
     }
 
     private IEnumerable<AddonUpdate> Available =>
@@ -97,8 +124,11 @@ public sealed class InstalledAddonsDialog
             {
                 var update = await _service.CheckAsync(_game, source.Repo, _cts.Token);
                 _results[source.Repo] = update;
-                if (update.Error == null)
+                if (update.Error == null && !source.Addons.SequenceEqual(update.Installed, IgnoreCase))
+                {
                     source.Addons = update.Installed;
+                    SaveSources();
+                }
                 if (update.Changed.Count > 0 && Warning(update) == null)
                     _ticked.Add(source.Repo);
                 _checking.Remove(source.Repo);
@@ -116,7 +146,10 @@ public sealed class InstalledAddonsDialog
         var added = source == null;
         source ??= new AddonSource { Repo = repo };
         if (added)
+        {
             _sources.Add(source);
+            SaveSources();
+        }
 
         await CheckAsync([source]);
         if (_results.GetValueOrDefault(repo) is not { } update || update.Installed.Intersect(family, IgnoreCase).Any())
@@ -133,7 +166,15 @@ public sealed class InstalledAddonsDialog
         _sources.Remove(source);
         _results.Remove(source.Repo);
         _ticked.Remove(source.Repo);
+        SaveSources();
         Render();
+    }
+
+    // Until this, the game's sources are the ones its .toc files name, found afresh each time
+    private void SaveSources()
+    {
+        _game.AddonSources = _sources;
+        SourcesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Render()
@@ -153,7 +194,9 @@ public sealed class InstalledAddonsDialog
             .ToList();
         foreach (var family in families)
             _list.Children.Add(LocalRow(family));
-        if (_installed.Count == 0)
+        if (!HasGame)
+            _list.Children.Add(Dim("The game's executable wasn't found, so its addons can't be listed."));
+        else if (_installed.Count == 0)
             _list.Children.Add(Dim("No addons are installed in this game."));
 
         var updates = Available.Count();
@@ -167,9 +210,12 @@ public sealed class InstalledAddonsDialog
 
     private void UpdateButtons()
     {
-        _dialog.IsPrimaryButtonEnabled = Available.Any(u => _ticked.Contains(u.Repo));
-        _dialog.IsSecondaryButtonEnabled = Available.Any(u => Warning(u) == null);
+        _updateSelected.IsEnabled = !_busy && Available.Any(u => _ticked.Contains(u.Repo));
+        _updateAll.IsEnabled = !_busy && Available.Any(u => Warning(u) == null);
+        _checkAgain.IsEnabled = !_busy && HasGame && _checking.Count == 0 && _sources.Count > 0;
     }
+
+    private static Button TextButton(string text, string styleKey) => new() { Content = text, Style = Res<Style>(styleKey) };
 
     private Grid SourceRow(AddonSource source, List<string> folders)
     {
@@ -187,13 +233,27 @@ public sealed class InstalledAddonsDialog
             .FirstOrDefault();
         var version = bumped != null ? $"{bumped.TargetVersion} → {bumped.SourceVersion}" : lead == null ? null : _versions[lead];
 
-        var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        title.Children.Add(BodyText(RepoName(source.Repo)));
+        var details = new List<string>();
         if (!string.IsNullOrWhiteSpace(version))
-            title.Children.Add(Dim(version));
+            details.Add(version);
+        if (folders.Count > 1)
+            details.Add(folders.Count.Plural("folder"));
+        if (hasUpdate && update!.Release == null)
+            details.Add("newest code");
+        // A narrow window shortens the details rather than cutting them off
+        var title = new Grid { ColumnSpacing = 8 };
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.Children.Add(BodyText(RepoName(source.Repo)));
+        var detailsText = Dim(string.Join(" · ", details));
+        detailsText.TextWrapping = TextWrapping.NoWrap;
+        detailsText.TextTrimming = TextTrimming.CharacterEllipsis;
+        Grid.SetColumn(detailsText, 1);
+        title.Children.Add(detailsText);
 
-        var details = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        details.Children.Add(new HyperlinkButton
+        var text = new StackPanel { Spacing = 2 };
+        text.Children.Add(title);
+        text.Children.Add(new HyperlinkButton
         {
             Content = $"github.com/{source.Repo}",
             NavigateUri = new Uri($"https://github.com/{source.Repo}"),
@@ -201,14 +261,6 @@ public sealed class InstalledAddonsDialog
             FontSize = 12,
             Foreground = Res<Brush>("GoldBrush")
         });
-        var counts = folders.Count == 0 ? "" : $"· {folders.Count.Plural("folder")}";
-        if (hasUpdate && update!.Release == null)
-            counts += " · newest code";
-        details.Children.Add(Dim(counts));
-
-        var text = new StackPanel { Spacing = 2 };
-        text.Children.Add(title);
-        text.Children.Add(details);
         if (update?.Error != null)
             text.Children.Add(WarningText($"⚠ {update.Error}"));
         else if (hasUpdate && Warning(update!) is { } warning)

@@ -25,6 +25,7 @@ public sealed partial class GameDetailControl : UserControl
     private bool _isNew;
     private CancellationTokenSource? _syncCts;
     private bool _syncBusy;
+    private InstalledAddonsView? _installedView;
     private readonly StatusNotifier _status;
 
     public GameEntry? CurrentGame => _game;
@@ -65,12 +66,16 @@ public sealed partial class GameDetailControl : UserControl
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
         UpdateSyncStatus(game);
+        CloseInstalledAddons();
 
         // Syncing is what a synced game is opened for; reloading the same game (e.g. after saving) keeps the tab
         if (otherGame || DetailPivot.SelectedItem == null)
             DetailPivot.SelectedItem = game.HasSyncRepo ? AddonsTab : GeneralTab;
         UpdateLaunchButtonState(game);
         UpdateSaveButtons();
+        // A save of the game on the Installed tab lists it afresh, in case its executable moved
+        if (InstalledTabShown)
+            ShowInstalledAddons(game);
 
         if (statusMessage != null)
             ShowStatus(statusMessage, true);
@@ -139,7 +144,6 @@ public sealed partial class GameDetailControl : UserControl
 
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
-        AddonUpdatesSection.Visibility = CopyAddonsSection.Visibility;
         SyncButtonsPanel.Visibility = !editing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
         NoRepoHint.Visibility = !editing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
     }

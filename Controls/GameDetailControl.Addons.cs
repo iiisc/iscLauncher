@@ -132,17 +132,38 @@ public sealed partial class GameDetailControl
             await _services.Sync.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
     }
 
-    private async void OnInstalledAddonsClick(object sender, RoutedEventArgs e)
+    // Listing a game's addons checks its GitHub repos, which means downloading them, so that waits until the tab is opened
+    private void OnPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_game is not { } game) return;
-        try
+        if (InstalledTabShown && _installedView == null && _game != null && !_isNew)
+            ShowInstalledAddons(_game);
+    }
+
+    private bool InstalledTabShown => DetailPivot.SelectedItem as PivotItem == InstalledTab;
+
+    private void ShowInstalledAddons(GameEntry game)
+    {
+        CloseInstalledAddons();
+        var view = new InstalledAddonsView(game, _services.AddonUpdates) { IsBusy = _syncBusy };
+        view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
+        view.UpdateRequested += async (_, picked) => await RunSyncAsync("Updating addons...", async (_, ct) =>
         {
-            var picked = await InstalledAddonsDialog.ShowAsync(XamlRoot, game, _services.AddonUpdates);
-            await _services.Library.SaveAsync();
-            if (picked.Count > 0)
-                await RunSyncAsync("Updating addons...", async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct));
-        }
-        finally { AddonUpdateService.DiscardDownloads(); }
+            var message = await _services.Sync.InstallUpdatesAsync(game, picked, ct);
+            view.MarkInstalled(picked);
+            return message;
+        });
+        _installedView = view;
+        InstalledHost.Child = view;
+        _ = view.CheckAllAsync();
+    }
+
+    /// <summary>Drops the Installed tab's list, so it's built afresh the next time the tab is opened.</summary>
+    private void CloseInstalledAddons()
+    {
+        _installedView?.Close();
+        _installedView = null;
+        InstalledHost.Child = null;
+        AddonUpdateService.DiscardDownloads();
     }
 
     private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
@@ -186,6 +207,8 @@ public sealed partial class GameDetailControl
             if (message != null) ShowStatus(message, true);
             else StatusBar.IsOpen = false;
             if (_game != null) UpdateSyncStatus(_game);
+            // A pull, rollback or restore can change the addons; an update from the Installed tab already shows itself
+            if (!InstalledTabShown) CloseInstalledAddons();
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
         catch (AppException ex)
@@ -224,7 +247,7 @@ public sealed partial class GameDetailControl
         CopyAddonsButton.IsEnabled = !busy;
         CopyCharacterSetupButton.IsEnabled = !busy;
         RestoreBackupButton.IsEnabled = !busy;
-        InstalledAddonsButton.IsEnabled = !busy;
+        if (_installedView != null) _installedView.IsBusy = busy;
         LaunchButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;

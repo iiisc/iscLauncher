@@ -69,7 +69,7 @@ WoW saves addon settings when you log out, which would undo changes made while i
 
 ## Updating addons
 
-**Installed Addons** on the Addons tab lists every addon in the game and whether it's connected to its project on GitHub. As it opens, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
+The **Installed** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
 
 Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up), click **Connect** on the addon and paste the link. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out.
 

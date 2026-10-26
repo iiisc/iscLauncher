@@ -166,8 +166,8 @@ public class GitHubService
             throw new AppException(response.StatusCode switch
             {
                 HttpStatusCode.NotFound => "not found on GitHub",
-                HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests when Token == null =>
-                    "GitHub limits how often it's asked without signing in. Sign in under Options, or try again in an hour",
+                HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests =>
+                    "GitHub limits how often it's asked without a working sign-in. Sign in under Options, or try again in an hour",
                 _ => $"GitHub refused the download ({(int)response.StatusCode} {response.ReasonPhrase})"
             });
         }
@@ -176,13 +176,24 @@ public class GitHubService
         return tag;
     }
 
-    // Public repos work signed out too, but signed in, GitHub allows far more requests an hour
+    // Public repos work signed out too, but signed in, GitHub allows far more requests an hour. A sign-in GitHub has
+    // since revoked gets 401 even for a public repo, so that's asked again without it.
     private async Task<HttpResponseMessage> GetAsync(string url, string? accept, CancellationToken ct)
+    {
+        var token = Token;
+        var response = await GetAsync(url, accept, token, ct);
+        if (token == null || response.StatusCode != HttpStatusCode.Unauthorized)
+            return response;
+        response.Dispose();
+        return await GetAsync(url, accept, null, ct);
+    }
+
+    private static async Task<HttpResponseMessage> GetAsync(string url, string? accept, string? token, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (accept != null)
             request.Headers.Accept.ParseAdd(accept);
-        if (Token is { } token)
+        if (token != null)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
     }
