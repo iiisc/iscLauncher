@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using iscLauncher.Helpers;
@@ -63,7 +62,7 @@ public sealed class AddonChecklist
 
         var rows = new StackPanel();
         var anyWarning = false;
-        foreach (var family in Families(addons))
+        foreach (var family in AddonFiles.Families(addons, a => a.Name))
         {
             var warning = family.Select(a => a.Warning).FirstOrDefault(w => w != null);
             anyWarning |= warning != null;
@@ -85,10 +84,6 @@ public sealed class AddonChecklist
             HorizontalContentAlignment = HorizontalAlignment.Left
         });
     }
-
-    private static IEnumerable<List<AddonDiff>> Families(List<AddonDiff> addons) =>
-        addons.GroupBy(a => AddonFiles.Family(a.Name), StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.OrderBy(a => a.Name.Length).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList());
 
     private static StackPanel RowContent(List<AddonDiff> family, string? warning)
     {

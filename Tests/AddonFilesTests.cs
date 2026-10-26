@@ -148,18 +148,17 @@ public sealed class AddonFilesTests : IDisposable
     public void ReadsARepoFromAGitHubLink(string text, string? repo) => Assert.Equal(repo, AddonFiles.GitHubRepo(text));
 
     [Fact]
-    public void GroupsAddonsUnderTheReposTheyNameAsTheirHome()
+    public void ReadsTheRepoAnAddonNamesAsItsHome()
     {
         var addOns = Path.Combine(_root, "AddOns");
-        Write(Path.Combine(addOns, @"DBM-Core\DBM-Core.toc"), "## Interface: 30300\n## X-Website: github.com/Zidras/DBM-Warmane/\n");
-        Write(Path.Combine(addOns, @"DBM-GUI\DBM-GUI.toc"), "## X-Website: https://github.com/Zidras/DBM-Warmane\n");
+        Write(Path.Combine(addOns, @"DBM-Core\DBM-Core.toc"), "## Interface: 30300\n## Version: 10.1\n## X-Website: github.com/Zidras/DBM-Warmane/\n");
         Write(Path.Combine(addOns, @"Author\Author.toc"), "## X-Website: github.com/fondlez\n");
         // Only the header counts; a file listed below it isn't a link
         Write(Path.Combine(addOns, @"Plain\Plain.toc"), "## Title: Plain\nlibs/github.com/x/y.lua\n");
 
-        var source = Assert.Single(AddonFiles.TocGitHubSources(addOns));
-        Assert.Equal("Zidras/DBM-Warmane", source.Repo);
-        Assert.Equal(["DBM-Core", "DBM-GUI"], source.Addons);
+        Assert.Equal(("10.1", "Zidras/DBM-Warmane"), AddonFiles.AddonInfo(Path.Combine(addOns, "DBM-Core")));
+        Assert.Null(AddonFiles.AddonInfo(Path.Combine(addOns, "Author")).Repo);
+        Assert.Null(AddonFiles.AddonInfo(Path.Combine(addOns, "Plain")).Repo);
     }
 
     [Fact]

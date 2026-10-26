@@ -4,7 +4,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
-using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
@@ -17,22 +16,6 @@ public static partial class AddonFiles
     public static string? GitHubRepo(string text) =>
         GitHubRepoPattern.Match(text.Trim()) is { Success: true } match ? $"{match.Groups[1].Value}/{match.Groups[2].Value}" : null;
 
-    /// <summary>The GitHub repo an addon's .toc files name as its home, if any.</summary>
-    public static string? TocGitHubRepo(string addonDir) =>
-        Directory.GetFiles(addonDir, "*.toc")
-            .SelectMany(toc => File.ReadLines(toc).Take(50).Where(line => line.StartsWith("##")))
-            .Select(GitHubRepo)
-            .FirstOrDefault(repo => repo != null);
-
-    /// <summary>A source for each repo the installed addons' .toc files name, holding the addons that name it.</summary>
-    public static List<AddonSource> TocGitHubSources(string addOnsDir) =>
-        AddonNames(addOnsDir)
-            .Select(name => (Name: name, Repo: TocGitHubRepo(Path.Combine(addOnsDir, name))))
-            .Where(a => a.Repo != null)
-            .GroupBy(a => a.Repo!, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new AddonSource { Repo = g.Key, Addons = g.Select(a => a.Name).ToList() })
-            .ToList();
-
     /// <summary>
     /// Unpacks a downloaded zip into <paramref name="addOnsDir"/> as addon folders, wherever they are in it: release zips
     /// have them at the top, GitHub's code zips inside a folder named after the commit, and a repo can be one addon itself.
@@ -44,16 +27,16 @@ public static partial class AddonFiles
         // scanner still has its files open
         using var zip = ZipFile.OpenRead(zipPath);
         var files = zip.Entries.Where(e => e.Name.Length > 0).Select(e => (Entry: e, Path: e.FullName.Replace('\\', '/'))).ToList();
-        var tocDirs = files.Where(f => f.Path.EndsWith(".toc", StringComparison.OrdinalIgnoreCase)).Select(f => Parent(f.Path)).Distinct().ToList();
+        var tocsByDir = files.Where(f => f.Path.EndsWith(".toc", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(f => Parent(f.Path))
+            .ToDictionary(g => g.Key, g => g.Select(f => Path.GetFileNameWithoutExtension(f.Entry.Name)).ToList());
         // An addon's own libraries have .toc files too, so only the outermost folders with one are addons
-        var addonDirs = tocDirs.Where(dir => !tocDirs.Any(outer => outer != dir && IsUnder(dir, outer))).ToList();
+        var addonDirs = tocsByDir.Keys.Where(dir => !tocsByDir.Keys.Any(outer => outer != dir && IsUnder(dir, outer)));
 
-        var root = Path.GetFullPath(addOnsDir) + Path.DirectorySeparatorChar;
         var names = new List<string>();
         foreach (var dir in addonDirs)
         {
-            var tocs = files.Where(f => Parent(f.Path) == dir && f.Path.EndsWith(".toc", StringComparison.OrdinalIgnoreCase))
-                .Select(f => Path.GetFileNameWithoutExtension(f.Entry.Name)).ToList();
+            var tocs = tocsByDir[dir];
             // An addon's folder is named after its .toc (Name.toc, or flavors like Name_Wrath.toc); a repo's top folder isn't
             var folder = dir[(dir.LastIndexOf('/') + 1)..];
             var name = folder.Length > 0 && tocs.Any(t => t.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) ? folder : tocs.MinBy(t => t.Length)!;
@@ -62,14 +45,7 @@ public static partial class AddonFiles
             names.Add(name);
 
             foreach (var (entry, path) in files.Where(f => IsUnder(f.Path, dir)))
-            {
-                var target = Path.GetFullPath(Path.Combine(addOnsDir, name, dir.Length == 0 ? path : path[(dir.Length + 1)..]));
-                // A zip can name paths that climb out of the folder it's unpacked into
-                if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                entry.ExtractToFile(target, overwrite: true);
-            }
+                ExtractInside(entry, Path.Combine(addOnsDir, name), dir.Length == 0 ? path : path[(dir.Length + 1)..]);
         }
         return names;
     }

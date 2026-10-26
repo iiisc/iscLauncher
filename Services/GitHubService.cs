@@ -144,7 +144,7 @@ public class GitHubService
         var url = $"https://api.github.com/repos/{repo}/zipball";
         string? tag = null;
         // Not found means no releases, or no such repo, which the download then reports
-        using (var release = await GetAsync($"https://api.github.com/repos/{repo}/releases/latest", null, ct))
+        using (var release = await GetAsync($"https://api.github.com/repos/{repo}/releases/latest", null, Token, ct))
         {
             if (release.IsSuccessStatusCode)
             {
@@ -160,7 +160,7 @@ public class GitHubService
         }
 
         // GitHub hands out a release file only when asked for bytes, but refuses that for a branch zip
-        using var response = await GetAsync(url, tag == null ? null : "application/octet-stream", ct);
+        using var response = await GetAsync(url, tag == null ? null : "application/octet-stream", Token, ct);
         if (!response.IsSuccessStatusCode)
         {
             throw new AppException(response.StatusCode switch
@@ -178,16 +178,6 @@ public class GitHubService
 
     // Public repos work signed out too, but signed in, GitHub allows far more requests an hour. A sign-in GitHub has
     // since revoked gets 401 even for a public repo, so that's asked again without it.
-    private async Task<HttpResponseMessage> GetAsync(string url, string? accept, CancellationToken ct)
-    {
-        var token = Token;
-        var response = await GetAsync(url, accept, token, ct);
-        if (token == null || response.StatusCode != HttpStatusCode.Unauthorized)
-            return response;
-        response.Dispose();
-        return await GetAsync(url, accept, null, ct);
-    }
-
     private static async Task<HttpResponseMessage> GetAsync(string url, string? accept, string? token, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -195,7 +185,11 @@ public class GitHubService
             request.Headers.Accept.ParseAdd(accept);
         if (token != null)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (token == null || response.StatusCode != HttpStatusCode.Unauthorized)
+            return response;
+        response.Dispose();
+        return await GetAsync(url, accept, null, ct);
     }
 
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, HttpContent? content, CancellationToken ct)

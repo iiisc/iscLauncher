@@ -120,21 +120,24 @@ public static partial class AddonFiles
         foreach (var addon in addons.Select(a => Path.Combine(GameAddOnsDir(gameDir), a)).Where(Directory.Exists))
             ForceDeleteDirectory(addon);
 
-        var root = Path.GetFullPath(gameDir) + Path.DirectorySeparatorChar;
         foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0))
         {
             ct.ThrowIfCancellationRequested();
             var relative = BackupSettingsPath(entry.FullName)
                 ?? (entry.FullName.StartsWith(ZipAddOns + "/") ? Path.Combine("Interface", entry.FullName) : null);
-            if (relative == null)
-                continue;
-            var target = Path.GetFullPath(Path.Combine(gameDir, relative));
-            // Never write outside the game folder, whatever the zip says
-            if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                continue;
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            entry.ExtractToFile(target, overwrite: true);
+            if (relative != null)
+                ExtractInside(entry, gameDir, relative);
         }
+    }
+
+    // A zip can name paths that climb out of the folder it's unpacked into; those entries are skipped
+    private static void ExtractInside(ZipArchiveEntry entry, string dir, string relative)
+    {
+        var target = Path.GetFullPath(Path.Combine(dir, relative));
+        if (!target.StartsWith(Path.GetFullPath(dir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return;
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        entry.ExtractToFile(target, overwrite: true);
     }
 
     private static string? BackupSettingsPath(string entry) =>

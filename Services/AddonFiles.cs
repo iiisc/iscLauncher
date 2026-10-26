@@ -127,17 +127,27 @@ public static partial class AddonFiles
         Directory.Delete(path, true);
     }
 
-    /// <summary>The version an addon's .toc gives, if any.</summary>
-    public static string? AddonVersion(string addonDir) => ReadToc(addonDir).Version;
+    /// <summary>The version an addon's .toc gives, and the GitHub repo it names as its home, if any.</summary>
+    public static (string? Version, string? Repo) AddonInfo(string addonDir)
+    {
+        var toc = ReadToc(addonDir);
+        return (toc.Version, toc.Repo);
+    }
 
-    /// <summary>Addons that ship as several folders (AtlasLoot, AtlasLoot_Crafting, ...) share this, so they're shown and updated together.</summary>
-    public static string Family(string addonName) => addonName.Split('_')[0];
+    /// <summary>
+    /// Groups addons that ship as several folders (AtlasLoot, AtlasLoot_Crafting, ...), so they're shown and updated
+    /// together. Each group leads with its shortest name.
+    /// </summary>
+    public static IEnumerable<List<T>> Families<T>(IEnumerable<T> addons, Func<T, string> name) =>
+        addons.GroupBy(a => name(a).Split('_')[0], StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderBy(a => name(a).Length).ThenBy(name, StringComparer.OrdinalIgnoreCase).ToList());
 
-    private record TocInfo(string? Version, List<int> Interfaces);
+    private record TocInfo(string? Version, List<int> Interfaces, string? Repo);
 
     private static TocInfo ReadToc(string addonDir)
     {
         string? version = null;
+        string? repo = null;
         var interfaces = new List<int>();
         var name = Path.GetFileName(addonDir);
 
@@ -147,6 +157,9 @@ public static partial class AddonFiles
             var isPrimary = Path.GetFileNameWithoutExtension(toc).Equals(name, StringComparison.OrdinalIgnoreCase);
             foreach (var line in File.ReadLines(toc).Take(50))
             {
+                // Only the header names a home; lines below it list the addon's files
+                if (line.StartsWith("##"))
+                    repo ??= GitHubRepo(line);
                 var match = TocField.Match(line);
                 if (!match.Success)
                     continue;
@@ -158,7 +171,7 @@ public static partial class AddonFiles
                     version = value;
             }
         }
-        return new TocInfo(version, interfaces);
+        return new TocInfo(version, interfaces, repo);
     }
 
     private static string? CompatibilityWarning(List<int> interfaces, int clientMajor)

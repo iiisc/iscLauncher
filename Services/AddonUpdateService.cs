@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -12,29 +11,38 @@ namespace iscLauncher.Services;
 /// Checks the GitHub repos a game's addons come from by downloading each and comparing it with what's installed.
 /// Versions in .toc files can't be trusted for this, and some addons publish only code, never releases.
 /// </summary>
-public class AddonUpdateService(GitHubService gitHub)
+public class AddonUpdateService
 {
     private static readonly string DownloadRoot = Path.Combine(Path.GetTempPath(), "iscLauncher-addon-updates");
 
-    /// <summary>The repos the user connected, or until they change them, the ones the addons' .toc files name.</summary>
-    public static List<AddonSource> Sources(GameEntry game) =>
-        game.AddonSources ?? AddonFiles.TocGitHubSources(AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game)));
+    private readonly GitHubService _gitHub;
 
-    /// <summary>Downloads a repo and compares it with the game. Only addons the game has are its update; the rest are left out.</summary>
-    public async Task<AddonUpdate> CheckAsync(GameEntry game, string repo, CancellationToken ct)
+    public AddonUpdateService(GitHubService gitHub)
     {
-        var gameAddOns = AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game));
-        var dir = Path.Combine(DownloadRoot, Guid.NewGuid().ToString("N"));
+        _gitHub = gitHub;
+        // Each list deletes its downloads when it closes; these are from a run that ended without closing it
+        if (Directory.Exists(DownloadRoot))
+        {
+            var leftovers = Directory.GetDirectories(DownloadRoot);
+            Task.Run(() => Array.ForEach(leftovers, Discard));
+        }
+    }
+
+    /// <summary>A folder for one list's downloads, for <see cref="Discard"/> once the list closes.</summary>
+    public static string NewDownloadDir() => Path.Combine(DownloadRoot, Guid.NewGuid().ToString("N"));
+
+    /// <summary>Downloads a repo into <paramref name="downloadDir"/> and compares it with the game.</summary>
+    public async Task<AddonUpdate> CheckAsync(GameEntry game, string repo, string downloadDir, CancellationToken ct)
+    {
+        var dir = Path.Combine(downloadDir, Guid.NewGuid().ToString("N"));
         try
         {
-            Directory.CreateDirectory(DownloadRoot);
-            var release = await gitHub.DownloadLatestAsync(repo, dir + ".zip", ct);
+            Directory.CreateDirectory(downloadDir);
+            var release = await _gitHub.DownloadLatestAsync(repo, dir + ".zip", ct);
             return await Task.Run(() =>
             {
-                var downloaded = AddonFiles.ExtractAddons(dir + ".zip", dir).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var installed = AddonFiles.AddonNames(gameAddOns).Where(downloaded.Contains).ToList();
-                var preview = AddonFiles.Compare(dir, gameAddOns, includeRemoved: false, AddonFiles.ClientMajorVersion(game.ExecutablePath), ct);
-                return new AddonUpdate(repo, release, dir, installed, preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList(), null);
+                AddonFiles.ExtractAddons(dir + ".zip", dir);
+                return Compare(game, new AddonUpdate(repo, release, dir, [], [], null));
             }, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -43,13 +51,31 @@ public class AddonUpdateService(GitHubService gitHub)
         }
     }
 
-    /// <summary>Deletes what checks downloaded. Housekeeping, so a file still in use is left for next time.</summary>
-    public static void DiscardDownloads()
+    /// <summary>
+    /// Compares a download with what the game has now, so a pull or an update shows without downloading again. Only
+    /// addons the game has are its update; the rest of the download is left out.
+    /// </summary>
+    public static AddonUpdate Compare(GameEntry game, AddonUpdate update)
+    {
+        if (update.Error != null)
+            return update;
+        var gameAddOns = AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game));
+        var downloaded = AddonFiles.AddonNames(update.Dir).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preview = AddonFiles.Compare(update.Dir, gameAddOns, includeRemoved: false, AddonFiles.ClientMajorVersion(game.ExecutablePath), CancellationToken.None);
+        return update with
+        {
+            Installed = AddonFiles.AddonNames(gameAddOns).Where(downloaded.Contains).ToList(),
+            Changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList()
+        };
+    }
+
+    /// <summary>Deletes downloads. Housekeeping, so a file still in use is left behind.</summary>
+    public static void Discard(string dir)
     {
         try
         {
-            if (Directory.Exists(DownloadRoot))
-                AddonFiles.ForceDeleteDirectory(DownloadRoot);
+            if (Directory.Exists(dir))
+                AddonFiles.ForceDeleteDirectory(dir);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
