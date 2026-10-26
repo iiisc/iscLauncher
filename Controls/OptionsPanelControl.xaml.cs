@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +32,7 @@ public sealed partial class OptionsPanelControl : UserControl
     public void Activate()
     {
         VersionText.Text = $"v{Services.AppUpdateService.CurrentVersion}";
-        StatusBar.IsOpen = false;
+        _status.Hide();
         UpdateAvailableText.Visibility = Visibility.Collapsed;
         ReleaseNotesPanel.Visibility = Visibility.Collapsed;
         UpdateProgressBar.Visibility = Visibility.Collapsed;
@@ -61,7 +60,7 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private async void OnGitHubClick(object sender, RoutedEventArgs e)
     {
-        if (_services.GitHub.Token != null && _services.GitHub.SignInProblem == null)
+        if (_services.GitHub.UsableToken != null)
         {
             _services.GitHub.SignOut();
             ShowStatus("Signed out of GitHub.", true);
@@ -86,8 +85,8 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private void OnChooseReposClick(object sender, RoutedEventArgs e)
     {
-        try { Process.Start(new ProcessStartInfo(GitHubService.InstallUrl) { UseShellExecute = true }); }
-        catch { ShowStatus("Could not open browser.", false); }
+        if (!Shell.Open(GitHubService.InstallUrl))
+            ShowStatus("Could not open browser.", false);
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -121,7 +120,7 @@ public sealed partial class OptionsPanelControl : UserControl
                     ShowAvailableUpdate(result);
                 }
             }
-            catch (OperationCanceledException) { StatusBar.IsOpen = false; }
+            catch (OperationCanceledException) { _status.Hide(); }
             catch (Exception ex) { ShowStatus($"Update check failed: {ex.Message}", false); }
             finally { CheckUpdatesButton.IsEnabled = true; }
         }
@@ -154,7 +153,7 @@ public sealed partial class OptionsPanelControl : UserControl
 
     public void ShowAvailableUpdate(UpdateCheckResult update)
     {
-        StatusBar.IsOpen = false;
+        _status.Hide();
         _pendingUpdate = update;
         UpdateAvailableText.Text = $"Version {update.LatestVersion} is available. The app will restart after installing.";
         UpdateAvailableText.Visibility = Visibility.Visible;
@@ -166,18 +165,15 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private void OnOpenDataFolderClick(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            Directory.CreateDirectory(Services.GameRepository.AppDataFolder);
-            Process.Start(new ProcessStartInfo(
-                Services.GameRepository.AppDataFolder) { UseShellExecute = true });
-        }
-        catch { ShowStatus("Could not open data folder.", false); }
+        try { Directory.CreateDirectory(Services.GameRepository.AppDataFolder); }
+        catch (IOException) { }
+        if (!Shell.Open(Services.GameRepository.AppDataFolder))
+            ShowStatus("Could not open data folder.", false);
     }
 
     private void OnOpenLogClick(object sender, RoutedEventArgs e)
     {
-        if (!Log.Open())
+        if (!Shell.Open(Log.FilePath))
             ShowStatus("Could not open the log.", false);
     }
 

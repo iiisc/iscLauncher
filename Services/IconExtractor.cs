@@ -10,7 +10,6 @@ namespace iscLauncher.Services;
 
 public static class IconExtractor
 {
-    // Cache icons by executable path to avoid re-extracting
     private static readonly ConcurrentDictionary<string, BitmapImage?> _iconCache = new();
 
     // Two thumbnail requests at once on the UI thread make one fail with E_PENDING, so icons load one at a time
@@ -49,9 +48,6 @@ public static class IconExtractor
         return icon;
     }
 
-    /// <summary>
-    /// Removes a specific icon from the cache.
-    /// </summary>
     public static void InvalidateCache(string executablePath)
     {
         _iconCache.TryRemove(executablePath, out _);

@@ -35,7 +35,7 @@ public partial class App : Application
             dialog.PrimaryButtonText = "Open Log";
             dialog.CloseButtonText = "OK";
             if (await dialog.ShowAsync() == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary)
-                Log.Open();
+                Shell.Open(Log.FilePath);
         }
         // Another dialog was already open; the error is still in the log
         catch { }

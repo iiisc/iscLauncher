@@ -5,13 +5,20 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
+using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
 public enum AddonChange { New, Changed, Removed }
 
 /// <summary>An addon that differs between a source and a target AddOns folder. Versions come from the addons' .toc files.</summary>
-public record AddonDiff(string Name, AddonChange Change, string? SourceVersion, string? TargetVersion, string? Warning);
+public record AddonDiff(string Name, AddonChange Change, string? SourceVersion, string? TargetVersion, string? Warning)
+{
+    /// <summary>"old → new", when both versions are known and differ.</summary>
+    public string? VersionChange => SourceVersion != null && TargetVersion != null && SourceVersion != TargetVersion
+        ? $"{TargetVersion} → {SourceVersion}"
+        : null;
+}
 
 /// <param name="Characters">Characters in the source's WTF folder, for the character-settings option.</param>
 public record AddonPreview(List<AddonDiff> Diffs, int Unchanged, int Characters = 0);
@@ -32,6 +39,8 @@ public static partial class AddonFiles
     private static readonly Regex DependencyField = new(@"^##\s*(Dep\w*|RequiredDeps)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
 
     public static string GameAddOnsDir(string gameDir) => Path.Combine(gameDir, "Interface", "AddOns");
+
+    public static string GameAddOnsDir(GameEntry game) => GameAddOnsDir(AddonSyncService.GameDir(game));
 
     /// <summary>Installed addon folder names. Blizzard_ folders ship with the client, so they're never compared or moved.</summary>
     public static List<string> AddonNames(string addOnsDir)
@@ -105,10 +114,7 @@ public static partial class AddonFiles
     {
         try
         {
-            // Blizzard's official exes store 1.60.1 as file-version major 160, so the version text is what's reliable.
-            // Private-server clients write it as "3, 3, 5, 12340".
-            var match = Regex.Match(FileVersionInfo.GetVersionInfo(exePath).FileVersion ?? "", @"\d+");
-            return match.Success ? int.Parse(match.Value) : 0;
+            return VersionParts(exePath) is [var major, ..] ? int.Parse(major) : 0;
         }
         catch
         {
@@ -121,15 +127,19 @@ public static partial class AddonFiles
     {
         try
         {
-            // Private-server clients write it as "3, 3, 5, 12340"
-            var parts = Regex.Matches(FileVersionInfo.GetVersionInfo(exePath).FileVersion ?? "", @"\d+").Take(3).Select(m => m.Value).ToList();
-            return parts.Count == 3 ? string.Join('.', parts) : null;
+            var parts = VersionParts(exePath);
+            return parts.Count >= 3 ? string.Join('.', parts.Take(3)) : null;
         }
         catch (Exception ex) when (ex is FileNotFoundException or ArgumentException)
         {
             return null;
         }
     }
+
+    // Blizzard's official exes store 1.60.1 as file-version major 160, so the version text is what's reliable.
+    // Private-server clients write it as "3, 3, 5, 12340".
+    private static List<string> VersionParts(string exePath) =>
+        Regex.Matches(FileVersionInfo.GetVersionInfo(exePath).FileVersion ?? "", @"\d+").Select(m => m.Value).ToList();
 
     internal static void ForceDeleteDirectory(string path)
     {

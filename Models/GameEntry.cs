@@ -44,43 +44,23 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("executablePath")]
     public string ExecutablePath { get; set; } = string.Empty;
 
-    /// <summary>
-    /// The realmlist server address (e.g., "logon.warmane.com").
-    /// When set, the launcher will update Data\enUS\realmlist.wtf before launching.
-    /// </summary>
     [JsonPropertyName("realmlistAddress")]
     public string? RealmlistAddress { get; set; }
 
-    /// <summary>
-    /// The account name to use for login.
-    /// When set, the launcher will update WTF\config.txt before launch.
-    /// </summary>
     [JsonPropertyName("accountName")]
     public string? AccountName { get; set; }
 
-    /// <summary>
-    /// The realm/server name (e.g., "ChromieCraft").
-    /// When set, the launcher will update WTF\config.txt before launch.
-    /// </summary>
     [JsonPropertyName("realmName")]
     public string? RealmName { get; set; }
 
-    /// <summary>
-    /// Seconds to wait after the process starts before attempting to type the password.
-    /// Needed for DirectX/OpenGL games whose login screen takes time to render on cold starts.
-    /// </summary>
+    /// <summary>Seconds to wait before typing the password; some clients take a while to show the login screen on a cold start.</summary>
     [JsonPropertyName("startupDelay")]
-    public int StartupDelaySeconds { get; set; } = 0;
+    public int StartupDelaySeconds { get; set; }
 
-    /// <summary>
-    /// HTTPS URL of the GitHub repo used for addon/WTF sync.
-    /// </summary>
     [JsonPropertyName("syncRepoUrl")]
     public string? SyncRepoUrl { get; set; }
 
-    /// <summary>
-    /// UTC timestamp of the last successful pull or push.
-    /// </summary>
+    /// <summary>When this PC last pulled or pushed, in UTC.</summary>
     [JsonPropertyName("lastSynced")]
     public DateTime? LastSynced { get; set; }
 

@@ -26,7 +26,8 @@ public static class SetUpSyncDialog
 
         var pickText = BodyText("Pick the repo this game syncs with, such as the one it uses on another PC.");
         var repoBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Header = "Repo" };
-        var refresh = new Button { Content = "Refresh", Style = Res<Style>("SecondaryButtonStyle"), VerticalAlignment = VerticalAlignment.Bottom };
+        var refresh = StyledButton("Refresh");
+        refresh.VerticalAlignment = VerticalAlignment.Bottom;
         var note = WarningText("");
         var picker = new Grid { ColumnSpacing = 8 };
         picker.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -34,11 +35,11 @@ public static class SetUpSyncDialog
         Grid.SetColumn(refresh, 1);
         picker.Children.Add(repoBox);
         picker.Children.Add(refresh);
-        var newRepo = new HyperlinkButton { Content = "Set Up a New Repo Instead", Padding = new Thickness(0), Foreground = Res<Microsoft.UI.Xaml.Media.Brush>("GoldBrush") };
-        var pick = Panel(pickText, picker, note, newRepo);
+        var newRepo = Link("Set Up a New Repo Instead");
+        var pick = Panel(10, pickText, picker, note, newRepo);
 
         var description = Uri.EscapeDataString("WoW addons and settings, synced by iscLauncher");
-        var make = Panel(
+        var make = Panel(10,
             SectionLabel("STEP 2 OF 3 · MAKE A REPO"),
             BodyText("A repo is a private folder on GitHub that only you can see. iscLauncher keeps this game's addons " +
                 "and settings in it, so your other PCs can pull them."),
@@ -47,7 +48,7 @@ public static class SetUpSyncDialog
             Dim("GitHub fills everything in. Click Create repository there, then come back and click Next."));
 
         var giveSteps = BodyText("");
-        var give = Panel(
+        var give = Panel(10,
             SectionLabel("STEP 3 OF 3 · GIVE IT TO ISCLAUNCHER"),
             BodyText("iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach."),
             giveSteps,
@@ -149,17 +150,6 @@ public static class SetUpSyncDialog
             return null;
         return repos[repoBox.SelectedIndex].CloneUrl;
     }
-
-    private static StackPanel Panel(params UIElement[] children)
-    {
-        var panel = new StackPanel { Spacing = 10 };
-        foreach (var child in children)
-            panel.Children.Add(child);
-        return panel;
-    }
-
-    private static HyperlinkButton Link(string text, string url) =>
-        new() { Content = text, NavigateUri = new Uri(url), Padding = new Thickness(0), Foreground = Res<Microsoft.UI.Xaml.Media.Brush>("GoldBrush") };
 
     // GitHub repo names allow letters, digits, '-', '_' and '.'; the game name is folded into that
     private static string SuggestedRepoName(string gameName)

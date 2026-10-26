@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using iscLauncher.Dialogs;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
@@ -27,7 +28,6 @@ public sealed class InstalledAddonsView : UserControl
     private readonly AddonUpdateService _service;
     private readonly string _addOnsDir;
     private readonly string _downloadDir = AddonUpdateService.NewDownloadDir();
-    private List<string> _installed;
     // Each installed addon's version and the repo its .toc names, read once per listing
     private Dictionary<string, (string? Version, string? Repo)> _toc;
     private readonly List<AddonSource> _sources;
@@ -38,8 +38,8 @@ public sealed class InstalledAddonsView : UserControl
     private readonly TextBlock _summary = BodyText("");
     private readonly TextBlock _message = WarningText("");
     private readonly CancellationTokenSource _cts = new();
-    private readonly Button _updateSelected = TextButton("Update Selected", "PrimaryButtonStyle");
-    private readonly Button _updateAll = TextButton("Update All", "SecondaryButtonStyle");
+    private readonly Button _updateSelected = StyledButton("Update Selected", "PrimaryButtonStyle");
+    private readonly Button _updateAll = StyledButton("Update All");
     private bool _busy;
     private Task _installing = Task.CompletedTask;
 
@@ -53,9 +53,8 @@ public sealed class InstalledAddonsView : UserControl
     {
         _game = game;
         _service = service;
-        _addOnsDir = AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game));
+        _addOnsDir = AddonFiles.GameAddOnsDir(game);
         _toc = AddonFiles.InstalledAddons(_addOnsDir);
-        _installed = [.. _toc.Keys];
         _sources = AddonUpdateService.Sources(game, _toc);
         _message.Visibility = Visibility.Collapsed;
 
@@ -104,7 +103,6 @@ public sealed class InstalledAddonsView : UserControl
         var (toc, compared) = await Task.Run(() =>
             (AddonFiles.InstalledAddons(_addOnsDir), downloaded.Select(u => AddonUpdateService.Compare(_game, u)).ToList()));
         _toc = toc;
-        _installed = [.. toc.Keys];
         foreach (var update in compared)
         {
             if (Source(update.Repo) is { } source)
@@ -172,7 +170,7 @@ public sealed class InstalledAddonsView : UserControl
     private async Task ConnectAsync(string repo, List<string> family)
     {
         _message.Visibility = Visibility.Collapsed;
-        var source = _sources.FirstOrDefault(s => IgnoreCase.Equals(s.Repo, repo));
+        var source = Source(repo);
         var added = source == null;
         // Saved by the check once it finds the repo's addons
         source ??= new AddonSource { Repo = repo };
@@ -218,17 +216,17 @@ public sealed class InstalledAddonsView : UserControl
         var connected = new HashSet<string>(IgnoreCase);
         foreach (var source in _sources.OrderBy(s => RepoName(s.Repo), IgnoreCase))
         {
-            var folders = _installed.Where(n => source.Addons.Contains(n, IgnoreCase)).ToList();
+            var folders = _toc.Keys.Where(n => source.Addons.Contains(n, IgnoreCase)).ToList();
             connected.UnionWith(folders);
             _list.Children.Add(SourceRow(source, folders));
         }
 
-        var families = AddonFiles.Families(_installed.Where(n => !connected.Contains(n)), n => n).ToList();
+        var families = AddonFiles.Families(_toc.Keys.Where(n => !connected.Contains(n)), n => n).ToList();
         foreach (var family in families)
             _list.Children.Add(LocalRow(family));
         if (!HasGame)
             _list.Children.Add(Dim("The game's executable wasn't found, so its addons can't be listed."));
-        else if (_installed.Count == 0)
+        else if (_toc.Count == 0)
             _list.Children.Add(Dim("No addons are installed in this game."));
 
         var updates = Available.Count();
@@ -248,8 +246,6 @@ public sealed class InstalledAddonsView : UserControl
         _updateAll.IsEnabled = !_busy && Available.Any(u => Warning(u) == null);
     }
 
-    private static Button TextButton(string text, string styleKey) => new() { Content = text, Style = Res<Style>(styleKey) };
-
     private Grid SourceRow(AddonSource source, List<string> folders)
     {
         var update = _results.GetValueOrDefault(source.Repo);
@@ -261,10 +257,10 @@ public sealed class InstalledAddonsView : UserControl
             .ThenBy(f => f.Length)
             .FirstOrDefault();
         var bumped = update?.Changed
-            .Where(a => a.SourceVersion != null && a.TargetVersion != null && a.SourceVersion != a.TargetVersion)
+            .Where(a => a.VersionChange != null)
             .OrderByDescending(a => IgnoreCase.Equals(a.Name, lead))
             .FirstOrDefault();
-        var version = bumped != null ? $"{bumped.TargetVersion} → {bumped.SourceVersion}" : lead == null ? null : _toc[lead].Version;
+        var version = bumped?.VersionChange ?? (lead == null ? null : _toc[lead].Version);
 
         var details = new List<string>();
         if (!string.IsNullOrWhiteSpace(version))
@@ -286,14 +282,9 @@ public sealed class InstalledAddonsView : UserControl
 
         var text = new StackPanel { Spacing = 2 };
         text.Children.Add(title);
-        text.Children.Add(new HyperlinkButton
-        {
-            Content = $"github.com/{source.Repo}",
-            NavigateUri = new Uri($"https://github.com/{source.Repo}"),
-            Padding = new Thickness(0),
-            FontSize = 12,
-            Foreground = Res<Brush>("GoldBrush")
-        });
+        var link = Link($"github.com/{source.Repo}", $"https://github.com/{source.Repo}");
+        link.FontSize = 12;
+        text.Children.Add(link);
         if (update?.Error != null)
             text.Children.Add(WarningText($"⚠ {update.Error}"));
         else if (hasUpdate && Warning(update!) is { } warning)
@@ -303,12 +294,13 @@ public sealed class InstalledAddonsView : UserControl
 
         UIElement status = _checking.Contains(source.Repo) ? Checking()
             : update == null ? Dim("Not checked")
-            : update.Error != null ? Status("Couldn't check", "CrimsonBrush")
-            : hasUpdate ? Status("Update available", "GoldBrush")
+            : update.Error != null ? Dim("Couldn't check", "CrimsonBrush")
+            : hasUpdate ? Dim("Update available", "GoldBrush")
             : update.Installed.Count == 0 ? Dim("Not installed")
-            : Status("Up to date", "EmeraldForegroundBrush");
+            : Dim("Up to date", "EmeraldForegroundBrush");
 
-        var remove = new Button { Content = new FontIcon { Glyph = "", FontSize = 12 }, Padding = new Thickness(8), Style = Res<Style>("SecondaryButtonStyle") };
+        var remove = StyledButton(new FontIcon { Glyph = "", FontSize = 12 });
+        remove.Padding = new Thickness(8);
         ToolTipService.SetToolTip(remove, "Stop updating from this repo");
         AutomationProperties.SetName(remove, $"Disconnect {source.Repo}");
         remove.Click += (_, _) => Remove(source);
@@ -326,13 +318,7 @@ public sealed class InstalledAddonsView : UserControl
 
     private Grid LocalRow(List<string> family)
     {
-        var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        title.Children.Add(BodyText(family[0]));
-        if (_toc[family[0]].Version is { Length: > 0 } version)
-            title.Children.Add(Dim(version));
-        if (family.Count > 1)
-            title.Children.Add(Dim($"and {(family.Count - 1).Plural("more part")}"));
-
+        var title = AddonChecklist.FamilyTitle(family[0], _toc[family[0]].Version, family.Count);
         var suggested = family.Select(n => _toc[n].Repo).FirstOrDefault(r => r != null);
         var text = new StackPanel { Spacing = 2 };
         text.Children.Add(title);
@@ -344,7 +330,7 @@ public sealed class InstalledAddonsView : UserControl
 
     private Button ConnectButton(List<string> family, string? suggested)
     {
-        var button = new Button { Content = "Connect", Style = Res<Style>("SecondaryButtonStyle") };
+        var button = StyledButton("Connect");
         AutomationProperties.SetName(button, $"Connect {family[0]}");
         // Built when clicked rather than for every unconnected row on every render
         button.Click += (_, _) => ConnectFlyout(family, suggested).ShowAt(button);
@@ -363,7 +349,7 @@ public sealed class InstalledAddonsView : UserControl
         AutomationProperties.SetName(box, $"GitHub repo for {family[0]}");
         var error = WarningText("");
         error.Visibility = Visibility.Collapsed;
-        var connect = new Button { Content = "Connect", Style = Res<Style>("PrimaryButtonStyle") };
+        var connect = StyledButton("Connect", "PrimaryButtonStyle");
 
         var matches = new StackPanel { Spacing = 4 };
         matches.Children.Add(Dim("Looking on GitHub..."));
@@ -375,7 +361,7 @@ public sealed class InstalledAddonsView : UserControl
         panel.Children.Add(error);
         panel.Children.Add(connect);
         panel.Children.Add(Dim("If the project holds other addons you have too, they're connected with it."));
-        var flyout = new Flyout { Content = new ScrollViewer { Content = panel, MaxHeight = 480 } };
+        var flyout = new Flyout { Content = new ScrollViewer { Content = panel, MaxHeight = 480 }, FlyoutPresenterStyle = Res<Style>("FlyoutPresenterStyle") };
         _ = ShowMatchesAsync(matches, family, flyout);
 
         connect.Click += async (_, _) =>
@@ -466,13 +452,6 @@ public sealed class InstalledAddonsView : UserControl
         fe.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(fe, column);
         grid.Children.Add(fe);
-    }
-
-    private static TextBlock Status(string text, string brushKey)
-    {
-        var block = Dim(text);
-        block.Foreground = Res<Brush>(brushKey);
-        return block;
     }
 
     private static StackPanel Checking()

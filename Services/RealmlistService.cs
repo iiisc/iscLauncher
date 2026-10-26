@@ -5,18 +5,10 @@ using System.Threading.Tasks;
 
 namespace iscLauncher.Services;
 
-/// <summary>
-/// Service to manage realmlist.wtf and config.txt files for WoW-style games.
-/// Updates configuration files to point to the correct server and account before launching.
-/// Failures throw <see cref="AppException"/>.
-/// </summary>
+/// <summary>Points a game's realmlist.wtf and Config.wtf at its server and account. Failures throw <see cref="AppException"/>.</summary>
 public class RealmlistService
 {
-    /// <summary>
-    /// Updates realmlist.wtf files for the given game executable.
-    /// Scans all locale subdirectories under {executableDirectory}\Data\ for existing files.
-    /// Falls back to creating Data\enUS\realmlist.wtf if none are found.
-    /// </summary>
+    /// <summary>Updates every locale's realmlist.wtf under Data, or creates Data\enUS\realmlist.wtf if there's none.</summary>
     public async Task UpdateRealmlistAsync(string executablePath, string? realmlistAddress)
     {
         if (string.IsNullOrWhiteSpace(realmlistAddress))

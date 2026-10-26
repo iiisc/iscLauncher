@@ -1,7 +1,7 @@
 using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using iscLauncher.Helpers;
 using iscLauncher.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -53,8 +53,8 @@ public static class GitHubSignInDialog
             var package = new DataPackage();
             package.SetText(signIn.UserCode);
             Clipboard.SetContent(package);
-            try { Process.Start(new ProcessStartInfo(signIn.VerificationUri) { UseShellExecute = true }); }
-            catch { waiting.Text = $"Couldn't open the browser. Go to {signIn.VerificationUri} yourself."; }
+            if (!Shell.Open(signIn.VerificationUri))
+                waiting.Text = $"Couldn't open the browser. Go to {signIn.VerificationUri} yourself.";
         };
 
         string? login = null;

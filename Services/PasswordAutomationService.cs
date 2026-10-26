@@ -78,9 +78,7 @@ public class PasswordAutomationService
         IntPtr bestWindow = IntPtr.Zero;
         Stopwatch? respondingSince = null;
 
-        // Track PIDs alongside their creation times so we can detect PID reuse
-        // and avoid typing a password into an unrelated process that inherited
-        // a recycled PID.
+        // PID → creation time, see ValidateProcessIdentity
         var knownProcesses = new Dictionary<uint, long> { [(uint)processId] = GetProcessCreationTime((uint)processId) };
 
         while (sw.Elapsed < WindowTimeout)
@@ -98,16 +96,11 @@ public class PasswordAutomationService
 
             if (bestWindow == IntPtr.Zero)
             {
-                // Walk the process tree rooted at the launched PID to discover
-                // child processes that may own the game window (e.g. a launcher
-                // that spawns the real game executable). Unlike name+time matching
-                // this cannot accidentally target a different instance of the game.
                 ExpandProcessTree(knownProcesses);
 
                 bestWindow = EnumerateVisibleWindows().FirstOrDefault(hWnd =>
                 {
                     GetWindowThreadProcessId(hWnd, out uint windowPid);
-                    // Guard against PID reuse: the process behind this window must still be the one found in the tree
                     return windowPid != currentPid
                         && ValidateProcessIdentity(knownProcesses, windowPid)
                         && GetWindowTitle(hWnd).Length > 0;
@@ -136,10 +129,8 @@ public class PasswordAutomationService
     }
 
     /// <summary>
-    /// Walks the system process list and adds any process whose parent is
-    /// already in <paramref name="knownProcesses"/> (i.e. descendants of the
-    /// launched process). Records each child's creation time so PID reuse
-    /// can be detected later.
+    /// Adds the launched process's descendants to <paramref name="knownProcesses"/>, since a launcher may start the
+    /// real game. Following the tree, rather than matching by name, can't pick up another running copy of the game.
     /// </summary>
     private static void ExpandProcessTree(Dictionary<uint, long> knownProcesses)
     {
@@ -202,11 +193,7 @@ public class PasswordAutomationService
         return false;
     }
 
-    /// <summary>
-    /// Returns the creation time (as a FILETIME long) for the given PID,
-    /// or 0 if the process cannot be opened (e.g. it has already exited
-    /// or requires elevated privileges).
-    /// </summary>
+    /// <summary>The process's creation time as a FILETIME, or 0 if it can't be opened (exited, or elevated).</summary>
     private static long GetProcessCreationTime(uint pid)
     {
         IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
@@ -278,7 +265,6 @@ public class PasswordAutomationService
 
             if (vkResult == -1)
             {
-                // Character has no virtual key mapping; use Unicode fallback
                 inputList.Add(CreateUnicodeKeyInput(c, keyUp: false));
                 inputList.Add(CreateUnicodeKeyInput(c, keyUp: true));
                 continue;
@@ -302,9 +288,6 @@ public class PasswordAutomationService
             if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: true, layout));
             if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: true, layout));
         }
-
-        if (inputList.Count == 0)
-            return true;
 
         var inputs = inputList.ToArray();
         uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());

@@ -90,23 +90,27 @@ public sealed class AddonChecklist
         var addon = family[0];
         var version = addon.Change switch
         {
-            AddonChange.Changed when addon.TargetVersion != null && addon.SourceVersion != null && addon.TargetVersion != addon.SourceVersion
-                => $"{addon.TargetVersion} → {addon.SourceVersion}",
+            AddonChange.Changed when addon.VersionChange != null => addon.VersionChange,
             AddonChange.Removed => addon.TargetVersion,
             _ => addon.SourceVersion
         };
 
-        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        line.Children.Add(BodyText(addon.Name));
-        if (!string.IsNullOrWhiteSpace(version))
-            line.Children.Add(Dim(version));
-        if (family.Count > 1)
-            line.Children.Add(Dim($"and {(family.Count - 1).Plural("more part")}"));
-
         var content = new StackPanel { Spacing = 2 };
-        content.Children.Add(line);
+        content.Children.Add(FamilyTitle(addon.Name, version, family.Count));
         if (warning != null)
             content.Children.Add(WarningText($"⚠ {warning}"));
         return content;
+    }
+
+    /// <summary>An addon's name and version, and how many more folders it ships as.</summary>
+    internal static StackPanel FamilyTitle(string name, string? version, int folders)
+    {
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        line.Children.Add(BodyText(name));
+        if (!string.IsNullOrWhiteSpace(version))
+            line.Children.Add(Dim(version));
+        if (folders > 1)
+            line.Children.Add(Dim($"and {(folders - 1).Plural("more part")}"));
+        return line;
     }
 }

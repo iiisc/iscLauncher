@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +27,7 @@ public sealed partial class GameDetailControl
         SetUpSyncButton.IsEnabled = false;
         try
         {
-            if ((_services.GitHub.Token == null || _services.GitHub.SignInProblem != null)
+            if (_services.GitHub.UsableToken == null
                 && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub, "STEP 1 OF 3 · SIGN IN") == null)
                 return;
 
@@ -197,16 +196,12 @@ public sealed partial class GameDetailControl
     private async Task<bool> RunSyncAsync(string startMessage,
         Func<IProgress<string>, CancellationToken, Task<string?>> operation)
     {
-        _syncCts?.Cancel(); _syncCts?.Dispose();
-        _syncCts = new CancellationTokenSource();
-        var ct = _syncCts.Token;
-        SetSyncBusy(true);
-        ShowInfo(startMessage);
+        var ct = StartSync(startMessage);
         try
         {
             var message = await operation(new Progress<string>(ShowInfo), ct);
             if (message != null) ShowStatus(message, true);
-            else StatusBar.IsOpen = false;
+            else _status.Hide();
             if (_game != null) UpdateSyncStatus(_game);
             // Pulls, rollbacks, restores and updates change the addons the list shows
             if (InstalledView is { } view) await view.RescanAsync();
@@ -228,6 +223,16 @@ public sealed partial class GameDetailControl
         return false;
     }
 
+    /// <summary>Takes over from any sync still running and marks the page busy; the caller ends with SetSyncBusy(false).</summary>
+    private CancellationToken StartSync(string message, TimeSpan? timeout = null)
+    {
+        _syncCts?.Cancel(); _syncCts?.Dispose();
+        _syncCts = timeout is { } t ? new CancellationTokenSource(t) : new CancellationTokenSource();
+        SetSyncBusy(true);
+        ShowInfo(message);
+        return _syncCts.Token;
+    }
+
     private void OnCancelSyncClick(object sender, RoutedEventArgs e) => _syncCts?.Cancel();
 
     public void CancelSync() => _syncCts?.Cancel();
@@ -237,8 +242,8 @@ public sealed partial class GameDetailControl
         if (_game?.HasSyncRepo != true) return;
         var url = _game.SyncRepoUrl!.TrimEnd('/');
         if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) url = url[..^4];
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch { ShowStatus("Could not open browser.", false); }
+        if (!Shell.Open(url))
+            ShowStatus("Could not open browser.", false);
     }
 
     private void SetSyncBusy(bool busy)

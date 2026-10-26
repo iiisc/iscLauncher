@@ -30,6 +30,12 @@ public sealed class StatusNotifier
     /// <summary>Work in progress, or a reminder: stays up until the next message replaces it.</summary>
     public void ShowInfo(string message) => Show(message, InfoBarSeverity.Informational);
 
+    public void Hide()
+    {
+        _hideTimer.Stop();
+        _bar.IsOpen = false;
+    }
+
     private void Show(string message, InfoBarSeverity severity)
     {
         _hideTimer.Stop();

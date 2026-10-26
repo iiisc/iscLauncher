@@ -57,7 +57,7 @@ public class AddonUpdateService
         try
         {
             var latest = await _gitHub.GetLatestAsync(source.Repo, ct);
-            var gameAddOns = GameAddOns(game);
+            var gameAddOns = AddonFiles.GameAddOnsDir(game);
             var (installed, files) = await Task.Run(() =>
             {
                 var present = source.Addons.Where(a => Directory.Exists(Path.Combine(gameAddOns, a))).ToList();
@@ -88,7 +88,7 @@ public class AddonUpdateService
     {
         if (update.Error != null || update.Dir == null)
             return update;
-        var gameAddOns = GameAddOns(game);
+        var gameAddOns = AddonFiles.GameAddOnsDir(game);
         var downloaded = AddonFiles.AddonNames(update.Dir).ToHashSet(IgnoreCase);
         var installed = AddonFiles.AddonNames(gameAddOns).Where(downloaded.Contains).ToList();
         var preview = AddonFiles.Compare(update.Dir, gameAddOns, includeRemoved: false, AddonFiles.ClientMajorVersion(game.ExecutablePath), CancellationToken.None);
@@ -107,7 +107,7 @@ public class AddonUpdateService
     /// </summary>
     public async Task RefreshAsync(GameEntry game, CancellationToken ct)
     {
-        var sources = await Task.Run(() => Sources(game, AddonFiles.InstalledAddons(GameAddOns(game))), ct);
+        var sources = await Task.Run(() => Sources(game, AddonFiles.InstalledAddons(AddonFiles.GameAddOnsDir(game))), ct);
         foreach (var source in sources)
         {
             if ((await _gitHub.GetLatestAsync(source.Repo, ct)).Id != source.MatchedVersion)
@@ -138,6 +138,4 @@ public class AddonUpdateService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
-
-    private static string GameAddOns(GameEntry game) => AddonFiles.GameAddOnsDir(AddonSyncService.GameDir(game));
 }

@@ -11,16 +11,9 @@ using static iscLauncher.Helpers.DialogHelper;
 
 namespace iscLauncher.Dialogs;
 
-/// <summary>
-/// Confirmation dialog that lets the user pick a commit to roll back to.
-/// Shows the repo's recent commits.
-/// </summary>
 public static class RollbackDialog
 {
-    /// <summary>
-    /// Shows the rollback dialog. Returns the selected commit, or <c>null</c> if cancelled.
-    /// The dialog opens immediately with a spinner while commits are loaded in the background.
-    /// </summary>
+    /// <summary>Lets the user pick a recent commit to roll back to. Returns it, or null if cancelled.</summary>
     public static async Task<GitCommitEntry?> ShowAsync(
         XamlRoot xamlRoot,
         Func<Task<List<GitCommitEntry>>> loadCommitsAsync)
@@ -89,7 +82,6 @@ public static class RollbackDialog
                 Padding = new Thickness(4)
             };
 
-            // Remove the default blue selection indicator in all visual states
             var transparent = new SolidColorBrush(Colors.Transparent);
             commitListView.Resources["ListViewItemSelectionIndicatorBrush"] = transparent;
             commitListView.Resources["ListViewItemSelectionIndicatorPointerOverBrush"] = transparent;
@@ -148,8 +140,7 @@ public static class RollbackDialog
 
     private static TextBlock CenteredMessage(string text, string brushKey)
     {
-        var block = BodyText(text);
-        block.Foreground = Res<Brush>(brushKey);
+        var block = BodyText(text, brushKey);
         block.HorizontalAlignment = HorizontalAlignment.Center;
         block.TextAlignment = TextAlignment.Center;
         return block;

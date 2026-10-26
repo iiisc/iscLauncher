@@ -12,7 +12,7 @@ namespace iscLauncher.Services;
 
 public record GitResult(bool Success, string Output);
 
-public record GitCommitEntry(string Hash, string Message, string Body = "", string DateString = "")
+public record GitCommitEntry(string Hash, string Message, string Body, string DateString)
 {
     public string DisplayDate => DateTimeOffset.TryParse(DateString, out var date)
         ? date.LocalDateTime.ToString("yyyy-MM-dd HH:mm")
@@ -40,16 +40,19 @@ public class GitService
     public string GetLocalCachePath(GameEntry game) =>
         Path.Combine(SyncCacheRoot, game.Id.ToString());
 
-    public async Task<bool> IsGitInstalledAsync(CancellationToken ct = default)
+    public async Task<bool> IsGitInstalledAsync(CancellationToken ct)
     {
+        if (_git != null)
+            return true;
         foreach (var candidate in new[] { "git", BundledGit })
         {
-            if (_git != null)
-                break;
             if ((await RunGitAsync(["--version"], ct, git: candidate)).Success)
+            {
                 _git = candidate;
+                return true;
+            }
         }
-        return _git != null;
+        return false;
     }
 
     /// <summary>
@@ -101,20 +104,20 @@ public class GitService
     }
 
     /// <summary>The checked-out commit, or null on a branch with no commits yet.</summary>
-    public async Task<string?> GetHeadAsync(string repoDir, CancellationToken ct = default)
+    public async Task<string?> GetHeadAsync(string repoDir, CancellationToken ct)
     {
         var result = await RunGitAsync(["-C", repoDir, "rev-parse", "-q", "--verify", "HEAD"], ct);
         return result.Success ? result.Output.Trim() : null;
     }
 
     /// <summary>Replaces the working tree and index with exactly the files of <paramref name="commit"/>, including deletions.</summary>
-    public async Task<GitResult> RestoreTreeAsync(string repoDir, string commit, CancellationToken ct = default) =>
+    public async Task<GitResult> RestoreTreeAsync(string repoDir, string commit, CancellationToken ct) =>
         await RunGitAsync(["-C", repoDir, "read-tree", "-u", "--reset", commit], ct);
 
-    public async Task<GitResult> AddAllAsync(string repoDir, CancellationToken ct = default) =>
+    public async Task<GitResult> AddAllAsync(string repoDir, CancellationToken ct) =>
         await RunGitAsync(["-C", repoDir, "add", "-A"], ct);
 
-    public async Task<GitResult> CommitAsync(string repoDir, string message, CancellationToken ct = default)
+    public async Task<GitResult> CommitAsync(string repoDir, string message, CancellationToken ct)
     {
         var msgFile = Path.Combine(repoDir, ".git", "COMMIT_MSG_TMP");
         try
@@ -130,16 +133,16 @@ public class GitService
         }
     }
 
-    public async Task<GitResult> PushAsync(string repoDir, string branch, CancellationToken ct = default) =>
+    public async Task<GitResult> PushAsync(string repoDir, string branch, CancellationToken ct) =>
         await RunGitAsync(["-C", repoDir, "push", "origin", $"HEAD:refs/heads/{branch}"], ct);
 
-    public async Task<bool> IsStatusCleanAsync(string repoDir, CancellationToken ct = default)
+    public async Task<bool> IsStatusCleanAsync(string repoDir, CancellationToken ct)
     {
         var result = await RunGitAsync(["-C", repoDir, "status", "--porcelain"], ct);
         return result.Success && string.IsNullOrWhiteSpace(result.Output);
     }
 
-    public async Task<List<GitCommitEntry>> LogAsync(string repoDir, int count = 20, CancellationToken ct = default)
+    public async Task<List<GitCommitEntry>> LogAsync(string repoDir, int count, CancellationToken ct)
     {
         // Use record separator (ASCII 30) to delimit entries and unit separator (ASCII 31) between fields
         const char rs = '\x1e';

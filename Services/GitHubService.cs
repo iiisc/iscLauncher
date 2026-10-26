@@ -54,6 +54,9 @@ public class GitHubService
 
     public string? Token => _credentials.GetCredential(TokenTarget);
 
+    /// <summary>The saved sign-in, unless GitHub turned it down or it's outdated.</summary>
+    public string? UsableToken => SignInProblem == null ? Token : null;
+
     /// <summary>
     /// Why the user needs to sign in again, or null: <see cref="TurnedDown"/> when GitHub refused the saved sign-in
     /// (revoked, or pushed out by newer ones, since GitHub keeps only the latest ten per app), or <see cref="Outdated"/>.
@@ -131,7 +134,7 @@ public class GitHubService
     /// <summary>The signed-in GitHub username, or null if not signed in or the sign-in no longer works.</summary>
     public async Task<string?> GetLoginAsync(CancellationToken ct = default)
     {
-        using var response = await SendAsync(HttpMethod.Get, "https://api.github.com/user", null, ct);
+        using var response = await GetSignedInAsync("https://api.github.com/user", ct);
         if (response?.IsSuccessStatusCode != true)
             return null;
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -168,7 +171,7 @@ public class GitHubService
 
     private async Task<JsonElement> GetJsonAsync(string url, CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Get, url, null, ct) ?? throw new AppException("Sign in with GitHub first.");
+        using var response = await GetSignedInAsync(url, ct) ?? throw new AppException("Sign in with GitHub first.");
         if (!response.IsSuccessStatusCode)
             throw new AppException($"GitHub couldn't list iscLauncher's repos ({(int)response.StatusCode} {response.ReasonPhrase}).");
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -242,7 +245,7 @@ public class GitHubService
     // both are asked again without it. A turned-down one isn't sent again after that.
     private async Task<HttpResponseMessage> GetAsync(string url, string? accept, CancellationToken ct, bool signedIn = true)
     {
-        var token = signedIn && SignInProblem == null ? Token : null;
+        var token = signedIn ? UsableToken : null;
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (accept != null)
             request.Headers.Accept.ParseAdd(accept);
@@ -255,11 +258,11 @@ public class GitHubService
         return await GetAsync(url, accept, ct, signedIn: false);
     }
 
-    private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, HttpContent? content, CancellationToken ct)
+    private async Task<HttpResponseMessage?> GetSignedInAsync(string url, CancellationToken ct)
     {
         if (Token is not { } token)
             return null;
-        using var request = new HttpRequestMessage(method, url) { Content = content };
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await Http.SendAsync(request, ct);
         IsTurnedDown(response);

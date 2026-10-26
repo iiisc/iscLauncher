@@ -164,7 +164,7 @@ public class AddonSyncService
     }
 
     public Task<AddonPreview> PreviewCopyAsync(GameEntry source, GameEntry target, CancellationToken ct) =>
-        Task.Run(() => AddonFiles.Compare(AddonFiles.GameAddOnsDir(GameDir(source)), AddonFiles.GameAddOnsDir(GameDir(target)),
+        Task.Run(() => AddonFiles.Compare(AddonFiles.GameAddOnsDir(source), AddonFiles.GameAddOnsDir(target),
             includeRemoved: false, AddonFiles.ClientMajorVersion(target.ExecutablePath), ct), ct);
 
     public Task<string> CopyToGameAsync(GameEntry source, GameEntry target, IReadOnlyList<AddonDiff> addons, bool copySettings, CancellationToken ct) =>
@@ -177,7 +177,7 @@ public class AddonSyncService
             string? skipped = null;
             ChangeGameFiles(target, names, copySettings, null, () =>
             {
-                AddonFiles.ApplyAddons(AddonFiles.GameAddOnsDir(GameDir(source)), AddonFiles.GameAddOnsDir(GameDir(target)), addons, CancellationToken.None);
+                AddonFiles.ApplyAddons(AddonFiles.GameAddOnsDir(source), AddonFiles.GameAddOnsDir(target), addons, CancellationToken.None);
                 if (copySettings)
                     skipped = CopyAddonSettings(source, target, names);
             }, ct);
@@ -190,7 +190,7 @@ public class AddonSyncService
     public Task<string> InstallUpdatesAsync(GameEntry game, IReadOnlyList<AddonUpdate> updates, CancellationToken ct) =>
         Task.Run(() =>
         {
-            var addOns = AddonFiles.GameAddOnsDir(GameDir(game));
+            var addOns = AddonFiles.GameAddOnsDir(game);
             ChangeGameFiles(game, updates.SelectMany(u => u.Changed).Select(a => a.Name), includeWtf: false, null, () =>
             {
                 foreach (var update in updates)

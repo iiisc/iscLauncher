@@ -209,6 +209,21 @@
         <Setter Property="FontStyle" Value="Italic"/>
       </Style>
 
+      <!-- Flyouts open in the system theme otherwise; these match the dialogs -->
+      <Style x:Key="MenuFlyoutPresenterStyle" TargetType="MenuFlyoutPresenter">
+        <Setter Property="RequestedTheme" Value="Dark"/>
+        <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderHighBrush}"/>
+        <Setter Property="CornerRadius" Value="8"/>
+      </Style>
+
+      <Style x:Key="FlyoutPresenterStyle" TargetType="FlyoutPresenter">
+        <Setter Property="RequestedTheme" Value="Dark"/>
+        <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderHighBrush}"/>
+        <Setter Property="CornerRadius" Value="8"/>
+      </Style>
+
     </ResourceDictionary>
   </Application.Resources>
 </Application>

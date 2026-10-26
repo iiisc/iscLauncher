@@ -26,9 +26,16 @@ public static class DialogHelper
             Foreground = Res<Brush>("TextPrimaryBrush"),
             BorderBrush = Res<Brush>("BorderHighBrush"),
             CornerRadius = new CornerRadius(8),
-            RequestedTheme = ElementTheme.Dark
+            RequestedTheme = ElementTheme.Dark,
+            PrimaryButtonStyle = Res<Style>("PrimaryButtonStyle")
         };
-        ApplyTheme(dialog);
+        // The close and secondary buttons have no style property of their own
+        dialog.Resources[typeof(Button)] = new Style(typeof(Button)) { BasedOn = Res<Style>("SecondaryButtonStyle") };
+        dialog.Resources["ContentDialogBackground"] = Res<Brush>("Surface2Brush");
+        dialog.Resources["ContentDialogTopOverlay"] = new SolidColorBrush(Colors.Transparent);
+        dialog.Resources["ContentDialogBorderWidth"] = new Thickness(1);
+        dialog.Resources["ContentDialogSeparatorBorderBrush"] = Res<Brush>("BorderBrush");
+        dialog.Resources["ContentDialogTitleForeground"] = Res<Brush>("TextPrimaryBrush");
         return dialog;
     }
 
@@ -49,21 +56,42 @@ public static class DialogHelper
 
     public static TextBlock StyledText(string text, string styleKey) => new() { Text = text, Style = Res<Style>(styleKey) };
 
-    public static TextBlock BodyText(string text) => StyledText(text, "BodyTextStyle");
+    public static TextBlock BodyText(string text, string? brushKey = null) => Colored(StyledText(text, "BodyTextStyle"), brushKey);
 
-    public static TextBlock Dim(string text)
+    public static TextBlock Dim(string text, string? brushKey = null)
     {
-        var block = StyledText(text, "HintTextStyle");
+        var block = Colored(StyledText(text, "HintTextStyle"), brushKey);
         block.VerticalAlignment = VerticalAlignment.Center;
         return block;
+    }
+
+    private static TextBlock Colored(TextBlock block, string? brushKey)
+    {
+        if (brushKey != null)
+            block.Foreground = Res<Brush>(brushKey);
+        return block;
+    }
+
+    public static Button StyledButton(object content, string styleKey = "SecondaryButtonStyle") =>
+        new() { Content = content, Style = Res<Style>(styleKey) };
+
+    /// <summary>A gold link. Without a URL, the caller handles its Click.</summary>
+    public static HyperlinkButton Link(string text, string? url = null) =>
+        new() { Content = text, NavigateUri = url == null ? null : new Uri(url), Padding = new Thickness(0), Foreground = Res<Brush>("GoldBrush") };
+
+    public static StackPanel Panel(double spacing, params UIElement[] children)
+    {
+        var panel = new StackPanel { Spacing = spacing };
+        foreach (var child in children)
+            panel.Children.Add(child);
+        return panel;
     }
 
     public static TextBlock WarningText(string text) => StyledText(text, "WarningTextStyle");
 
     public static TextBlock SectionLabel(string text, string brushKey = "GoldDarkBrush")
     {
-        var block = StyledText(text, "SectionHeaderStyle");
-        block.Foreground = Res<Brush>(brushKey);
+        var block = Colored(StyledText(text, "SectionHeaderStyle"), brushKey);
         block.Margin = new Thickness(0, 4, 0, 0);
         return block;
     }
@@ -84,17 +112,4 @@ public static class DialogHelper
         dialog.Resources["ContentDialogMaxWidth"] = max;
     }
 
-    private static void ApplyTheme(ContentDialog dialog)
-    {
-        dialog.PrimaryButtonStyle = Res<Style>("PrimaryButtonStyle");
-
-        // Default implicit button style — matches SecondaryButtonStyle for close/cancel buttons.
-        dialog.Resources[typeof(Button)] = new Style(typeof(Button)) { BasedOn = Res<Style>("SecondaryButtonStyle") };
-
-        dialog.Resources["ContentDialogBackground"] = Application.Current.Resources["Surface2Brush"];
-        dialog.Resources["ContentDialogTopOverlay"] = new SolidColorBrush(Colors.Transparent);
-        dialog.Resources["ContentDialogBorderWidth"] = new Thickness(1);
-        dialog.Resources["ContentDialogSeparatorBorderBrush"] = Application.Current.Resources["BorderBrush"];
-        dialog.Resources["ContentDialogTitleForeground"] = Application.Current.Resources["TextPrimaryBrush"];
-    }
 }

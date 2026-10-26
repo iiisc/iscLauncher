@@ -52,18 +52,20 @@ public sealed partial class MainWindow : Window
         _ = LoadAsync();
     }
 
-    private void ShowPanel(UIElement panel)
+    /// <summary>Shows one panel, with <paramref name="game"/> selected in the list.</summary>
+    private void ShowPanel(UIElement panel, GameEntry? game = null, bool adding = false)
     {
+        GameList.SetSelectedGame(game);
         EmptyState.Visibility   = panel == EmptyState   ? Visibility.Visible : Visibility.Collapsed;
         GameDetail.Visibility   = panel == GameDetail   ? Visibility.Visible : Visibility.Collapsed;
         OptionsPanel.Visibility = panel == OptionsPanel ? Visibility.Visible : Visibility.Collapsed;
-        GameList.SetAddGameHighlight(false);
+        GameList.SetAddGameHighlight(adding);
         GameList.SetOptionsHighlight(panel == OptionsPanel);
     }
 
     private void ShowDetail(GameEntry game, string? statusMessage = null)
     {
-        ShowPanel(GameDetail);
+        ShowPanel(GameDetail, game);
         GameDetail.LoadGame(game, statusMessage);
     }
 
@@ -71,9 +73,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowAddGame()
     {
-        GameList.SetSelectedGame(null);
-        ShowPanel(GameDetail);
-        GameList.SetAddGameHighlight(true);
+        ShowPanel(GameDetail, adding: true);
         GameDetail.StartNewGame();
     }
 
@@ -81,7 +81,6 @@ public sealed partial class MainWindow : Window
     {
         // Left selected, the game's card couldn't be clicked to go back to it
         _gameBeforeOptions = GameList.SelectedGame;
-        GameList.SetSelectedGame(null);
         ShowPanel(OptionsPanel);
         OptionsPanel.Activate();
         if (_startupUpdate != null)
@@ -121,8 +120,7 @@ public sealed partial class MainWindow : Window
         // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete
         try { await Task.Run(() => _services.Sync.DeleteLocalData(game)); } catch { }
         if (!shown) return;
-        GameList.SetSelectedGame(null);
-        if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
+        if (_services.Library.Games.FirstOrDefault() is { } first) ShowDetail(first);
         else ShowEmptyState();
     }
 
@@ -142,33 +140,23 @@ public sealed partial class MainWindow : Window
     {
         // A game that was just added isn't selected in the list yet
         var added = GameList.SelectedGame != game;
-        if (added)
-            GameList.SetSelectedGame(game);
         ShowDetail(game, added ? "Game added successfully!" : "Game updated successfully!");
     }
 
     private void OnOptionsCloseRequested(object? sender, EventArgs e)
     {
-        if (_gameBeforeOptions is { } game && _services.Library.Games.Contains(game))
-        {
-            GameList.SetSelectedGame(game);
-            ShowDetail(game);
-        }
+        if (_gameBeforeOptions is { } game && _services.Library.Games.Contains(game)) ShowDetail(game);
         else ShowEmptyState();
     }
 
-    private void OnDetailEscapeRequested(object? sender, EventArgs e)
-    {
-        GameList.SetSelectedGame(null);
-        ShowEmptyState();
-    }
+    private void OnDetailEscapeRequested(object? sender, EventArgs e) => ShowEmptyState();
 
     private async Task LoadAsync()
     {
         try
         {
             await _services.Library.LoadAsync();
-            if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
+            if (_services.Library.Games.FirstOrDefault() is { } first) ShowDetail(first);
             _ = CheckForUpdatesSilentlyAsync();
             _ = CheckForRemoteChangesAsync();
             _ = CheckForAddonUpdatesAsync();
@@ -190,12 +178,13 @@ public sealed partial class MainWindow : Window
             try { await _services.GitHub.GetLoginAsync(); }
             catch (Exception ex) { Log.Write($"Couldn't check the GitHub sign-in: {ex.Message}"); }
         }
-        foreach (var game in _services.Library.Games.Where(g => g.HasSyncRepo).ToList())
+        // At once, so one unreachable repo doesn't hold up the rest
+        await Task.WhenAll(_services.Library.Games.Where(g => g.HasSyncRepo).ToList().Select(async game =>
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             try { await _services.Sync.RefreshRemoteHeadAsync(game, timeout.Token); }
             catch (Exception ex) { Log.Write($"Couldn't check {game.Name}'s repo: {ex.Message}"); }
-        }
+        }));
     }
 
     // Marks the games whose addons have a newer version on GitHub. Quiet, like the check above.

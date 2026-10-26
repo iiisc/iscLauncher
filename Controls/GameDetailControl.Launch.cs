@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
@@ -79,19 +78,16 @@ public sealed partial class GameDetailControl
     /// </summary>
     private async Task<bool> OfferPullBeforeLaunchAsync(GameEntry game)
     {
-        if (!game.HasSyncRepo || _syncBusy || _services.Launcher.IsRunning(game))
+        if (!game.HasSyncRepo || _services.Launcher.IsRunning(game))
             return true;
 
         GitCommitEntry? change;
-        _syncCts?.Cancel(); _syncCts?.Dispose();
         // Being offline shouldn't hold up playing, so the check gives up quickly; Cancel skips it
-        _syncCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        SetSyncBusy(true);
-        ShowInfo($"Checking {game.Name}'s repo for changes from your other PCs...");
+        var ct = StartSync($"Checking {game.Name}'s repo for changes from your other PCs...", TimeSpan.FromSeconds(10));
         try
         {
-            var session = await _services.Sync.OpenAsync(game, null, _syncCts.Token);
-            change = await _services.Sync.FindUnpulledChangeAsync(session, _syncCts.Token);
+            var session = await _services.Sync.OpenAsync(game, null, ct);
+            change = await _services.Sync.FindUnpulledChangeAsync(session, ct);
         }
         // No network, no git or a cancelled check: launch as if there were nothing to pull
         catch (Exception ex)
@@ -114,7 +110,7 @@ public sealed partial class GameDetailControl
             case ContentDialogResult.Secondary:
                 return true;
             default:
-                StatusBar.IsOpen = false;
+                _status.Hide();
                 return false;
         }
     }

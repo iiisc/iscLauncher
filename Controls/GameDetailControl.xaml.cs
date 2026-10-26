@@ -83,7 +83,7 @@ public sealed partial class GameDetailControl : UserControl
         if (statusMessage != null)
             ShowStatus(statusMessage, true);
         else
-            StatusBar.IsOpen = false;
+            _status.Hide();
     }
 
     public void StartNewGame()
@@ -102,7 +102,7 @@ public sealed partial class GameDetailControl : UserControl
         foreach (var exe in BattleNetInstall.FindInstalledGames().Where(e => !inLibrary.Contains(e)))
         {
             var name = BattleNetInstall.VersionName(exe);
-            var button = new Button { Content = name, Style = DialogHelper.Res<Style>("SecondaryButtonStyle") };
+            var button = DialogHelper.StyledButton(name);
             ToolTipService.SetToolTip(button, exe);
             button.Click += (_, _) =>
             {
@@ -122,6 +122,8 @@ public sealed partial class GameDetailControl : UserControl
             "You have unsaved changes that will be lost. Discard them?", "Discard") == ContentDialogResult.Primary;
     }
 
+    private bool IsEditing => _isNew || HasUnsavedChanges;
+
     private int StartupDelay => double.IsNaN(StartupDelayNumberBox.Value) ? 0 : (int)StartupDelayNumberBox.Value;
 
     private bool HasUnsavedChanges => _game is { } game && (
@@ -138,7 +140,7 @@ public sealed partial class GameDetailControl : UserControl
     // so they wait too.
     private void UpdateSaveButtons()
     {
-        var editing = _isNew || HasUnsavedChanges;
+        var editing = IsEditing;
         LaunchButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
         SaveButtonText.Text = _isNew ? "Add Game" : "Save Changes";
@@ -230,7 +232,7 @@ public sealed partial class GameDetailControl : UserControl
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         // While there's something to save, Escape belongs to the Cancel button
-        if (_isNew || HasUnsavedChanges) return;
+        if (IsEditing) return;
         EscapeRequested?.Invoke(this, EventArgs.Empty);
         args.Handled = true;
     }
