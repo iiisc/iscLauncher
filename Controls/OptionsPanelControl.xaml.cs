@@ -16,8 +16,7 @@ public sealed partial class OptionsPanelControl : UserControl
 {
     public event EventHandler? CloseRequested;
 
-    public AppUpdateService? AppUpdateService { get; set; }
-    public GitHubService? GitHub { get; set; }
+    private AppServices _services = null!;
 
     private UpdateCheckResult? _pendingUpdate;
     private CancellationTokenSource? _updateCts;
@@ -28,6 +27,8 @@ public sealed partial class OptionsPanelControl : UserControl
         InitializeComponent();
         _status = new StatusNotifier(StatusBar, StatusText);
     }
+
+    public void Initialize(AppServices services) => _services = services;
 
     public void Activate()
     {
@@ -45,26 +46,26 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private async Task ShowGitHubAccountAsync()
     {
-        var signedIn = GitHub!.Token != null;
+        var signedIn = _services.GitHub.Token != null;
         GitHubAccountText.Text = signedIn ? "Signed in to GitHub" : "Not signed in";
         GitHubButtonText.Text = signedIn ? "Sign Out" : "Sign In";
-        if (signedIn && await GitHub.GetLoginAsync() is { } login)
+        if (signedIn && await _services.GitHub.GetLoginAsync() is { } login)
             GitHubAccountText.Text = $"Signed in to GitHub as {login}";
     }
 
     private async void OnGitHubClick(object sender, RoutedEventArgs e)
     {
-        if (GitHub!.Token != null)
+        if (_services.GitHub.Token != null)
         {
-            GitHub.SignOut();
-            ShowStatus("Signed out of GitHub.", true);
+            _services.GitHub.SignOut();
+            ShowStatus("Signed out of _services.GitHub.", true);
         }
         else
         {
             GitHubButton.IsEnabled = false;
             try
             {
-                if (await GitHubSignInDialog.ShowAsync(XamlRoot, GitHub) is { } login)
+                if (await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) is { } login)
                     ShowStatus($"Signed in to GitHub as {login}.", true);
             }
             catch (Exception ex) { ShowStatus($"GitHub sign-in failed: {ex.Message}", false); }
@@ -90,7 +91,7 @@ public sealed partial class OptionsPanelControl : UserControl
             {
                 _updateCts?.Cancel(); _updateCts?.Dispose();
                 _updateCts = new CancellationTokenSource();
-                var result = await AppUpdateService!.CheckForUpdateAsync(_updateCts.Token);
+                var result = await _services.Updates.CheckForUpdateAsync(_updateCts.Token);
                 if (!result.UpdateAvailable)
                 {
                     ShowStatus($"You're up to date (v{Services.AppUpdateService.CurrentVersion}).", true);
@@ -123,7 +124,7 @@ public sealed partial class OptionsPanelControl : UserControl
                     UpdateProgressBar.Value = p;
                     StatusText.Text = $"Downloading update... {(int)(p * 100)}%";
                 });
-                await AppUpdateService!.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
+                await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
                 Application.Current.Exit();
             }
             catch (Exception ex)

@@ -21,7 +21,7 @@ public sealed partial class GameDetailControl
         if (_game is not { } game) return;
         if (CanSendPassword(game))
             await WhileBusyAsync(game, () => RunLauncherAsync($"Sending password to {game.Name}...",
-                () => GameLauncherService!.SendPasswordToRunningGameAsync(game)));
+                () => _services.Launcher.SendPasswordToRunningGameAsync(game)));
         else
             await LaunchAsync(game);
     }
@@ -37,7 +37,7 @@ public sealed partial class GameDetailControl
         { ShowStatus("Wait for the addon sync to finish before launching.", false); return; }
         var launched = await WhileBusyAsync(game, async () =>
             await OfferPullBeforeLaunchAsync(game)
-            && await RunLauncherAsync($"Launching {game.Name}...", () => GameLauncherService!.LaunchGameAsync(game)));
+            && await RunLauncherAsync($"Launching {game.Name}...", () => _services.Launcher.LaunchGameAsync(game)));
         if (launched)
             await AfterGameClosesAsync(game);
     }
@@ -71,7 +71,7 @@ public sealed partial class GameDetailControl
     /// </summary>
     private async Task<bool> OfferPullBeforeLaunchAsync(GameEntry game)
     {
-        if (!game.HasSyncRepo || _syncBusy || GameLauncherService!.IsRunning(game))
+        if (!game.HasSyncRepo || _syncBusy || _services.Launcher.IsRunning(game))
             return true;
 
         GitCommitEntry? change;
@@ -82,8 +82,8 @@ public sealed partial class GameDetailControl
         ShowInfo($"Checking {game.Name}'s repo for changes from your other PCs...");
         try
         {
-            var session = await AddonSyncService!.OpenAsync(game, null, _syncCts.Token);
-            change = await AddonSyncService.FindUnpulledChangeAsync(session, _syncCts.Token);
+            var session = await _services.Sync.OpenAsync(game, null, _syncCts.Token);
+            change = await _services.Sync.FindUnpulledChangeAsync(session, _syncCts.Token);
         }
         // No network, no git or a cancelled check: launch as if there were nothing to pull
         catch (Exception ex)
@@ -117,7 +117,7 @@ public sealed partial class GameDetailControl
     private async Task AfterGameClosesAsync(GameEntry game)
     {
         // Battle.net can take a while to start an official game, or wait on an update first
-        if (!await GameLauncherService!.WaitForExitAsync(game, TimeSpan.FromMinutes(10)))
+        if (!await _services.Launcher.WaitForExitAsync(game, TimeSpan.FromMinutes(10)))
             return;
         if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
         if (!game.HasSyncRepo)
@@ -140,7 +140,7 @@ public sealed partial class GameDetailControl
 
     // Official games log in through Battle.net, so there's never a password to send
     private bool CanSendPassword(GameEntry game) =>
-        !BattleNetInstall.IsOfficial(game.ExecutablePath) && GameLauncherService!.IsRunning(game);
+        !BattleNetInstall.IsOfficial(game.ExecutablePath) && _services.Launcher.IsRunning(game);
 
     private void UpdateLaunchButtonState(GameEntry game)
     {

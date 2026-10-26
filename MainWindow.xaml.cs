@@ -16,36 +16,21 @@ namespace iscLauncher;
 
 public sealed partial class MainWindow : Window
 {
-    private readonly GameRepository _gameRepository = new();
-    private readonly CredentialService _credentialService = new();
-    private readonly GameLauncherService _gameLauncherService;
-    private readonly GitHubService _gitHub;
-    private readonly AddonSyncService _addonSyncService;
-    private readonly AppUpdateService _updateService = new();
+    private readonly AppServices _services;
     private UpdateCheckResult? _startupUpdate;
 
     public MainWindow()
     {
         InitializeComponent();
-        _gameLauncherService = new GameLauncherService(_credentialService);
-        _gitHub = new GitHubService(_credentialService);
-        _addonSyncService = new AddonSyncService(new GitService(() => _gitHub.Token), _gameRepository);
         VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
 
         var hwnd = WindowNative.GetWindowHandle(this);
+        _services = AppServices.Create(hwnd);
 
-        GameList.SetGames(_gameRepository.Games);
+        GameList.SetGames(_services.Library.Games);
 
-        GameDetail.GameRepository = _gameRepository;
-        GameDetail.CredentialService = _credentialService;
-        GameDetail.GameLauncherService = _gameLauncherService;
-        GameDetail.AddonSyncService = _addonSyncService;
-        GameDetail.GitHub = _gitHub;
-        GameDetail.OwnerHwnd = hwnd;
-        GameDetail.Games = _gameRepository.Games;
-
-        OptionsPanel.AppUpdateService = _updateService;
-        OptionsPanel.GitHub = _gitHub;
+        GameDetail.Initialize(_services);
+        OptionsPanel.Initialize(_services);
 
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;
@@ -58,7 +43,7 @@ public sealed partial class MainWindow : Window
 
         OptionsPanel.CloseRequested += OnOptionsCloseRequested;
 
-        Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
+        Closed += (_, _) => _services.Launcher.CancelPendingClipboardClear();
 
         SetWindowSize(hwnd, 900, 650);
         SetupCustomTitleBar();
@@ -124,12 +109,12 @@ public sealed partial class MainWindow : Window
     private async void OnDeleteConfirmed(object? sender, GameEntry game)
     {
         GameDetail.CancelSync();
-        _credentialService.DeleteCredential(game.CredentialTarget);
-        await _gameRepository.RemoveAsync(game);
+        _services.Credentials.DeleteCredential(game.CredentialTarget);
+        await _services.Library.RemoveAsync(game);
         // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete
-        try { await Task.Run(() => _addonSyncService.DeleteLocalData(game)); } catch { }
+        try { await Task.Run(() => _services.Sync.DeleteLocalData(game)); } catch { }
         GameList.SetSelectedGame(null);
-        if (_gameRepository.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
+        if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
         else ShowEmptyState();
     }
 
@@ -170,8 +155,8 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            await _gameRepository.LoadAsync();
-            if (_gameRepository.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
+            await _services.Library.LoadAsync();
+            if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
             _ = CheckForUpdatesSilentlyAsync();
             _ = CheckForRemoteChangesAsync();
         }
@@ -186,10 +171,10 @@ public sealed partial class MainWindow : Window
     // Marks the games another PC has pushed to since this one last synced. Quiet: offline just shows nothing.
     private async Task CheckForRemoteChangesAsync()
     {
-        foreach (var game in _gameRepository.Games.Where(g => g.HasSyncRepo).ToList())
+        foreach (var game in _services.Library.Games.Where(g => g.HasSyncRepo).ToList())
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            try { await _addonSyncService.RefreshRemoteHeadAsync(game, timeout.Token); }
+            try { await _services.Sync.RefreshRemoteHeadAsync(game, timeout.Token); }
             catch (Exception ex) { Log.Write($"Couldn't check {game.Name}'s repo: {ex.Message}"); }
         }
     }
@@ -198,7 +183,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var result = await _updateService.CheckForUpdateAsync();
+            var result = await _services.Updates.CheckForUpdateAsync();
             if (result.UpdateAvailable && result.DownloadUrl != null)
             {
                 _startupUpdate = result;

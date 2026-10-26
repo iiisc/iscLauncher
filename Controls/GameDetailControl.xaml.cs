@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -19,13 +18,7 @@ public sealed partial class GameDetailControl : UserControl
     public event EventHandler<GameEntry>? DeleteConfirmed;
     public event EventHandler? EscapeRequested;
 
-    public GameRepository? GameRepository { get; set; }
-    public CredentialService? CredentialService { get; set; }
-    public GameLauncherService? GameLauncherService { get; set; }
-    public AddonSyncService? AddonSyncService { get; set; }
-    public GitHubService? GitHub { get; set; }
-    public IntPtr OwnerHwnd { get; set; }
-    public IReadOnlyCollection<GameEntry>? Games { get; set; }
+    private AppServices _services = null!;
 
     private GameEntry? _game;
     // A game being added: not in the library until saved
@@ -47,6 +40,8 @@ public sealed partial class GameDetailControl : UserControl
         StartupDelayNumberBox.ValueChanged += (_, _) => UpdateSaveButtons();
     }
 
+    public void Initialize(AppServices services) => _services = services;
+
     public void LoadGame(GameEntry game, string? statusMessage = null)
     {
         _game = game;
@@ -61,7 +56,7 @@ public sealed partial class GameDetailControl : UserControl
         RealmTextBox.Text = game.RealmName ?? string.Empty;
         StartupDelayNumberBox.Value = game.StartupDelaySeconds;
         PasswordBox.Password = string.Empty;
-        PasswordBox.PlaceholderText = CredentialService!.GetCredential(game.CredentialTarget) != null
+        PasswordBox.PlaceholderText = _services.Credentials.GetCredential(game.CredentialTarget) != null
             ? "A password is saved. Type a new one to replace it."
             : "No password saved";
 
@@ -89,7 +84,7 @@ public sealed partial class GameDetailControl : UserControl
 
     private void ShowFoundInstalls()
     {
-        var inLibrary = (Games ?? []).Select(g => g.ExecutablePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var inLibrary = _services.Library.Games.Select(g => g.ExecutablePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         FoundInstallsPanel.Children.Clear();
         foreach (var exe in BattleNetInstall.FindInstalledGames().Where(e => !inLibrary.Contains(e)))
         {
@@ -175,15 +170,15 @@ public sealed partial class GameDetailControl : UserControl
         game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
 
         if (!string.IsNullOrEmpty(PasswordBox.Password))
-            CredentialService!.SaveCredential(game.CredentialTarget, PasswordBox.Password);
+            _services.Credentials.SaveCredential(game.CredentialTarget, PasswordBox.Password);
 
         if (oldPath != game.ExecutablePath)
             IconExtractor.InvalidateCache(oldPath);
 
         if (_isNew)
-            await GameRepository!.AddAsync(game);
+            await _services.Library.AddAsync(game);
         else
-            await GameRepository!.SaveAsync();
+            await _services.Library.SaveAsync();
         game.NotifyChanged();
 
         GameSaved?.Invoke(this, game);
@@ -192,7 +187,7 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnBrowseExecutableClick(object sender, RoutedEventArgs e)
     {
-        var file = await FormHelpers.PickFileAsync(OwnerHwnd, ".exe");
+        var file = await FormHelpers.PickFileAsync(_services.OwnerHwnd, ".exe");
         if (file == null) return;
         ExecutableTextBox.Text = file.Path;
         if (string.IsNullOrWhiteSpace(NameTextBox.Text))

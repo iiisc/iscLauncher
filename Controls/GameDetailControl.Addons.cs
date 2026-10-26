@@ -27,11 +27,11 @@ public sealed partial class GameDetailControl
         SetUpSyncButton.IsEnabled = false;
         try
         {
-            if (GitHub!.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, GitHub) == null)
+            if (_services.GitHub.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) == null)
                 return;
 
-            ShowInfo("Looking up your repos on GitHub...");
-            var repos = await GitHub.ListPrivateReposAsync(CancellationToken.None);
+            ShowInfo("Looking up your repos on _services.GitHub...");
+            var repos = await _services.GitHub.ListPrivateReposAsync(CancellationToken.None);
             StatusBar.IsOpen = false;
 
             var nameBox = new ComboBox
@@ -54,8 +54,8 @@ public sealed partial class GameDetailControl
 
             var name = nameBox.Text.Trim();
             var isNew = !repos.Any(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            ShowInfo(isNew ? "Creating the repo on GitHub..." : "Linking the repo...");
-            SyncRepoUrlTextBox.Text = await GitHub.CreateRepoAsync(name, CancellationToken.None);
+            ShowInfo(isNew ? "Creating the repo on _services.GitHub..." : "Linking the repo...");
+            SyncRepoUrlTextBox.Text = await _services.GitHub.CreateRepoAsync(name, CancellationToken.None);
             if (await SaveAsync())
                 ShowStatus(isNew
                     ? "Sync is set up. Push to upload this PC's addons and settings."
@@ -85,26 +85,26 @@ public sealed partial class GameDetailControl
     private Task PullAsync(GameEntry game) =>
         RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await AddonSyncService!.OpenAsync(game, p, ct);
-            var preview = await AddonSyncService.PreviewPullAsync(session, ct);
+            var session = await _services.Sync.OpenAsync(game, p, ct);
+            var preview = await _services.Sync.PreviewPullAsync(session, ct);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Pull {game.Name} from Repo", "Pull",
                 "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
             if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
-            return await AddonSyncService.PullAsync(session, choice.Addons, choice.Options, p, ct);
+            return await _services.Sync.PullAsync(session, choice.Addons, choice.Options, p, ct);
         });
 
     private Task PushAsync(GameEntry game) =>
         RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await AddonSyncService!.OpenAsync(game, p, ct);
-            var previewTask = AddonSyncService.PreviewPushAsync(session, ct);
-            var warningTask = AddonSyncService.DescribeUnpulledChangesAsync(session, ct);
+            var session = await _services.Sync.OpenAsync(game, p, ct);
+            var previewTask = _services.Sync.PreviewPushAsync(session, ct);
+            var warningTask = _services.Sync.DescribeUnpulledChangesAsync(session, ct);
             await Task.WhenAll(previewTask, warningTask);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Push {game.Name} to Repo", "Push",
                 "Choose what to upload from this PC. The repo keeps every earlier version, so you can roll back.",
                 await warningTask, await previewTask, toRepo: true);
-            return choice == null ? null : await AddonSyncService.PushAsync(session, choice.Addons, choice.Options, p, ct);
+            return choice == null ? null : await _services.Sync.PushAsync(session, choice.Addons, choice.Options, p, ct);
         });
 
     private async void OnRollbackClick(object sender, RoutedEventArgs e)
@@ -112,51 +112,51 @@ public sealed partial class GameDetailControl
         if (_game is not { } game) return;
         await RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await AddonSyncService!.OpenAsync(game, p, ct);
-            var commit = await RollbackDialog.ShowAsync(XamlRoot, () => AddonSyncService.GetCommitLogAsync(session, ct));
+            var session = await _services.Sync.OpenAsync(game, p, ct);
+            var commit = await RollbackDialog.ShowAsync(XamlRoot, () => _services.Sync.GetCommitLogAsync(session, ct));
             if (commit == null) return null;
 
-            var preview = await AddonSyncService.PreviewRollbackAsync(session, commit.Hash, ct);
+            var preview = await _services.Sync.PreviewRollbackAsync(session, commit.Hash, ct);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Roll Back to {commit.Hash}", "Roll Back",
                 $"The repo goes back to “{commit.Message}” for every PC. Choose what to apply to this PC; anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
             if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
-            return await AddonSyncService.RollbackAsync(session, commit, choice.Addons, choice.Options, p, ct);
+            return await _services.Sync.RollbackAsync(session, commit, choice.Addons, choice.Options, p, ct);
         });
     }
 
     private async void OnCopyAddonsClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
-        var targets = Games?.Where(g => g.Id != game.Id).ToList() ?? [];
+        var targets = _services.Library.Games.Where(g => g.Id != game.Id).ToList();
         if (targets.Count == 0)
         { ShowStatus("Add another game to your library to copy addons into it.", false); return; }
 
         var choice = await CopyAddonsDialog.ShowAsync(XamlRoot, game, targets,
-            (target, ct) => AddonSyncService!.PreviewCopyAsync(game, target, ct));
+            (target, ct) => _services.Sync.PreviewCopyAsync(game, target, ct));
         if (choice == null || !await ConfirmGamesClosedAsync([choice.Target])) return;
         await RunSyncAsync($"Copying addons to {choice.Target.Name}...", async (_, ct) =>
-            await AddonSyncService!.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
+            await _services.Sync.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
     }
 
     private async void OnCopyCharacterSetupClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
-        var sources = AddonSyncService!.ListCharacters(game);
+        var sources = _services.Sync.ListCharacters(game);
         if (sources.Count == 0)
         { ShowStatus("No characters found for this game yet. Log in once so the game creates its settings folders.", false); return; }
 
-        var targets = sources.Concat((Games ?? []).Where(g => g.Id != game.Id).SelectMany(AddonSyncService.ListCharacters)).ToList();
+        var targets = sources.Concat(_services.Library.Games.Where(g => g.Id != game.Id).SelectMany(_services.Sync.ListCharacters)).ToList();
         var choice = await CharacterSetupDialog.ShowAsync(XamlRoot, sources, targets);
         if (choice == null || !await ConfirmGamesClosedAsync(choice.Targets.Select(t => t.Game).Distinct())) return;
         await RunSyncAsync("Copying character setup...", async (_, ct) =>
-            await AddonSyncService.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
+            await _services.Sync.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
     }
 
     private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
-        var backups = AddonSyncService!.ListBackups(game);
+        var backups = _services.Sync.ListBackups(game);
         if (backups.Count == 0)
         { ShowStatus($"There are no backups of {game.Name} yet.", false); return; }
 
@@ -171,7 +171,7 @@ public sealed partial class GameDetailControl
             return;
 
         var backup = backups[choices.SelectedIndex];
-        await RunSyncAsync("Restoring the backup...", async (_, ct) => await AddonSyncService.RestoreBackupAsync(game, backup, ct));
+        await RunSyncAsync("Restoring the backup...", async (_, ct) => await _services.Sync.RestoreBackupAsync(game, backup, ct));
     }
 
     private static string DescribeBackup(BackupInfo backup)
@@ -185,7 +185,7 @@ public sealed partial class GameDetailControl
     // WoW writes addon settings and AddOns.txt back when you log out, which would undo files changed while it runs
     private async Task<bool> ConfirmGamesClosedAsync(IEnumerable<GameEntry> games)
     {
-        var running = games.Where(GameLauncherService!.IsRunning).Select(g => g.Name).ToList();
+        var running = games.Where(_services.Launcher.IsRunning).Select(g => g.Name).ToList();
         if (running.Count == 0) return true;
 
         var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Game Is Running");
