@@ -16,6 +16,7 @@ concurrency:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     env:
@@ -29,6 +30,8 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
           # The release notes list the commits since the previous release, so the history and tags are needed
           fetch-depth: 0
+          # The build runs code from NuGet packages, so the write token isn't left in the git config; only the tag push gets it
+          persist-credentials: false
 
       - name: Determine version
         id: version
@@ -85,15 +88,19 @@ jobs:
       - name: Sign
         if: env.HAS_SIGNING_CERT == 'true'
         shell: pwsh
+        # Read from the environment so the secrets never become part of the script text
+        env:
+          CERT: ${{ secrets.SIGNING_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
           $certPath = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}"))
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT))
           try {
             $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
               Where-Object FullName -match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
             $files = (Get-ChildItem publish -Include *.exe, *.dll -Recurse).FullName
-            & $signtool sign /f $certPath /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $files
+            & $signtool sign /f $certPath /p $env:CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $files
             if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
           }
           finally {
@@ -131,12 +138,21 @@ jobs:
           $range = if ($previous) { "$previous..HEAD" } else { "HEAD" }
           git log $range --no-merges --format='- %s' | Out-File -Encoding utf8 notes.md
 
+      # Tagged only now, after the build succeeded, so a failed run doesn't use up a version number. Pushed with git
+      # because GitHub refused to let the release action create the tag through its API with this token.
+      - name: Push tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git tag ${{ steps.version.outputs.TAG }} ${{ steps.version.outputs.COMMIT }}
+          git push "https://x-access-token:$env:TOKEN@github.com/${{ github.repository }}.git" ${{ steps.version.outputs.TAG }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
-          # Only created now, after the build succeeded, so a failed run doesn't use up a version number
-          target_commitish: ${{ steps.version.outputs.COMMIT }}
           body_path: notes.md
           files: |
             iscLauncher-${{ steps.version.outputs.TAG }}-win-x64.zip
