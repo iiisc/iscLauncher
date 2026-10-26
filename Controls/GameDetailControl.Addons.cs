@@ -132,6 +132,38 @@ public sealed partial class GameDetailControl
             await _services.Sync.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
     }
 
+    private async void OnCheckAddonUpdatesClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        if (AddonUpdateService.Sources(game).Count == 0)
+        { ShowStatus("None of this game's addons name a GitHub project. Add the repos to check under GitHub Sources.", false); return; }
+
+        await RunSyncAsync("Checking for addon updates...", async (p, ct) =>
+        {
+            try
+            {
+                var updates = await _services.AddonUpdates.CheckAsync(game, p, ct);
+                if (updates.All(u => u.Changed.Count == 0 && u.Error == null))
+                    return $"Addons from {updates.Count.Plural("GitHub repo")} are up to date.";
+
+                var picked = await AddonUpdatesDialog.ShowAsync(XamlRoot, game, updates);
+                if (picked is not { Count: > 0 }) return null;
+                return await _services.Sync.InstallUpdatesAsync(game, picked, ct);
+            }
+            finally { AddonUpdateService.DiscardDownloads(); }
+        });
+    }
+
+    private async void OnAddonSourcesClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        var sources = await AddonSourcesDialog.ShowAsync(XamlRoot, game.Name, AddonUpdateService.Sources(game));
+        if (sources == null) return;
+        game.AddonSources = sources;
+        await _services.Library.SaveAsync();
+        ShowStatus($"Updates will be looked for in {sources.Count.Plural("GitHub repo")}.", true);
+    }
+
     private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
@@ -211,6 +243,8 @@ public sealed partial class GameDetailControl
         CopyAddonsButton.IsEnabled = !busy;
         CopyCharacterSetupButton.IsEnabled = !busy;
         RestoreBackupButton.IsEnabled = !busy;
+        CheckAddonUpdatesButton.IsEnabled = !busy;
+        AddonSourcesButton.IsEnabled = !busy;
         LaunchButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -67,6 +68,10 @@ public class GameEntry : INotifyPropertyChanged
     /// </summary>
     [JsonPropertyName("lastSyncedCommit")]
     public string? LastSyncedCommit { get; set; }
+
+    /// <summary>GitHub repos ("owner/name") to check for addon updates, or null to use the ones the addons' .toc files name.</summary>
+    [JsonPropertyName("addonSources")]
+    public List<string>? AddonSources { get; set; }
 
     // Screen readers announce a list item by its ToString
     public override string ToString() => Name;

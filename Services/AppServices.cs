@@ -9,6 +9,7 @@ public sealed record AppServices(
     CredentialService Credentials,
     GameLauncherService Launcher,
     AddonSyncService Sync,
+    AddonUpdateService AddonUpdates,
     GitHubService GitHub,
     AppUpdateService Updates,
     IntPtr OwnerHwnd)
@@ -23,6 +24,7 @@ public sealed record AppServices(
             credentials,
             new GameLauncherService(credentials),
             new AddonSyncService(new GitService(() => gitHub.Token), library),
+            new AddonUpdateService(gitHub),
             gitHub,
             new AppUpdateService(),
             ownerHwnd);

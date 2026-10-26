@@ -136,4 +136,65 @@ public sealed class AddonFilesTests : IDisposable
         Assert.Equal("old format", File.ReadAllText(Path.Combine(game, @"WTF\Account\ACC\SavedVariables\Foo.lua")));
         Assert.False(File.Exists(Path.Combine(_root, "escaped.txt")));
     }
+
+    [Theory]
+    [InlineData("https://github.com/Zidras/DBM-Warmane/", "Zidras/DBM-Warmane")]
+    [InlineData("github.com/NoM0Re/WeakAuras-WotLK", "NoM0Re/WeakAuras-WotLK")]
+    [InlineData("  https://github.com/a/b.git ", "a/b")]
+    [InlineData("https://github.com/a/b/tree/main/Sub", "a/b")]
+    [InlineData("a/My.Addon", "a/My.Addon")]
+    [InlineData("## X-Website: github.com/fondlez", null)]
+    [InlineData("https://gitlab.com/a/b", null)]
+    public void ReadsARepoFromAGitHubLink(string text, string? repo) => Assert.Equal(repo, AddonFiles.GitHubRepo(text));
+
+    [Fact]
+    public void FindsTheReposThatAddonsNameAsTheirHome()
+    {
+        var addOns = Path.Combine(_root, "AddOns");
+        Write(Path.Combine(addOns, @"DBM-Core\DBM-Core.toc"), "## Interface: 30300\n## X-Website: github.com/Zidras/DBM-Warmane/\n");
+        Write(Path.Combine(addOns, @"DBM-GUI\DBM-GUI.toc"), "## X-Website: https://github.com/Zidras/DBM-Warmane\n");
+        Write(Path.Combine(addOns, @"Author\Author.toc"), "## X-Website: github.com/fondlez\n");
+        // Only the header counts; a file listed below it isn't a link
+        Write(Path.Combine(addOns, @"Plain\Plain.toc"), "## Title: Plain\nlibs/github.com/x/y.lua\n");
+
+        Assert.Equal(["Zidras/DBM-Warmane"], AddonFiles.GitHubRepos(addOns));
+    }
+
+    [Fact]
+    public void UnpacksAddonsWhereverTheDownloadKeepsThem()
+    {
+        // GitHub's code zip: a folder named after the commit, holding addon folders that bring their own libraries
+        var codeZip = Zip("code.zip",
+            ("Owner-Pack-1a2b3c/README.md", ""),
+            ("Owner-Pack-1a2b3c/Pack-Core/Pack-Core.toc", "## Version: 2"),
+            ("Owner-Pack-1a2b3c/Pack-Core/Libs/LibStub/LibStub.toc", ""),
+            ("Owner-Pack-1a2b3c/Pack-Raids/Pack-Raids_Wrath.toc", ""));
+        var code = Path.Combine(_root, "code");
+        Assert.Equal(["Pack-Core", "Pack-Raids"], AddonFiles.ExtractAddons(codeZip, code).Order());
+        Assert.True(File.Exists(Path.Combine(code, @"Pack-Core\Libs\LibStub\LibStub.toc")));
+        Assert.Equal(["Pack-Core", "Pack-Raids"], Directory.GetDirectories(code).Select(Path.GetFileName).Order());
+
+        // A repo that is one addon is named after its .toc, not the repo
+        var single = Path.Combine(_root, "single");
+        Assert.Equal(["Questie"], AddonFiles.ExtractAddons(Zip("single.zip",
+            ("Owner-Questie-335-9f8e7d/Questie.toc", ""), ("Owner-Questie-335-9f8e7d/Questie-Classic.toc", "")), single));
+        Assert.True(File.Exists(Path.Combine(single, @"Questie\Questie-Classic.toc")));
+
+        // A release zip has the addon folders at the top
+        Assert.Equal(["WeakAuras", "WeakAurasOptions"], AddonFiles.ExtractAddons(Zip("release.zip",
+            ("WeakAuras/WeakAuras.toc", ""), ("WeakAurasOptions/WeakAurasOptions.toc", "")), Path.Combine(_root, "release")).Order());
+    }
+
+    private string Zip(string name, params (string Entry, string Text)[] files)
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, name);
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        foreach (var (entry, text) in files)
+        {
+            using var writer = new StreamWriter(zip.CreateEntry(entry).Open());
+            writer.Write(text);
+        }
+        return path;
+    }
 }

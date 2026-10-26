@@ -13,6 +13,14 @@ public record CharacterFolder(GameEntry Game, string Dir, string Label);
 
 public record BackupInfo(string Path, DateTime Created, List<string> Addons, bool HasSettings);
 
+/// <summary>A GitHub repo checked for addon updates.</summary>
+/// <param name="Release">The release downloaded, or null when it was the newest code.</param>
+/// <param name="Dir">Where its addons were unpacked.</param>
+/// <param name="Changed">Installed addons that differ from the download.</param>
+/// <param name="UpToDate">Installed addons that already match it.</param>
+/// <param name="Error">Why it couldn't be checked.</param>
+public record AddonUpdate(string Repo, string? Release, string Dir, List<AddonDiff> Changed, int UpToDate, string? Error);
+
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 {
@@ -164,6 +172,21 @@ public class AddonSyncService
 
             var message = $"Copied {addons.Count.Plural("addon")} to {target.Name}.";
             return skipped == null ? message : $"{message} Settings weren't copied: {skipped}.";
+        }, ct);
+
+    /// <summary>Replaces the installed addons in each update with the downloaded ones.</summary>
+    public Task<string> InstallUpdatesAsync(GameEntry game, IReadOnlyList<AddonUpdate> updates, CancellationToken ct) =>
+        Task.Run(() =>
+        {
+            var addOns = AddonFiles.GameAddOnsDir(GameDir(game));
+            ChangeGameFiles(game, updates.SelectMany(u => u.Changed).Select(a => a.Name), includeWtf: false, null, () =>
+            {
+                foreach (var update in updates)
+                    AddonFiles.ApplyAddons(update.Dir, addOns, update.Changed, CancellationToken.None);
+            }, ct);
+
+            var message = $"Updated {string.Join(", ", updates.Select(u => u.Repo))}.";
+            return game.HasSyncRepo ? $"{message} Push to send the update to your other PCs." : message;
         }, ct);
 
     /// <summary>The game's backups, newest first.</summary>

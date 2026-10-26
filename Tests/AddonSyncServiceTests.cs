@@ -179,6 +179,34 @@ public sealed class AddonSyncServiceTests : System.IDisposable
     }
 
     [Fact]
+    public async Task InstallingAnUpdateReplacesOnlyTheChangedAddonsAndBacksThemUp()
+    {
+        var game = _sandbox.AddGame("game");
+        Addon(Dir(game), "WeakAuras", "5.21.8");
+        Addon(Dir(game), "WeakAurasOptions", "5.21.8");
+        Write(Path.Combine(Dir(game), @"Interface\AddOns\WeakAuras\Dropped.lua"), "gone in the new version");
+        var download = Path.Combine(_sandbox.Root, "download");
+        Addon(download, "WeakAuras", "5.22.1");
+        Addon(download, "WeakAurasOptions", "5.21.8");
+        Addon(download, "WeakAurasArchive", "5.22.1");
+
+        var downloaded = AddonFiles.GameAddOnsDir(download);
+        var preview = AddonFiles.Compare(downloaded, AddonFiles.GameAddOnsDir(Dir(game)), includeRemoved: false, clientMajor: 0, _ct);
+        var changed = preview.Diffs.Where(d => d.Change == AddonChange.Changed).ToList();
+        Assert.Equal(("WeakAuras", "5.21.8", "5.22.1"), (Assert.Single(changed).Name, changed[0].TargetVersion, changed[0].SourceVersion));
+
+        var message = await Sync.InstallUpdatesAsync(game, [new AddonUpdate("NoM0Re/WeakAuras-WotLK", "5.22.1", downloaded, changed, preview.Unchanged, null)], _ct);
+        Assert.Equal("Updated NoM0Re/WeakAuras-WotLK.", message);
+
+        var addOns = AddonFiles.GameAddOnsDir(Dir(game));
+        Assert.Contains("5.22.1", File.ReadAllText(Path.Combine(addOns, @"WeakAuras\WeakAuras.lua")));
+        Assert.False(File.Exists(Path.Combine(addOns, @"WeakAuras\Dropped.lua")));
+        // Parts of the download that weren't installed stay out
+        Assert.False(Directory.Exists(Path.Combine(addOns, "WeakAurasArchive")));
+        Assert.Equal(["WeakAuras"], Assert.Single(Sync.ListBackups(game)).Addons);
+    }
+
+    [Fact]
     public async Task CopyingToAnotherGameReplacesAddonsAndCopiesTheirSettings()
     {
         var source = _sandbox.AddGame("source");

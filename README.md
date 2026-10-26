@@ -23,6 +23,7 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 - **Sync between PCs** through a private GitHub repo: push from one PC, pull on another.
 - **Copy Addons** from one game in your library to another, optionally with their settings.
 - **Copy Character Setup** gives other characters, in any game, the same enabled addons and per-character addon data as one character.
+- **Update addons** that are on GitHub, then push to send the update to your other PCs.
 - Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
 ## Install
@@ -66,6 +67,14 @@ Before anything is applied you see each addon as new, changed or removed, and ca
 
 WoW saves addon settings when you log out, which would undo changes made while it's running. If the game is open, the app asks before Pull, Rollback, Copy Addons or Copy Character Setup.
 
+## Updating addons
+
+**Check for Updates** on the Addons tab downloads the newest version of each addon that's on GitHub and compares it with what you have installed. You pick which updates to install; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
+
+Addons that name their GitHub project in their `.toc` file are found by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up) and add its link under **GitHub Sources**. Only addons you have installed are updated, so a repo that holds several addons is fine.
+
+A repo's newest release is used when it has one with a zip; otherwise its newest code is.
+
 ## Backups and data
 
 Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords:
@@ -73,7 +82,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | What | Where |
 |------|-------|
 | Your game library | `games.json` |
-| Backups made before every pull, copy or rollback | `Backups` (the last 3 per game; put one back with **Addons → Restore a Backup**) |
+| Backups made before every pull, copy, rollback or update | `Backups` (the last 3 per game; put one back with **Addons → Restore a Backup**) |
 | Local copies of your sync repos | `SyncCache` |
 | A log of syncs, launches and errors, for when something goes wrong | `log.txt` (**Options → Open Log**) |
 | Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |
@@ -96,7 +105,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 
 ## Privacy
 
-iscLauncher only talks to GitHub: to check for new versions, to sign you in and create sync repos, and to push and pull your sync repos. Game passwords never leave your PC. Signing in gives the app access to your repositories, which GitHub only offers as one permission; it only uses the repos you sync with. You can sign out under **Options**, or revoke access any time on GitHub under **Settings → Applications**.
+iscLauncher only talks to GitHub: to check for new versions, to sign you in and create sync repos, to push and pull your sync repos, and to download addon updates. Game passwords never leave your PC. Signing in gives the app access to your repositories, which GitHub only offers as one permission; it only uses the repos you sync with. You can sign out under **Options**, or revoke access any time on GitHub under **Settings → Applications**.
 
 ## Building from source
 

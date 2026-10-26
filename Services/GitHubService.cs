@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -131,6 +133,58 @@ public class GitHubService
             }
         }
         throw new AppException($"GitHub couldn't create the repo ({(int)created.StatusCode} {created.ReasonPhrase}).");
+    }
+
+    /// <summary>
+    /// Downloads a repo's newest release zip, or its default branch when no release has one: some addons only ever
+    /// publish code. Returns the release's tag, or null for the branch.
+    /// </summary>
+    public async Task<string?> DownloadLatestAsync(string repo, string zipPath, CancellationToken ct)
+    {
+        var url = $"https://api.github.com/repos/{repo}/zipball";
+        string? tag = null;
+        // Not found means no releases, or no such repo, which the download then reports
+        using (var release = await GetAsync($"https://api.github.com/repos/{repo}/releases/latest", null, ct))
+        {
+            if (release.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(await release.Content.ReadAsStringAsync(ct));
+                var zip = doc.RootElement.GetProperty("assets").EnumerateArray()
+                    .FirstOrDefault(a => a.GetProperty("name").GetString()!.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+                if (zip.ValueKind == JsonValueKind.Object)
+                {
+                    url = zip.GetProperty("url").GetString()!;
+                    tag = doc.RootElement.GetProperty("tag_name").GetString();
+                }
+            }
+        }
+
+        // GitHub hands out a release file only when asked for bytes, but refuses that for a branch zip
+        using var response = await GetAsync(url, tag == null ? null : "application/octet-stream", ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new AppException(response.StatusCode switch
+            {
+                HttpStatusCode.NotFound => "not found on GitHub",
+                HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests when Token == null =>
+                    "GitHub limits how often it's asked without signing in. Sign in under Options, or try again in an hour",
+                _ => $"GitHub refused the download ({(int)response.StatusCode} {response.ReasonPhrase})"
+            });
+        }
+        await using var file = File.Create(zipPath);
+        await response.Content.CopyToAsync(file, ct);
+        return tag;
+    }
+
+    // Public repos work signed out too, but signed in, GitHub allows far more requests an hour
+    private async Task<HttpResponseMessage> GetAsync(string url, string? accept, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (accept != null)
+            request.Headers.Accept.ParseAdd(accept);
+        if (Token is { } token)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 
     private async Task<HttpResponseMessage?> SendAsync(HttpMethod method, string url, HttpContent? content, CancellationToken ct)

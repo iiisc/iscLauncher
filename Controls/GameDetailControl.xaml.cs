@@ -139,6 +139,7 @@ public sealed partial class GameDetailControl : UserControl
 
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        AddonUpdatesSection.Visibility = CopyAddonsSection.Visibility;
         SyncButtonsPanel.Visibility = !editing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
         NoRepoHint.Visibility = !editing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
     }
