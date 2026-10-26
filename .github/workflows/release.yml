@@ -24,6 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # A manual release builds master as it is now, so re-running a failed one picks up fixes pushed since.
+          # (Re-runs still use the workflow file of the original run; only the code is current.)
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
           # The release notes list the commits since the previous release, so the history and tags are needed
           fetch-depth: 0
 
@@ -44,6 +47,7 @@ jobs:
             $ver = "${{ github.ref_name }}".TrimStart('v')
           }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
           echo "TAG=v$ver" >> $env:GITHUB_OUTPUT
 
       - name: Setup .NET
@@ -132,7 +136,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
           # Only created now, after the build succeeded, so a failed run doesn't use up a version number
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.version.outputs.COMMIT }}
           body_path: notes.md
           files: |
             iscLauncher-${{ steps.version.outputs.TAG }}-win-x64.zip
