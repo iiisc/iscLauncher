@@ -44,6 +44,9 @@ public sealed partial class GameDetailControl : UserControl
 
     public void LoadGame(GameEntry game, string? statusMessage = null)
     {
+        var otherGame = _game?.Id != game.Id;
+        if (_game != null) _game.PropertyChanged -= OnGameChanged;
+        game.PropertyChanged += OnGameChanged;
         _game = game;
         _isNew = false;
         FoundInstallsSection.Visibility = Visibility.Collapsed;
@@ -61,9 +64,11 @@ public sealed partial class GameDetailControl : UserControl
             : "No password saved";
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
-        UpdateLastSyncedText(game);
+        UpdateSyncStatus(game);
 
-        DetailPivot.SelectedIndex = 0;
+        // Syncing is what a synced game is opened for; reloading the same game (e.g. after saving) keeps the tab
+        if (otherGame || DetailPivot.SelectedItem == null)
+            DetailPivot.SelectedItem = game.HasSyncRepo ? AddonsTab : GeneralTab;
         UpdateLaunchButtonState(game);
         UpdateSaveButtons();
 
@@ -129,7 +134,6 @@ public sealed partial class GameDetailControl : UserControl
         LaunchButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         EditModeButtons.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
         SaveButtonText.Text = _isNew ? "Add Game" : "Save Changes";
-        RemoveGameSection.Visibility = _isNew ? Visibility.Collapsed : Visibility.Visible;
 
         SetUpSyncButton.Visibility = string.IsNullOrWhiteSpace(SyncRepoUrlTextBox.Text) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -207,9 +211,8 @@ public sealed partial class GameDetailControl : UserControl
             DetailPivot.Items.Insert(1, AutomationTab);
     }
 
-    private async void OnRemoveGameClick(object sender, RoutedEventArgs e)
+    public async Task ConfirmRemoveAsync(GameEntry game)
     {
-        if (_game is not { } game) return;
         if (await DialogHelper.AskAsync(XamlRoot, "Remove Game",
             $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.",
             "Remove") == ContentDialogResult.Primary)

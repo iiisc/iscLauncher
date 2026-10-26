@@ -5,6 +5,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:iscLauncher.Models">
 
+    <UserControl.Resources>
+        <MenuFlyout x:Key="GameMenu" Opening="OnGameMenuOpening">
+            <MenuFlyoutItem Text="Remove from Library" Click="OnRemoveMenuClick">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE74D;"/>
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+        </MenuFlyout>
+    </UserControl.Resources>
+
     <Grid Background="{StaticResource SurfaceBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -15,7 +25,8 @@
             <ListView x:Name="GameListView"
                       SelectionMode="Single"
                       SelectionChanged="OnSelectionChanged"
-                      DoubleTapped="OnDoubleTapped">
+                      DoubleTapped="OnDoubleTapped"
+                      KeyDown="OnListKeyDown">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -70,7 +81,7 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:GameEntry">
-                            <Grid ColumnSpacing="12">
+                            <Grid ColumnSpacing="12" ContextFlyout="{StaticResource GameMenu}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="48" />
                                     <ColumnDefinition Width="*" />
@@ -102,9 +113,12 @@
                                     <TextBlock Text="{x:Bind Name, Mode=OneWay}"
                                                FontSize="13"
                                                Foreground="{StaticResource TextPrimaryBrush}" />
-                                    <TextBlock Text="{x:Bind ExecutableDisplayPath, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"
-                                               TextTrimming="CharacterEllipsis" />
+                                    <Border HorizontalAlignment="Left" CornerRadius="3" Padding="6,1"
+                                            BorderBrush="{StaticResource BorderHighBrush}" BorderThickness="1"
+                                            ToolTipService.ToolTip="{x:Bind ExecutablePath, Mode=OneWay}">
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Foreground="{StaticResource GoldBrush}"
+                                                   TextTrimming="CharacterEllipsis" Loaded="OnClientLabelLoaded" />
+                                    </Border>
                                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,2,0,0"
                                                 Visibility="{x:Bind HasServerInfo, Mode=OneWay}">
                                         <StackPanel Orientation="Horizontal" Spacing="4"

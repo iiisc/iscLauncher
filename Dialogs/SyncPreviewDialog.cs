@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using iscLauncher.Helpers;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -26,7 +27,7 @@ public static class SyncPreviewDialog
         var addonsBox = Option("Addons", true);
         var addonSettingsBox = Option("Addon settings — saved settings for all addons, shared by every character", true);
         var characterBox = Option("Character settings — layouts, macros, keybinds and per-character addon data" +
-            (preview.Characters > 0 ? $" ({preview.Characters} character(s))" : ""), false);
+            (preview.Characters > 0 ? $" ({preview.Characters.Plural("character")})" : ""), false);
         addonsBox.Click += (_, _) => checklist.IsEnabled = addonsBox.IsChecked == true;
 
         var panel = new StackPanel { Spacing = 8 };

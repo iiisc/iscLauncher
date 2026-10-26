@@ -120,7 +120,7 @@ public class AddonSyncService
         var repoAddons = AddonFiles.AddonNames(s.RepoAddOns);
         var characters = AddonFiles.CharacterCount(s.CachePath);
         var pcName = Environment.MachineName;
-        var subject = $"sync: {s.Game.Name} — {repoAddons.Count} addon(s), {characters} character(s) [{pcName}]";
+        var subject = $"sync: {s.Game.Name} — {repoAddons.Count.Plural("addon")}, {characters.Plural("character")} [{pcName}]";
         var message = string.Join("\n", new[] { subject, "", "Addons:" }.Concat(repoAddons.Select(n => $"  - {n}")));
 
         var head = await CommitAndPushAsync(s, message, progress, ct);
@@ -162,7 +162,7 @@ public class AddonSyncService
                     skipped = CopyAddonSettings(source, target, names);
             }, ct);
 
-            var message = $"Copied {addons.Count} addon(s) to {target.Name}.";
+            var message = $"Copied {addons.Count.Plural("addon")} to {target.Name}.";
             return skipped == null ? message : $"{message} Settings weren't copied: {skipped}.";
         }, ct);
 
@@ -211,7 +211,7 @@ public class AddonSyncService
                         AddonFiles.CopyCharacterSetup(source.Dir, target.Dir, enabledAddons, data);
                 }, ct);
             }
-            return $"Gave {targets.Count} character(s) {source.Label}'s addon setup.";
+            return $"Gave {targets.Count.Plural("character")} {source.Label}'s addon setup.";
         }, ct);
 
     /// <summary>Commits whatever changed in the cache and pushes it. Returns the new head (unchanged if there was nothing to commit).</summary>

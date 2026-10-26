@@ -1,6 +1,10 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
@@ -10,6 +14,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.System;
 
 namespace iscLauncher.Controls;
 
@@ -19,8 +24,11 @@ public sealed partial class GameListControl : UserControl
     public event EventHandler<GameEntry>? LaunchRequested;
     public event EventHandler? AddGameRequested;
     public event EventHandler? OptionsRequested;
+    public event EventHandler<GameEntry>? RemoveRequested;
 
     private bool _suppressSelectionChange;
+    // The card the shared right-click menu was opened on
+    private GameEntry? _menuGame;
 
     public GameListControl() => InitializeComponent();
 
@@ -72,14 +80,59 @@ public sealed partial class GameListControl : UserControl
             LaunchRequested?.Invoke(this, game);
     }
 
+    private void OnListKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Delete && GameListView.SelectedItem is GameEntry game)
+        {
+            RemoveRequested?.Invoke(this, game);
+            e.Handled = true;
+        }
+    }
+
+    private void OnGameMenuOpening(object? sender, object e) =>
+        _menuGame = ((sender as MenuFlyout)?.Target as FrameworkElement)?.DataContext as GameEntry;
+
+    private void OnRemoveMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (_menuGame != null) RemoveRequested?.Invoke(this, _menuGame);
+    }
+
     private void OnGameIconLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not Image image || image.DataContext is not GameEntry game) return;
-        // x:Bind can't load the icon asynchronously, so reload it whenever the entry changes (e.g. a new executable)
-        PropertyChangedEventHandler onChanged = (_, _) => _ = LoadIconAsync(image, game);
+        if (sender is Image image && image.DataContext is GameEntry game)
+            Watch(image, game, () => _ = LoadIconAsync(image, game));
+    }
+
+    private void OnClientLabelLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBlock label && label.DataContext is GameEntry game)
+            Watch(label, game, () => label.Text = ClientLabel(game));
+    }
+
+    // x:Bind can't derive these from the exe, so they're refreshed whenever the entry changes (e.g. a new executable)
+    private static void Watch(FrameworkElement element, GameEntry game, Action refresh)
+    {
+        PropertyChangedEventHandler onChanged = (_, _) => refresh();
         game.PropertyChanged += onChanged;
-        image.Unloaded += (_, _) => game.PropertyChanged -= onChanged;
-        _ = LoadIconAsync(image, game);
+        element.Unloaded += (_, _) => game.PropertyChanged -= onChanged;
+        refresh();
+    }
+
+    /// <summary>The client's version, e.g. "WoW 3.3.5". An official install's name already says that, so its tag is "Battle.net".</summary>
+    private static string ClientLabel(GameEntry game)
+    {
+        var exe = game.ExecutablePath;
+        if (BattleNetInstall.IsOfficial(exe))
+            return "Battle.net";
+        try
+        {
+            // Private-server clients write the version as "3, 3, 5, 12340"
+            var parts = Regex.Matches(FileVersionInfo.GetVersionInfo(exe).FileVersion ?? "", @"\d+").Take(3).Select(m => m.Value).ToList();
+            if (parts.Count == 3)
+                return "WoW " + string.Join('.', parts);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or ArgumentException) { }
+        return game.ExecutableDisplayPath;
     }
 
     private static async Task LoadIconAsync(Image image, GameEntry game)

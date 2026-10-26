@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using iscLauncher.Helpers;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -29,7 +30,7 @@ public static class RestoreBackupDialog
     {
         var parts = new List<string>();
         if (backup.HasSettings) parts.Add("settings");
-        if (backup.Addons.Count > 0) parts.Add($"{backup.Addons.Count} addon(s)");
+        if (backup.Addons.Count > 0) parts.Add(backup.Addons.Count.Plural("addon"));
         return $"{backup.Created:g}: {string.Join(" and ", parts)}";
     }
 }

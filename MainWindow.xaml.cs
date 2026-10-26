@@ -36,6 +36,7 @@ public sealed partial class MainWindow : Window
         GameList.LaunchRequested  += OnLaunchRequested;
         GameList.AddGameRequested += OnAddGameRequested;
         GameList.OptionsRequested += OnOptionsRequested;
+        GameList.RemoveRequested  += async (_, game) => await GameDetail.ConfirmRemoveAsync(game);
 
         GameDetail.GameSaved      += OnGameSaved;
         GameDetail.EscapeRequested += OnDetailEscapeRequested;
@@ -108,11 +109,14 @@ public sealed partial class MainWindow : Window
 
     private async void OnDeleteConfirmed(object? sender, GameEntry game)
     {
-        GameDetail.CancelSync();
+        // Removing another game from its card's menu leaves the one on screen, and any sync it's running, alone
+        var shown = GameDetail.CurrentGame == game;
+        if (shown) GameDetail.CancelSync();
         _services.Credentials.DeleteCredential(game.CredentialTarget);
         await _services.Library.RemoveAsync(game);
         // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete
         try { await Task.Run(() => _services.Sync.DeleteLocalData(game)); } catch { }
+        if (!shown) return;
         GameList.SetSelectedGame(null);
         if (_services.Library.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
         else ShowEmptyState();

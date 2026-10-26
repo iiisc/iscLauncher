@@ -43,6 +43,8 @@ The app checks for a new version when it starts. When one is ready, a dot appear
 
 If the password gets typed before the login screen is ready, raise **Startup Delay** under **Automation**.
 
+To remove a game from the library, right-click its card (or select it and press Delete).
+
 ## Syncing addons between PCs
 
 Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.

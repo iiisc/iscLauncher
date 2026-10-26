@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -10,6 +11,7 @@ using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace iscLauncher.Controls;
 
@@ -170,7 +172,7 @@ public sealed partial class GameDetailControl
             var message = await operation(new Progress<string>(ShowInfo), ct);
             if (message != null) ShowStatus(message, true);
             else StatusBar.IsOpen = false;
-            if (_game != null) UpdateLastSyncedText(_game);
+            if (_game != null) UpdateSyncStatus(_game);
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
         catch (AppException ex)
@@ -214,17 +216,28 @@ public sealed partial class GameDetailControl
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void UpdateLastSyncedText(GameEntry game)
+    // The repo's head is checked in the background at startup and after every sync, so this can change while the game is shown
+    private void OnGameChanged(object? sender, PropertyChangedEventArgs e) =>
+        DispatcherQueue.TryEnqueue(() => { if (sender is GameEntry game && game == _game) UpdateSyncStatus(game); });
+
+    private void UpdateSyncStatus(GameEntry game)
     {
-        if (game.LastSynced is DateTime ts)
-        {
-            var e = DateTime.UtcNow - ts;
-            LastSyncedText.Text = $"Last synced: {(e.TotalMinutes < 1 ? "just now" :
-                e.TotalMinutes < 60 ? $"{(int)e.TotalMinutes} min ago" :
-                e.TotalHours < 24 ? $"{(int)e.TotalHours}h ago" :
-                $"{(int)e.TotalDays}d ago")}";
-            LastSyncedText.Visibility = Visibility.Visible;
-        }
-        else { LastSyncedText.Visibility = Visibility.Collapsed; }
+        SyncStatusPanel.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
+        var lastSynced = game.LastSynced is DateTime ts ? $"last synced {Ago(DateTime.UtcNow - ts)}" : "not synced from this PC yet";
+        var (glyph, brush, text) =
+            game.HasRemoteChanges ? ("", "GoldBrush", $"New from another PC: pull to get it ({lastSynced})")
+            : game.RemoteHead != null ? ("", "EmeraldForegroundBrush", $"Up to date with the repo ({lastSynced})")
+            : ("", "TextMutedBrush", char.ToUpper(lastSynced[0]) + lastSynced[1..]);
+        SyncStatusIcon.Glyph = glyph;
+        SyncStatusIcon.Foreground = DialogHelper.Res<Brush>(brush);
+        SyncStatusText.Foreground = DialogHelper.Res<Brush>(game.HasRemoteChanges ? "GoldBrush" : "TextPrimaryBrush");
+        SyncStatusText.Text = text;
+        SyncAddonsButton.Style = DialogHelper.Res<Style>(game.HasRemoteChanges ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
     }
+
+    private static string Ago(TimeSpan e) =>
+        e.TotalMinutes < 1 ? "just now"
+        : e.TotalMinutes < 60 ? $"{(int)e.TotalMinutes} min ago"
+        : e.TotalHours < 24 ? $"{(int)e.TotalHours}h ago"
+        : $"{(int)e.TotalDays}d ago";
 }

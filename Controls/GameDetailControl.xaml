@@ -23,7 +23,7 @@
                 <SolidColorBrush x:Key="PivotHeaderItemSelectedPipeFill" Color="{StaticResource GoldColor}"/>
             </Pivot.Resources>
 
-            <PivotItem AutomationProperties.Name="General">
+            <PivotItem x:Name="GeneralTab" AutomationProperties.Name="General">
                 <PivotItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE10F;" FontSize="12"/>
@@ -70,19 +70,6 @@
                             <TextBox x:Name="AccountTextBox" Header="Account name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., myaccount"/>
                             <TextBox x:Name="RealmTextBox" Header="Realm name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., ChromieCraft"/>
                         </StackPanel>
-
-                        <StackPanel x:Name="RemoveGameSection" Spacing="6" Margin="0,10,0,0">
-                            <TextBlock Text="REMOVE" Style="{StaticResource SectionHeaderStyle}"/>
-                            <Button Click="OnRemoveGameClick"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    BorderBrush="{StaticResource CrimsonBrush}"
-                                    AutomationProperties.Name="Remove from Library">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{StaticResource CrimsonBrush}"/>
-                                    <TextBlock Text="Remove from Library" Foreground="{StaticResource CrimsonBrush}"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </PivotItem>
@@ -115,7 +102,7 @@
                 </ScrollViewer>
             </PivotItem>
 
-            <PivotItem AutomationProperties.Name="Addons">
+            <PivotItem x:Name="AddonsTab" AutomationProperties.Name="Addons">
                 <PivotItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE895;" FontSize="12"/>
@@ -142,7 +129,13 @@
                             </Button>
                         </Grid>
 
-                        <TextBlock x:Name="LastSyncedText" Style="{StaticResource HintTextStyle}" Visibility="Collapsed"/>
+                        <StackPanel x:Name="SyncStatusPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                            <FontIcon x:Name="SyncStatusIcon" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SyncStatusText" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <HyperlinkButton Content="Open on GitHub" Click="OnOpenRepoClick" Padding="4,0" FontSize="12"
+                                             Foreground="{StaticResource GoldBrush}" VerticalAlignment="Center"
+                                             ToolTipService.ToolTip="Open this game's sync repo in your browser"/>
+                        </StackPanel>
 
                         <StackPanel x:Name="SyncButtonsPanel" Orientation="Horizontal" Spacing="10">
                             <Button x:Name="SyncAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnSyncAddonsClick" AutomationProperties.Name="Pull">
@@ -162,13 +155,6 @@
                                     <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
                                     <TextBlock Text="Rollback"/>
                                 </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource SecondaryButtonStyle}"
-                                    Width="40" Padding="0"
-                                    Click="OnOpenRepoClick"
-                                    ToolTipService.ToolTip="Open repo in browser"
-                                    AutomationProperties.Name="Open repo in browser">
-                                <FontIcon Glyph="&#xE774;" FontSize="14"/>
                             </Button>
                         </StackPanel>
                         <TextBlock x:Name="NoRepoHint"
