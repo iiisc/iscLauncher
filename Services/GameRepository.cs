@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -7,82 +8,85 @@ using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
+/// <summary>
+/// The game library: loaded once, kept in memory as the one list everything shares, and written back to games.json
+/// after each change. Games are edited in place, then saved.
+/// </summary>
 public class GameRepository
 {
     public static readonly string AppDataFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
 
-    private static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
     };
 
-    private static readonly SemaphoreSlim _fileLock = new(1, 1);
+    private readonly string _filePath;
 
-    public async Task<GameLibrary> LoadAsync()
+    // A sync finishing while a game is being saved would otherwise have two writes share the temp file
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
+
+    /// <param name="filePath">Where the library lives; only tests pass one, to keep away from the real games.json.</param>
+    public GameRepository(string? filePath = null) =>
+        _filePath = filePath ?? Path.Combine(AppDataFolder, "games.json");
+
+    public ObservableCollection<GameEntry> Games { get; } = new();
+
+    public async Task LoadAsync()
     {
-        if (!File.Exists(GamesFilePath))
-        {
-            return new GameLibrary();
-        }
+        if (!File.Exists(_filePath))
+            return;
 
-        var json = await File.ReadAllTextAsync(GamesFilePath);
+        var json = await File.ReadAllTextAsync(_filePath);
+        GameLibrary library;
         try
         {
-            return JsonSerializer.Deserialize<GameLibrary>(json, JsonOptions) ?? new GameLibrary();
+            library = JsonSerializer.Deserialize<GameLibrary>(json, JsonOptions) ?? new GameLibrary();
         }
         catch (JsonException ex)
         {
             // Move the unreadable file aside so the next save can't overwrite the user's only copy
-            var corruptPath = $"{GamesFilePath}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
-            File.Move(GamesFilePath, corruptPath);
+            var corruptPath = $"{_filePath}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
+            File.Move(_filePath, corruptPath);
             throw new InvalidDataException(
                 $"games.json could not be read ({ex.Message}). It was moved to {corruptPath} and the library starts empty.", ex);
         }
+
+        foreach (var game in library.Games)
+            Games.Add(game);
     }
 
-    private async Task SaveAsync(GameLibrary library)
+    public async Task AddAsync(GameEntry game)
     {
-        Directory.CreateDirectory(AppDataFolder);
-        var json = JsonSerializer.Serialize(library, JsonOptions);
-        // Write-then-rename so a crash mid-write can't leave a truncated games.json
-        var tempPath = GamesFilePath + ".tmp";
-        await File.WriteAllTextAsync(tempPath, json);
-        File.Move(tempPath, GamesFilePath, overwrite: true);
+        Games.Add(game);
+        await SaveAsync();
     }
 
-    public Task AddGameAsync(GameEntry game) =>
-        MutateAsync(library => { library.Games.Add(game); return true; });
-
-    public Task UpdateGameAsync(GameEntry game) =>
-        MutateAsync(library =>
-        {
-            var index = library.Games.FindIndex(g => g.Id == game.Id);
-            if (index < 0)
-                return false;
-            library.Games[index] = game;
-            return true;
-        });
-
-    public Task RemoveGameAsync(Guid gameId) =>
-        MutateAsync(library => { library.Games.RemoveAll(g => g.Id == gameId); return true; });
-
-    /// <summary>Load, apply <paramref name="change"/>, and save only if it returns true.</summary>
-    private async Task MutateAsync(Func<GameLibrary, bool> change)
+    public async Task RemoveAsync(GameEntry game)
     {
-        await _fileLock.WaitAsync();
+        Games.Remove(game);
+        await SaveAsync();
+    }
+
+    /// <summary>Writes the library as it is now.</summary>
+    public async Task SaveAsync()
+    {
+        await _saveLock.WaitAsync();
         try
         {
-            var library = await LoadAsync();
-            if (change(library))
-                await SaveAsync(library);
+            // Serialised once the lock is held, so the newest state is what lands on disk
+            var json = JsonSerializer.Serialize(new GameLibrary { Games = [.. Games] }, JsonOptions);
+            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+            // Write-then-rename so a crash mid-write can't leave a truncated games.json
+            var tempPath = _filePath + ".tmp";
+            await File.WriteAllTextAsync(tempPath, json);
+            File.Move(tempPath, _filePath, overwrite: true);
         }
         finally
         {
-            _fileLock.Release();
+            _saveLock.Release();
         }
     }
 }

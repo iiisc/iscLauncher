@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -23,7 +22,6 @@ public sealed partial class MainWindow : Window
     private readonly GitHubService _gitHub;
     private readonly AddonSyncService _addonSyncService;
     private readonly AppUpdateService _updateService = new();
-    private readonly ObservableCollection<GameEntry> _games = new();
     private UpdateCheckResult? _startupUpdate;
 
     public MainWindow()
@@ -31,12 +29,12 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         _gameLauncherService = new GameLauncherService(_credentialService);
         _gitHub = new GitHubService(_credentialService);
-        _addonSyncService = new AddonSyncService(new GitService(() => _gitHub.Token));
+        _addonSyncService = new AddonSyncService(new GitService(() => _gitHub.Token), _gameRepository);
         VersionText.Text = $"v{AppUpdateService.CurrentVersion}";
 
         var hwnd = WindowNative.GetWindowHandle(this);
 
-        GameList.SetGames(_games);
+        GameList.SetGames(_gameRepository.Games);
 
         GameDetail.GameRepository = _gameRepository;
         GameDetail.CredentialService = _credentialService;
@@ -44,7 +42,7 @@ public sealed partial class MainWindow : Window
         GameDetail.AddonSyncService = _addonSyncService;
         GameDetail.GitHub = _gitHub;
         GameDetail.OwnerHwnd = hwnd;
-        GameDetail.Games = _games;
+        GameDetail.Games = _gameRepository.Games;
 
         OptionsPanel.AppUpdateService = _updateService;
         OptionsPanel.GitHub = _gitHub;
@@ -127,12 +125,11 @@ public sealed partial class MainWindow : Window
     {
         GameDetail.CancelSync();
         _credentialService.DeleteCredential(game.CredentialTarget);
-        await _gameRepository.RemoveGameAsync(game.Id);
+        await _gameRepository.RemoveAsync(game);
         // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete
         try { await Task.Run(() => _addonSyncService.DeleteLocalData(game)); } catch { }
-        _games.Remove(game);
         GameList.SetSelectedGame(null);
-        if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
+        if (_gameRepository.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
         else ShowEmptyState();
     }
 
@@ -150,12 +147,10 @@ public sealed partial class MainWindow : Window
 
     private void OnGameSaved(object? sender, GameEntry game)
     {
-        var added = !_games.Contains(game);
+        // A game that was just added isn't selected in the list yet
+        var added = GameList.SelectedGame != game;
         if (added)
-        {
-            _games.Add(game);
             GameList.SetSelectedGame(game);
-        }
         ShowDetail(game, added ? "Game added successfully!" : "Game updated successfully!");
     }
 
@@ -175,9 +170,8 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var library = await _gameRepository.LoadAsync();
-            foreach (var game in library.Games) _games.Add(game);
-            if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
+            await _gameRepository.LoadAsync();
+            if (_gameRepository.Games.FirstOrDefault() is { } first) { GameList.SetSelectedGame(first); ShowDetail(first); }
             _ = CheckForUpdatesSilentlyAsync();
             _ = CheckForRemoteChangesAsync();
         }
@@ -192,7 +186,7 @@ public sealed partial class MainWindow : Window
     // Marks the games another PC has pushed to since this one last synced. Quiet: offline just shows nothing.
     private async Task CheckForRemoteChangesAsync()
     {
-        foreach (var game in _games.Where(g => g.HasSyncRepo).ToList())
+        foreach (var game in _gameRepository.Games.Where(g => g.HasSyncRepo).ToList())
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             try { await _addonSyncService.RefreshRemoteHeadAsync(game, timeout.Token); }

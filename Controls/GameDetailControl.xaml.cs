@@ -181,9 +181,9 @@ public sealed partial class GameDetailControl : UserControl
             IconExtractor.InvalidateCache(oldPath);
 
         if (_isNew)
-            await GameRepository!.AddGameAsync(game);
+            await GameRepository!.AddAsync(game);
         else
-            await GameRepository!.UpdateGameAsync(game);
+            await GameRepository!.SaveAsync();
         game.NotifyChanged();
 
         GameSaved?.Invoke(this, game);

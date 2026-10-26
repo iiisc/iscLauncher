@@ -34,12 +34,13 @@ public class AddonSyncService
     private static readonly string BackupRoot = Path.Combine(GameRepository.AppDataFolder, "Backups");
 
     private readonly GitService _git;
-    private readonly GameRepository _gameRepository = new();
+    private readonly GameRepository _gameRepository;
     private const string SyncBranch = "main";
 
-    public AddonSyncService(GitService git)
+    public AddonSyncService(GitService git, GameRepository gameRepository)
     {
         _git = git;
+        _gameRepository = gameRepository;
     }
 
     public async Task<SyncSession> OpenAsync(GameEntry game, IProgress<string>? progress, CancellationToken ct)
@@ -259,7 +260,7 @@ public class AddonSyncService
         game.LastSynced = DateTime.UtcNow;
         game.LastSyncedCommit = head;
         game.RemoteHead = head;
-        await _gameRepository.UpdateGameAsync(game);
+        await _gameRepository.SaveAsync();
     }
 
     internal static string GameDir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath) ?? "";
