@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using iscLauncher.Services;
 
@@ -30,5 +31,19 @@ public static class Log
         }
         // Logging must never be what makes something fail
         catch { }
+    }
+
+    /// <summary>Opens the log in the user's text editor. False if it couldn't be opened.</summary>
+    public static bool Open()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(FilePath) { UseShellExecute = true });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

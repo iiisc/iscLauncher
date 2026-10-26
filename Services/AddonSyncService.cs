@@ -11,6 +11,8 @@ namespace iscLauncher.Services;
 
 public record CharacterFolder(GameEntry Game, string Dir, string Label);
 
+public record BackupInfo(string Path, DateTime Created, List<string> Addons, bool HasSettings);
+
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 {
@@ -165,10 +167,42 @@ public class AddonSyncService
             return message;
         }, ct);
 
+    /// <summary>The game's backups, newest first.</summary>
+    public List<BackupInfo> ListBackups(GameEntry game)
+    {
+        var dir = BackupDir(game);
+        if (!Directory.Exists(dir))
+            return [];
+        return Directory.GetFiles(dir, "*.zip")
+            .Select(path => (path, contents: AddonFiles.BackupContents(path)))
+            .Select(b => new BackupInfo(b.path, File.GetCreationTime(b.path), b.contents.Addons, b.contents.HasSettings))
+            .OrderByDescending(b => b.Created)
+            .ToList();
+    }
+
+    /// <summary>Restores a backup, after backing up what it's about to replace so the restore itself can be undone.</summary>
+    public Task<string> RestoreBackupAsync(GameEntry game, BackupInfo backup, CancellationToken ct) =>
+        Task.Run(() =>
+        {
+            // Restored from a copy: the backup made first can prune the oldest backup, which may be this one
+            var copy = Path.Combine(Path.GetTempPath(), $"iscLauncher-restore-{Guid.NewGuid():N}.zip");
+            File.Copy(backup.Path, copy);
+            try
+            {
+                Backup(game, backup.Addons, backup.HasSettings, ct);
+                AddonFiles.RestoreBackup(copy, GameDir(game), ct);
+            }
+            finally
+            {
+                File.Delete(copy);
+            }
+            return $"Restored the backup from {backup.Created:g}. What it replaced was backed up first.";
+        }, ct);
+
     /// <summary>Deletes the game's local copy of its repo and its backups, once it's been removed from the library.</summary>
     public void DeleteLocalData(GameEntry game)
     {
-        foreach (var dir in new[] { _git.GetLocalCachePath(game), Path.Combine(BackupRoot, game.Id.ToString()) })
+        foreach (var dir in new[] { _git.GetLocalCachePath(game), BackupDir(game) })
             if (Directory.Exists(dir))
                 AddonFiles.ForceDeleteDirectory(dir);
     }
@@ -231,7 +265,9 @@ public class AddonSyncService
     internal static string GameDir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath) ?? "";
 
     private static void Backup(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, CancellationToken ct) =>
-        AddonFiles.Backup(Path.Combine(BackupRoot, game.Id.ToString()), GameDir(game), addonNames, includeWtf, ct);
+        AddonFiles.Backup(BackupDir(game), GameDir(game), addonNames, includeWtf, ct);
+
+    private static string BackupDir(GameEntry game) => Path.Combine(BackupRoot, game.Id.ToString());
 
     /// <summary>Copies account-wide SavedVariables for the named addons. Returns why it couldn't, or null on success.</summary>
     private static string? CopyAddonSettings(GameEntry source, GameEntry target, IEnumerable<string> addons)

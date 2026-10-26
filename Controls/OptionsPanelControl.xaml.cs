@@ -34,6 +34,7 @@ public sealed partial class OptionsPanelControl : UserControl
         VersionText.Text = $"v{Services.AppUpdateService.CurrentVersion}";
         StatusBar.IsOpen = false;
         UpdateAvailableText.Visibility = Visibility.Collapsed;
+        ReleaseNotesPanel.Visibility = Visibility.Collapsed;
         UpdateProgressBar.Visibility = Visibility.Collapsed;
         CheckUpdatesIcon.Glyph = "\uE72C";
         CheckUpdatesText.Text = "Check for Updates";
@@ -122,8 +123,7 @@ public sealed partial class OptionsPanelControl : UserControl
                     UpdateProgressBar.Value = p;
                     StatusText.Text = $"Downloading update... {(int)(p * 100)}%";
                 });
-                await AppUpdateService!.DownloadAndApplyAsync(
-                    _pendingUpdate.DownloadUrl!, _pendingUpdate.AssetName!, progress, _updateCts.Token);
+                await AppUpdateService!.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
                 Application.Current.Exit();
             }
             catch (Exception ex)
@@ -141,6 +141,8 @@ public sealed partial class OptionsPanelControl : UserControl
         _pendingUpdate = update;
         UpdateAvailableText.Text = $"Version {update.LatestVersion} is available. The app will restart after installing.";
         UpdateAvailableText.Visibility = Visibility.Visible;
+        ReleaseNotesText.Text = update.Notes;
+        ReleaseNotesPanel.Visibility = update.Notes.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CheckUpdatesIcon.Glyph = "\uE896";
         CheckUpdatesText.Text = "Download & Install";
     }
@@ -158,8 +160,8 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private void OnOpenLogClick(object sender, RoutedEventArgs e)
     {
-        try { Process.Start(new ProcessStartInfo(Log.FilePath) { UseShellExecute = true }); }
-        catch { ShowStatus("Could not open the log.", false); }
+        if (!Log.Open())
+            ShowStatus("Could not open the log.", false);
     }
 
     private void OnAddToStartMenuClick(object sender, RoutedEventArgs e)

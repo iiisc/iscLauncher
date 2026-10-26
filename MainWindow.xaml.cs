@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinRT.Interop;
@@ -218,6 +219,12 @@ public sealed partial class MainWindow : Window
     {
         var scale = GetDpiForWindow(hwnd) / 96.0;
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(width * scale), (int)(height * scale)));
+        // Below this the game list and the game page no longer fit side by side
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = (int)(760 * scale);
+            presenter.PreferredMinimumHeight = (int)(520 * scale);
+        }
     }
 
     [DllImport("user32.dll")]

@@ -32,7 +32,7 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 
 Requires 64-bit Windows 10 version 1809 or later. If SmartScreen warns on first launch, choose **More info → Run anyway**. To find the app from the Start menu, use **Options → Add to Start Menu**.
 
-The app checks for a new version when it starts. When one is ready, a dot appears on the ⚙ Options button; install it from there.
+The app checks for a new version when it starts. When one is ready, a dot appears on the ⚙ Options button, where you can see what changed and install it. Downloads are checked against GitHub's checksum before anything is replaced.
 
 ## Getting started
 
@@ -71,7 +71,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | What | Where |
 |------|-------|
 | Your game library | `games.json` |
-| Backups made before every pull, copy or rollback | `Backups` (the last 3 per game) |
+| Backups made before every pull, copy or rollback | `Backups` (the last 3 per game; put one back with **Addons → Restore a Backup**) |
 | Local copies of your sync repos | `SyncCache` |
 | A log of syncs, launches and errors, for when something goes wrong | `log.txt` (**Options → Open Log**) |
 | Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |

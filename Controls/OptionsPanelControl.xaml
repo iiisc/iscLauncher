@@ -47,6 +47,9 @@
                                 </Button>
                             </Grid>
                             <TextBlock x:Name="UpdateAvailableText" Style="{StaticResource BodyTextStyle}" Visibility="Collapsed"/>
+                            <ScrollViewer x:Name="ReleaseNotesPanel" MaxHeight="160" Visibility="Collapsed">
+                                <TextBlock x:Name="ReleaseNotesText" Style="{StaticResource HintTextStyle}" IsTextSelectionEnabled="True"/>
+                            </ScrollViewer>
                             <ProgressBar x:Name="UpdateProgressBar"
                                          Minimum="0" Maximum="1" Value="0"
                                          Foreground="{StaticResource EmeraldBrush}"

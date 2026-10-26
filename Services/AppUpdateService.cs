@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -11,7 +12,8 @@ using System.Threading.Tasks;
 
 namespace iscLauncher.Services;
 
-public record UpdateCheckResult(bool UpdateAvailable, string LatestVersion, string? DownloadUrl, string? AssetName);
+/// <param name="Sha256">GitHub's checksum of the download, so it can be verified before it replaces the app.</param>
+public record UpdateCheckResult(bool UpdateAvailable, string LatestVersion, string? DownloadUrl, string? AssetName, string? Sha256, string Notes);
 
 public class AppUpdateService
 {
@@ -50,6 +52,7 @@ public class AppUpdateService
 
         string? downloadUrl = null;
         string? assetName = null;
+        string? sha256 = null;
 
         if (root.TryGetProperty("assets", out var assets))
         {
@@ -60,24 +63,31 @@ public class AppUpdateService
                 {
                     downloadUrl = asset.GetProperty("browser_download_url").GetString();
                     assetName = name;
+                    // GitHub reports each file's checksum as "sha256:<hex>"
+                    if (asset.TryGetProperty("digest", out var digest) && digest.GetString() is { } value && value.StartsWith("sha256:"))
+                        sha256 = value["sha256:".Length..];
                     break;
                 }
             }
         }
 
-        return new UpdateCheckResult(IsNewer(latestVersion, CurrentVersion), latestVersion, downloadUrl, assetName);
+        var notes = root.TryGetProperty("body", out var body) ? (body.GetString() ?? "").Trim() : "";
+        return new UpdateCheckResult(IsNewer(latestVersion, CurrentVersion), latestVersion, downloadUrl, assetName, sha256, notes);
     }
 
     // Downloads the release asset and writes the swap script, then launches it.
     // The caller is responsible for calling Application.Current.Exit() on the UI thread.
-    public async Task DownloadAndApplyAsync(string downloadUrl, string assetName,
-        IProgress<double>? progress = null, CancellationToken ct = default)
+    public async Task DownloadAndApplyAsync(UpdateCheckResult update, IProgress<double>? progress = null, CancellationToken ct = default)
     {
+        // The update replaces the app itself, so a download that can't be verified isn't installed
+        if (update.Sha256 == null)
+            throw new InvalidOperationException("this release has no checksum to verify it against. Download it from GitHub instead.");
+
         var tempDir = Path.Combine(Path.GetTempPath(), "iscLauncherUpdate");
         Directory.CreateDirectory(tempDir);
-        var destPath = Path.Combine(tempDir, assetName);
+        var destPath = Path.Combine(tempDir, update.AssetName!);
 
-        using var response = await _http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var response = await _http.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1L;
@@ -103,6 +113,13 @@ public class AppUpdateService
             }
         }
         fileStream.Close();
+
+        await using (var downloaded = File.OpenRead(destPath))
+        {
+            var actual = Convert.ToHexString(await SHA256.HashDataAsync(downloaded, ct).ConfigureAwait(false));
+            if (!actual.Equals(update.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("the download doesn't match GitHub's checksum, so nothing was installed. Try again.");
+        }
 
         var currentExe = Environment.ProcessPath
             ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;

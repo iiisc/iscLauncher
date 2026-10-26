@@ -153,6 +153,35 @@ public sealed partial class GameDetailControl
             await AddonSyncService.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
     }
 
+    private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is not { } game) return;
+        var backups = AddonSyncService!.ListBackups(game);
+        if (backups.Count == 0)
+        { ShowStatus($"There are no backups of {game.Name} yet.", false); return; }
+
+        var choices = new RadioButtons { ItemsSource = backups.Select(DescribeBackup).ToList(), SelectedIndex = 0 };
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(DialogHelper.BodyText("Pick a backup to put back. What it replaces is backed up first, so this can be undone too."));
+        panel.Children.Add(choices);
+        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, $"Restore {game.Name}");
+        dialog.Content = panel;
+        dialog.PrimaryButtonText = "Restore";
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || !await ConfirmGamesClosedAsync([game]))
+            return;
+
+        var backup = backups[choices.SelectedIndex];
+        await RunSyncAsync("Restoring the backup...", async (_, ct) => await AddonSyncService.RestoreBackupAsync(game, backup, ct));
+    }
+
+    private static string DescribeBackup(BackupInfo backup)
+    {
+        var parts = new List<string>();
+        if (backup.HasSettings) parts.Add("settings");
+        if (backup.Addons.Count > 0) parts.Add($"{backup.Addons.Count} addon(s)");
+        return $"{backup.Created:g}: {string.Join(" and ", parts)}";
+    }
+
     // WoW writes addon settings and AddOns.txt back when you log out, which would undo files changed while it runs
     private async Task<bool> ConfirmGamesClosedAsync(IEnumerable<GameEntry> games)
     {
@@ -214,6 +243,7 @@ public sealed partial class GameDetailControl
         RollbackButton.IsEnabled = !busy;
         CopyAddonsButton.IsEnabled = !busy;
         CopyCharacterSetupButton.IsEnabled = !busy;
+        RestoreBackupButton.IsEnabled = !busy;
         LaunchButton.IsEnabled = !busy;
         SyncProgressRing.IsActive = busy;
         BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;

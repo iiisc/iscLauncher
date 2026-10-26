@@ -16,7 +16,29 @@ public partial class App : Application
     {
         Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
         InitializeComponent();
-        UnhandledException += (_, e) => Log.Write($"Unhandled error: {e.Exception}");
+        UnhandledException += OnUnhandledException;
+    }
+
+    private async void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        Log.Write($"Unhandled error: {e.Exception}");
+        // Before the window exists there's nowhere to show it, so startup errors still close the app
+        if (_window?.Content?.XamlRoot is not { } xamlRoot)
+            return;
+
+        // Kept running rather than vanishing, so the user can finish or restart on their own terms
+        e.Handled = true;
+        try
+        {
+            var dialog = DialogHelper.CreateThemedDialog(xamlRoot, "Something Went Wrong");
+            dialog.Content = $"{e.Message}\n\nThe details are in the log. If anything looks wrong, restart the app.";
+            dialog.PrimaryButtonText = "Open Log";
+            dialog.CloseButtonText = "OK";
+            if (await dialog.ShowAsync() == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary)
+                Log.Open();
+        }
+        // Another dialog was already open; the error is still in the log
+        catch { }
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)

@@ -186,6 +186,19 @@
                             </Button>
                         </StackPanel>
 
+                        <StackPanel x:Name="BackupsSection" Spacing="8" Margin="0,20,0,0">
+                            <TextBlock Text="BACKUPS" Style="{StaticResource SectionHeaderStyle}"/>
+                            <TextBlock Text="Addons and settings are backed up before every pull, copy and rollback. The last 3 are kept."
+                                       Style="{StaticResource HintTextStyle}"/>
+                            <Button x:Name="RestoreBackupButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnRestoreBackupClick"
+                                    AutomationProperties.Name="Restore a Backup">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE81C;" FontSize="14"/>
+                                    <TextBlock Text="Restore a Backup"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
                         <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,20,0,0">
                             <TextBlock Text="SHARE ADDONS" Style="{StaticResource SectionHeaderStyle}"/>
                             <TextBlock Text="Copy addons and their settings into another game, or give your other characters the same addon setup as one character."
