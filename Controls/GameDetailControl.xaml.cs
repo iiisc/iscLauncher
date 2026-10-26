@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,8 @@ public sealed partial class GameDetailControl : UserControl
 
     private GameEntry? _game;
     private bool _isEditing;
+    // A game being added: not in the library until saved
+    private bool _isNew;
     private readonly Dictionary<Guid, int> _runningProcessIds = new();
     // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
     private readonly HashSet<Guid> _busyGames = new();
@@ -47,26 +50,17 @@ public sealed partial class GameDetailControl : UserControl
     {
         _game = game;
         _isEditing = false;
+        _isNew = false;
         SetEditMode(false);
-
-        var official = BattleNetInstall.IsOfficial(game.ExecutablePath);
-        OfficialNote.Visibility = official ? Visibility.Visible : Visibility.Collapsed;
-        ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
-        AutomationTab.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
+        ShowOfficial(game.ExecutablePath);
 
         NameTextBox.Text = game.Name;
         ExecutableTextBox.Text = game.ExecutablePath;
         RealmlistTextBox.Text = game.RealmlistAddress ?? string.Empty;
         AccountTextBox.Text = game.AccountName ?? string.Empty;
         RealmTextBox.Text = game.RealmName ?? string.Empty;
-        WindowTitleTextBox.Text = game.WindowTitle ?? string.Empty;
         StartupDelayNumberBox.Value = game.StartupDelaySeconds;
         PasswordBox.Password = string.Empty;
-        InputMethodComboBox.SelectedIndex = game.InputMethod switch
-        {
-            PasswordInputMethod.Clipboard => 1,
-            _ => 0
-        };
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
         SyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
@@ -79,6 +73,15 @@ public sealed partial class GameDetailControl : UserControl
             ShowStatus(statusMessage, true);
         else
             StatusBar.IsOpen = false;
+    }
+
+    public void StartNewGame()
+    {
+        LoadGame(new GameEntry());
+        _isNew = true;
+        _isEditing = true;
+        SetEditMode(true);
+        NameTextBox.Focus(FocusState.Programmatic);
     }
 
     public void SetComputerName(string name) => ComputerNameTextBox.Text = name;
@@ -103,8 +106,9 @@ public sealed partial class GameDetailControl : UserControl
 
     private void OnCancelEditClick(object sender, RoutedEventArgs e)
     {
-        if (_game != null) LoadGame(_game);
         _isEditing = false;
+        if (_isNew) EscapeRequested?.Invoke(this, EventArgs.Empty);
+        else if (_game != null) LoadGame(_game);
     }
 
     private async void OnSaveClick(object sender, RoutedEventArgs e)
@@ -124,14 +128,8 @@ public sealed partial class GameDetailControl : UserControl
         game.RealmlistAddress = RealmlistTextBox.Text.NullIfBlank();
         game.AccountName = AccountTextBox.Text.NullIfBlank();
         game.RealmName = RealmTextBox.Text.NullIfBlank();
-        game.WindowTitle = WindowTitleTextBox.Text.NullIfBlank();
         game.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
             ? 0 : (int)StartupDelayNumberBox.Value;
-        game.InputMethod = InputMethodComboBox.SelectedIndex switch
-        {
-            1 => PasswordInputMethod.Clipboard,
-            _ => PasswordInputMethod.SendKeys
-        };
         game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
         game.SyncBranch = SyncBranchTextBox.Text.NullIfBlank();
 
@@ -141,7 +139,10 @@ public sealed partial class GameDetailControl : UserControl
         if (oldPath != game.ExecutablePath)
             IconExtractor.InvalidateCache(oldPath);
 
-        await GameRepository!.UpdateGameAsync(game);
+        if (_isNew)
+            await GameRepository!.AddGameAsync(game);
+        else
+            await GameRepository!.UpdateGameAsync(game);
         game.NotifyChanged();
 
         _isEditing = false;
@@ -151,7 +152,20 @@ public sealed partial class GameDetailControl : UserControl
     private async void OnBrowseExecutableClick(object sender, RoutedEventArgs e)
     {
         var file = await FormHelpers.PickFileAsync(OwnerHwnd, ".exe");
-        if (file != null) ExecutableTextBox.Text = file.Path;
+        if (file == null) return;
+        ExecutableTextBox.Text = file.Path;
+        if (string.IsNullOrWhiteSpace(NameTextBox.Text))
+            NameTextBox.Text = Path.GetFileNameWithoutExtension(file.Name);
+        ShowOfficial(file.Path);
+    }
+
+    // Battle.net handles login for official installs, so the login settings don't apply
+    private void ShowOfficial(string exePath)
+    {
+        var official = BattleNetInstall.IsOfficial(exePath);
+        OfficialNote.Visibility = official ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
+        AutomationTab.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SetEditMode(bool isEditing)
@@ -161,9 +175,7 @@ public sealed partial class GameDetailControl : UserControl
         RealmlistTextBox.IsEnabled = isEditing;
         AccountTextBox.IsEnabled = isEditing;
         RealmTextBox.IsEnabled = isEditing;
-        WindowTitleTextBox.IsEnabled = isEditing;
         PasswordBox.IsEnabled = isEditing;
-        InputMethodComboBox.IsEnabled = isEditing;
         StartupDelayNumberBox.IsEnabled = isEditing;
         SyncRepoUrlTextBox.IsEnabled = isEditing;
         SyncBranchTextBox.IsEnabled = isEditing;

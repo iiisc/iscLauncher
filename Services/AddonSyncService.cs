@@ -28,7 +28,6 @@ public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 /// </summary>
 public class AddonSyncService
 {
-    private const string AddonListHeader = "Addons:";
 
     private static readonly string BackupRoot = Path.Combine(GameRepository.AppDataFolder, "Backups");
 
@@ -124,7 +123,7 @@ public class AddonSyncService
         var characters = AddonFiles.CharacterCount(s.CachePath);
         var pcName = await _gameRepository.GetComputerNameAsync();
         var subject = $"sync: {s.Game.Name} — {repoAddons.Count} addon(s), {characters} character(s) [{pcName}]";
-        var message = string.Join("\n", new[] { subject, "", AddonListHeader }.Concat(repoAddons.Select(n => $"  - {n}")));
+        var message = string.Join("\n", new[] { subject, "", "Addons:" }.Concat(repoAddons.Select(n => $"  - {n}")));
 
         var head = await CommitAndPushAsync(s, message, progress, ct);
         await MarkSyncedAsync(s.Game, head);
@@ -182,34 +181,6 @@ public class AddonSyncService
             }
             return $"Gave {targets.Count} character(s) {source.Label}'s addon setup.";
         }, ct);
-
-    /// <summary>Reads back the addon list that <see cref="PushAsync"/> writes into the commit body.</summary>
-    public static List<string> ParseAddonList(string commitBody)
-    {
-        var addons = new List<string>();
-        if (string.IsNullOrWhiteSpace(commitBody))
-            return addons;
-
-        var inAddonSection = false;
-        foreach (var rawLine in commitBody.Split('\n'))
-        {
-            var line = rawLine.Trim();
-            if (line.Equals(AddonListHeader, StringComparison.OrdinalIgnoreCase))
-            {
-                inAddonSection = true;
-                continue;
-            }
-
-            if (inAddonSection)
-            {
-                if (line.StartsWith("- "))
-                    addons.Add(line[2..].Trim());
-                else if (line.Length == 0 && addons.Count > 0)
-                    break;
-            }
-        }
-        return addons;
-    }
 
     /// <summary>Commits whatever changed in the cache and pushes it. Returns the new head (unchanged if there was nothing to commit).</summary>
     private async Task<string?> CommitAndPushAsync(SyncSession s, string message, IProgress<string>? progress, CancellationToken ct)

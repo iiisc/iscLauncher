@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -46,12 +45,7 @@ public sealed partial class MainWindow : Window
         OptionsPanel.GameRepository = _gameRepository;
         OptionsPanel.CredentialService = _credentialService;
         OptionsPanel.AppUpdateService = _updateService;
-        OptionsPanel.OwnerHwnd = hwnd;
         OptionsPanel.Games = _games;
-
-        AddGamePanel.GameRepository = _gameRepository;
-        AddGamePanel.CredentialService = _credentialService;
-        AddGamePanel.OwnerHwnd = hwnd;
 
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;
@@ -63,12 +57,7 @@ public sealed partial class MainWindow : Window
         GameDetail.EscapeRequested += OnDetailEscapeRequested;
 
         OptionsPanel.CloseRequested               += OnOptionsCloseRequested;
-        OptionsPanel.LibraryImported              += OnLibraryImported;
-        OptionsPanel.IconCacheCleared             += OnIconCacheCleared;
         OptionsPanel.CheckUpdatesOnStartupChanged += (_, v) => _checkUpdatesOnStartup = v;
-
-        AddGamePanel.GameAdded  += OnGameAdded;
-        AddGamePanel.Cancelled  += OnAddGameCancelled;
 
         Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
 
@@ -85,8 +74,7 @@ public sealed partial class MainWindow : Window
         EmptyState.Visibility   = panel == EmptyState   ? Visibility.Visible : Visibility.Collapsed;
         GameDetail.Visibility   = panel == GameDetail   ? Visibility.Visible : Visibility.Collapsed;
         OptionsPanel.Visibility = panel == OptionsPanel ? Visibility.Visible : Visibility.Collapsed;
-        AddGamePanel.Visibility = panel == AddGamePanel ? Visibility.Visible : Visibility.Collapsed;
-        GameList.SetAddGameHighlight(panel == AddGamePanel);
+        GameList.SetAddGameHighlight(false);
         GameList.SetOptionsHighlight(panel == OptionsPanel);
     }
 
@@ -101,8 +89,9 @@ public sealed partial class MainWindow : Window
     private void ShowAddGame()
     {
         GameList.SetSelectedGame(null);
-        ShowPanel(AddGamePanel);
-        AddGamePanel.ClearAndFocus();
+        ShowPanel(GameDetail);
+        GameList.SetAddGameHighlight(true);
+        GameDetail.StartNewGame();
     }
 
     private void ShowOptions()
@@ -118,12 +107,6 @@ public sealed partial class MainWindow : Window
             return false;
         GameDetail.CancelSync();
         return true;
-    }
-
-    private void ReplaceGames(IEnumerable<GameEntry> games)
-    {
-        _games.Clear();
-        foreach (var g in games) _games.Add(g);
     }
 
     private async void OnGameSelected(object? sender, GameEntry? game)
@@ -162,39 +145,21 @@ public sealed partial class MainWindow : Window
         if (await TryLeaveDetailAsync()) ShowOptions();
     }
 
-    private void OnGameSaved(object? sender, GameEntry savedGame) =>
-        ShowDetail(savedGame, "Game updated successfully!");
-
-    private void OnGameAdded(object? sender, GameEntry game)
+    private void OnGameSaved(object? sender, GameEntry game)
     {
-        _games.Add(game);
-        GameList.SetSelectedGame(game);
-        ShowDetail(game, "Game added successfully!");
-    }
-
-    private void OnAddGameCancelled(object? sender, EventArgs e)
-    {
-        if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
-        else ShowEmptyState();
+        var added = !_games.Contains(game);
+        if (added)
+        {
+            _games.Add(game);
+            GameList.SetSelectedGame(game);
+        }
+        ShowDetail(game, added ? "Game added successfully!" : "Game updated successfully!");
     }
 
     private void OnOptionsCloseRequested(object? sender, EventArgs e)
     {
         if (GameList.SelectedGame != null) ShowDetail(GameList.SelectedGame);
         else ShowEmptyState();
-    }
-
-    private void OnLibraryImported(object? sender, LibraryImportedEventArgs e)
-    {
-        _checkUpdatesOnStartup = e.CheckUpdatesOnStartup;
-        ReplaceGames(e.Games);
-        GameList.SetSelectedGame(null);
-        ShowEmptyState();
-    }
-
-    private void OnIconCacheCleared(object? sender, EventArgs e)
-    {
-        foreach (var game in _games) game.NotifyChanged();
     }
 
     private void OnDetailEscapeRequested(object? sender, EventArgs e)
@@ -208,7 +173,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var library = await _gameRepository.LoadAsync();
-            ReplaceGames(library.Games);
+            foreach (var game in library.Games) _games.Add(game);
             GameDetail.SetComputerName(library.EffectiveComputerName);
             _checkUpdatesOnStartup = library.CheckUpdatesOnStartup;
             if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }

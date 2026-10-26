@@ -144,23 +144,6 @@
                                              PlaceholderText="Enter password to update"/>
                             </StackPanel>
                             <StackPanel Spacing="4">
-                                <TextBlock Text="Password Input Method" Style="{StaticResource FieldLabelStyle}"/>
-                                <ComboBox x:Name="InputMethodComboBox"
-                                          Style="{StaticResource ThemedComboBoxStyle}"
-                                          HorizontalAlignment="Stretch"
-                                          FontSize="12">
-                                    <ComboBoxItem Content="SendKeys (Best for DirectX)"/>
-                                    <ComboBoxItem Content="Clipboard (Manual)"/>
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Window Title (optional)" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBox x:Name="WindowTitleTextBox"
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="e.g., 'Login' or 'World of Warcraft'"
-                                         FontSize="12"/>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
                                 <TextBlock Text="Startup Delay (seconds)" Style="{StaticResource FieldLabelStyle}"/>
                                 <NumberBox x:Name="StartupDelayNumberBox"
                                            Style="{StaticResource ThemedNumberBoxStyle}"

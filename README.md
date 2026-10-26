@@ -16,7 +16,7 @@ Manage multiple WoW private server installations from one place. iscLauncher han
 
 - **Multi-server library** — each entry stores its own executable, server address, account, and realm
 - **Auto realmlist & config update** — `realmlist.wtf` and `WTF\Config.wtf` are written before every launch
-- **Auto-login** — passwords are kept in Windows Credential Manager and delivered via `SendInput` or clipboard
+- **Auto-login** — passwords are kept in Windows Credential Manager and typed via `SendInput`, falling back to the clipboard
 - **Addon sync** — push/pull `Interface\AddOns` and `WTF` to a private GitHub repo, with rollback support
 
 ---
@@ -71,8 +71,7 @@ A configurable **computer name** is included in each commit message to identify 
 | Symptom | Fix |
 |---------|-----|
 | Password typed too early | Increase **Startup Delay** in Automation settings |
-| Special characters mistyped | Switch **Input Method** to *Clipboard* |
-| No password entered at all | Increase startup delay or check the window title pattern |
+| No password entered at all | Increase **Startup Delay** in Automation settings |
 | Auto-login fails on an elevated game | Run iscLauncher as administrator |
 | Addon sync fails | Check the repo URL, visibility (private), and Git credentials |
 

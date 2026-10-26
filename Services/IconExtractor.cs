@@ -50,14 +50,6 @@ public static class IconExtractor
     }
 
     /// <summary>
-    /// Clears the icon cache (useful when a game's executable changes).
-    /// </summary>
-    public static void ClearCache()
-    {
-        _iconCache.Clear();
-    }
-
-    /// <summary>
     /// Removes a specific icon from the cache.
     /// </summary>
     public static void InvalidateCache(string executablePath)

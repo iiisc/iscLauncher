@@ -12,7 +12,7 @@ namespace iscLauncher.Dialogs;
 
 /// <summary>
 /// Confirmation dialog that lets the user pick a commit to roll back to.
-/// Shows a commit list with addon detail for the selected entry.
+/// Shows the repo's recent commits.
 /// </summary>
 public static class RollbackDialog
 {
@@ -143,56 +143,10 @@ public static class RollbackDialog
                 });
             }
             commitListView.SelectedIndex = 0;
-
-            var addonDetailHeader = new TextBlock
-            {
-                Text = "📦 Included Addons",
-                FontFamily = Res<FontFamily>("DisplayFont"),
-                FontSize = 10,
-                CharacterSpacing = 100,
-                Foreground = Res<Brush>("GoldDarkBrush"),
-                Visibility = Visibility.Collapsed
-            };
-
-            var addonDetailText = new TextBlock
-            {
-                FontFamily = Res<FontFamily>("BodyFont"),
-                FontSize = 11,
-                Foreground = Res<Brush>("TextMutedBrush"),
-                TextWrapping = TextWrapping.Wrap
-            };
-
-            var addonDetailScroller = new ScrollViewer
-            {
-                MaxHeight = 120,
-                Content = addonDetailText,
-                Visibility = Visibility.Collapsed
-            };
-
-            void UpdateAddonDetail(GitCommitEntry c)
-            {
-                var addons = AddonSyncService.ParseAddonList(c.Body);
-                var visibility = addons.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-                addonDetailHeader.Visibility = visibility;
-                addonDetailScroller.Visibility = visibility;
-                if (addons.Count > 0)
-                    addonDetailText.Text = string.Join(",  ", addons);
-            }
-
-            UpdateAddonDetail(commits[0]);
-
-            commitListView.SelectionChanged += (_, _) =>
-            {
-                if (commitListView.SelectedItem is ListViewItem sel && sel.Tag is GitCommitEntry c)
-                    UpdateAddonDetail(c);
-            };
-
             contentPanel.Children.Clear();
             contentPanel.Children.Add(BodyText(
                 "Select the version to restore. Next you'll see what changes on this PC and choose what to apply."));
             contentPanel.Children.Add(commitListView);
-            contentPanel.Children.Add(addonDetailHeader);
-            contentPanel.Children.Add(addonDetailScroller);
 
             dialog.IsPrimaryButtonEnabled = true;
         };

@@ -5,19 +5,6 @@ using System.Text.Json.Serialization;
 
 namespace iscLauncher.Models;
 
-public enum PasswordInputMethod
-{
-    /// <summary>
-    /// Use keyboard simulation to type the password (best for DirectX/OpenGL games like WoW)
-    /// </summary>
-    SendKeys = 0,
-
-    /// <summary>
-    /// Just copy the password to clipboard (manual paste)
-    /// </summary>
-    Clipboard = 1
-}
-
 public class GameEntry : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -33,12 +20,6 @@ public class GameEntry : INotifyPropertyChanged
 
     [JsonPropertyName("executablePath")]
     public string ExecutablePath { get; set; } = string.Empty;
-
-    [JsonPropertyName("windowTitle")]
-    public string? WindowTitle { get; set; }
-
-    [JsonPropertyName("inputMethod")]
-    public PasswordInputMethod InputMethod { get; set; } = PasswordInputMethod.SendKeys;
 
     /// <summary>
     /// The realmlist server address (e.g., "logon.warmane.com").

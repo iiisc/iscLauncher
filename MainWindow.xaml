@@ -58,7 +58,6 @@
                                HorizontalAlignment="Center" Margin="0,-12,0,0"/>
                 </StackPanel>
                 <controls:OptionsPanelControl x:Name="OptionsPanel" Visibility="Collapsed"/>
-                <controls:AddGamePanelControl x:Name="AddGamePanel" Visibility="Collapsed"/>
                 <InfoBar x:Name="UpdateBar"
                          IsOpen="False"
                          Severity="Informational"

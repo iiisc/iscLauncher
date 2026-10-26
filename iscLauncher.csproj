@@ -15,17 +15,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Page Remove="Controls\AddGamePanelControl.xaml" />
     <Page Remove="Controls\GameDetailControl.xaml" />
     <Page Remove="Controls\GameListControl.xaml" />
     <Page Remove="Controls\OptionsPanelControl.xaml" />
   </ItemGroup>
 
   <ItemGroup>
-    <Page Include="Controls\AddGamePanelControl.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="Controls\GameListControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -73,9 +68,6 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.5" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="Controls\AddGamePanelControl.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
     <None Update="Controls\GameDetailControl.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>

@@ -15,7 +15,7 @@ public class GameRepository
 
     private static readonly string GamesFilePath = Path.Combine(AppDataFolder, "games.json");
 
-    internal static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
     };
@@ -52,19 +52,6 @@ public class GameRepository
         var tempPath = GamesFilePath + ".tmp";
         await File.WriteAllTextAsync(tempPath, json);
         File.Move(tempPath, GamesFilePath, overwrite: true);
-    }
-
-    public async Task ReplaceAsync(GameLibrary library)
-    {
-        await _fileLock.WaitAsync();
-        try
-        {
-            await SaveAsync(library);
-        }
-        finally
-        {
-            _fileLock.Release();
-        }
     }
 
     public Task AddGameAsync(GameEntry game) =>

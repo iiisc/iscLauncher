@@ -18,13 +18,12 @@ public class PasswordAutomationService
     public async Task<AutomationResult> AutomatePasswordEntryAsync(
         int processId,
         string password,
-        string? windowTitlePattern = null,
         CancellationToken cancellationToken = default)
     {
         // The poll loop makes blocking Win32 calls (SendMessageTimeout can stall up to 1s
         // while the game loads), so keep it off the caller's UI thread.
         var (windowHandle, info) = await Task.Run(
-            () => WaitForGameWindowAsync(processId, windowTitlePattern, cancellationToken), cancellationToken);
+            () => WaitForGameWindowAsync(processId, cancellationToken), cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
         {
@@ -85,7 +84,6 @@ public class PasswordAutomationService
 
     private static async Task<(IntPtr handle, string info)> WaitForGameWindowAsync(
         int processId,
-        string? windowTitlePattern,
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
@@ -139,10 +137,6 @@ public class PasswordAutomationService
                 {
                     diagnostics.Add($"Window: '{title}' (PID {windowPid})");
                 }
-
-                if (!string.IsNullOrEmpty(windowTitlePattern)
-                    && !title.Contains(windowTitlePattern, StringComparison.OrdinalIgnoreCase))
-                    continue;
 
                 if (bestWindow == IntPtr.Zero)
                     bestWindow = hWnd;
@@ -231,7 +225,7 @@ public class PasswordAutomationService
             return false;
 
         // Creation time of 0 means we couldn't query it initially (e.g. elevated
-        // process). Accept it — the window-title and PID-tree checks still apply.
+        // process). Accept it — the PID-tree check still applies.
         if (expectedCreation == 0)
             return true;
 

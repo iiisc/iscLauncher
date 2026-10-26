@@ -46,13 +46,7 @@ public class GameLauncherService
             return new LaunchResult(false, "The game process is no longer running.");
         }
 
-        if (game.InputMethod == PasswordInputMethod.Clipboard)
-        {
-            CopyPasswordToClipboard(password);
-            return new LaunchResult(true, "Password copied to clipboard - press Ctrl+V to paste.", processId);
-        }
-
-        var result = await _automationService.AutomatePasswordEntryAsync(processId, password, game.WindowTitle);
+        var result = await _automationService.AutomatePasswordEntryAsync(processId, password);
         if (result.Success)
             return new LaunchResult(true, "Password sent to running game.", processId);
 
@@ -115,16 +109,8 @@ public class GameLauncherService
                 return new LaunchResult(false, "Failed to start process");
             }
 
-            if (game.InputMethod == PasswordInputMethod.Clipboard)
-            {
-                CopyPasswordToClipboard(password);
-                return new LaunchResult(true,
-                    "Game launched. Password copied to clipboard - press Ctrl+V to paste.",
-                    process.Id);
-            }
-
-            // SendKeys mode: wait for the process to finish initialising its
-            // message loop before we look for its window and start typing.
+            // Wait for the process to finish initialising its message loop
+            // before we look for its window and start typing.
             try
             {
                 await Task.Run(() => process.WaitForInputIdle(15_000));
@@ -141,7 +127,7 @@ public class GameLauncherService
             if (game.StartupDelaySeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
 
-            var automationResult = await _automationService.AutomatePasswordEntryAsync(process.Id, password, game.WindowTitle);
+            var automationResult = await _automationService.AutomatePasswordEntryAsync(process.Id, password);
             if (automationResult.Success)
             {
                 return new LaunchResult(true, "Game launched and password entered automatically.", process.Id);
