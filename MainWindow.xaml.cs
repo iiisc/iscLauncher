@@ -1,6 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
@@ -176,12 +178,24 @@ public sealed partial class MainWindow : Window
             foreach (var game in library.Games) _games.Add(game);
             if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
             _ = CheckForUpdatesSilentlyAsync();
+            _ = CheckForRemoteChangesAsync();
         }
         catch (Exception ex)
         {
             var d = DialogHelper.CreateThemedDialog(Content.XamlRoot, "Load Error");
             d.Content = $"Failed to load games: {ex.Message}";
             _ = d.ShowAsync();
+        }
+    }
+
+    // Marks the games another PC has pushed to since this one last synced. Quiet: offline just shows nothing.
+    private async Task CheckForRemoteChangesAsync()
+    {
+        foreach (var game in _games.Where(g => g.HasSyncRepo).ToList())
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            try { await _addonSyncService.RefreshRemoteHeadAsync(game, timeout.Token); }
+            catch (Exception ex) { Log.Write($"Couldn't check {game.Name}'s repo: {ex.Message}"); }
         }
     }
 
@@ -197,7 +211,7 @@ public sealed partial class MainWindow : Window
             }
         }
         // Being offline or rate-limited at startup isn't worth interrupting for; Options can check again
-        catch { }
+        catch (Exception ex) { Log.Write($"Startup update check failed: {ex.Message}"); }
     }
 
     private void SetWindowSize(IntPtr hwnd, int width, int height)

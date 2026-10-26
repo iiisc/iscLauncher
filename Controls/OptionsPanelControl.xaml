@@ -80,23 +80,45 @@
                 <StackPanel Spacing="12">
                     <TextBlock Text="DATA" Style="{StaticResource SectionHeaderStyle}"/>
                     <Border Style="{StaticResource CardStyle}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="Data Folder" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="Open the app data directory in Explorer" Style="{StaticResource HintTextStyle}"/>
-                            </StackPanel>
-                            <Button Grid.Column="1" Click="OnOpenDataFolderClick" Style="{StaticResource SecondaryButtonStyle}"
-                                    AutomationProperties.Name="Open data folder">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE8DA;" FontSize="12"/>
-                                    <TextBlock Text="Open"/>
+                        <StackPanel Spacing="12">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="Data Folder" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="Your game library, backups and log" Style="{StaticResource HintTextStyle}"/>
                                 </StackPanel>
-                            </Button>
-                        </Grid>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <Button Click="OnOpenLogClick" Style="{StaticResource SecondaryButtonStyle}" AutomationProperties.Name="Open log">
+                                        <TextBlock Text="Open Log"/>
+                                    </Button>
+                                    <Button Click="OnOpenDataFolderClick" Style="{StaticResource SecondaryButtonStyle}"
+                                            AutomationProperties.Name="Open data folder">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE8DA;" FontSize="12"/>
+                                            <TextBlock Text="Open Folder"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="Start Menu" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="Find iscLauncher from the Start menu. Add it again if you move the app's folder."
+                                               Style="{StaticResource HintTextStyle}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Click="OnAddToStartMenuClick" Style="{StaticResource SecondaryButtonStyle}"
+                                        AutomationProperties.Name="Add to Start menu">
+                                    <TextBlock Text="Add to Start Menu"/>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
 

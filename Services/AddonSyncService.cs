@@ -56,7 +56,9 @@ public class AddonSyncService
         if (!mirror.Success)
             throw new SyncException($"Couldn't fetch from the repo. Check the URL, and for a private repo that you're signed in to GitHub under Options. {mirror.Output.Trim()}");
 
-        return new SyncSession(game, cachePath, await _git.GetHeadAsync(cachePath, ct));
+        var head = await _git.GetHeadAsync(cachePath, ct);
+        game.RemoteHead = head;
+        return new SyncSession(game, cachePath, head);
     }
 
     public Task<AddonPreview> PreviewPullAsync(SyncSession s, CancellationToken ct) =>
@@ -78,9 +80,7 @@ public class AddonSyncService
 
     /// <summary>The repo's newest commit if this PC hasn't pulled or pushed it yet, or null if it's caught up.</summary>
     public async Task<GitCommitEntry?> FindUnpulledChangeAsync(SyncSession s, CancellationToken ct) =>
-        s.HeadCommit == null || s.HeadCommit == s.Game.LastSyncedCommit
-            ? null
-            : (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault();
+        s.Game.HasRemoteChanges ? (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault() : null;
 
     public async Task<string?> DescribeUnpulledChangesAsync(SyncSession s, CancellationToken ct) =>
         await FindUnpulledChangeAsync(s, ct) is { } latest
@@ -213,10 +213,18 @@ public class AddonSyncService
         return await _git.GetHeadAsync(s.CachePath, ct);
     }
 
+    /// <summary>Learns the repo's newest commit without touching the local copy, so the game's card can show changes waiting.</summary>
+    public async Task RefreshRemoteHeadAsync(GameEntry game, CancellationToken ct)
+    {
+        if (await _git.IsGitInstalledAsync(ct))
+            game.RemoteHead = await _git.GetRemoteHeadAsync(game.SyncRepoUrl!.Trim(), SyncBranch, ct);
+    }
+
     private async Task MarkSyncedAsync(GameEntry game, string? head)
     {
         game.LastSynced = DateTime.UtcNow;
         game.LastSyncedCommit = head;
+        game.RemoteHead = head;
         await _gameRepository.UpdateGameAsync(game);
     }
 

@@ -21,8 +21,11 @@ public sealed class StatusNotifier
         _hideTimer.Tick += (_, _) => _bar.IsOpen = false;
     }
 
-    public void Show(string message, bool isSuccess) =>
+    public void Show(string message, bool isSuccess)
+    {
+        Log.Write(isSuccess ? message : $"Error: {message}");
         Show(message, isSuccess ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+    }
 
     /// <summary>Work in progress, or a reminder: stays up until the next message replaces it.</summary>
     public void ShowInfo(string message) => Show(message, InfoBarSeverity.Informational);

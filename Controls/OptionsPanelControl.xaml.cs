@@ -156,6 +156,28 @@ public sealed partial class OptionsPanelControl : UserControl
         catch { ShowStatus("Could not open data folder.", false); }
     }
 
+    private void OnOpenLogClick(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(Log.FilePath) { UseShellExecute = true }); }
+        catch { ShowStatus("Could not open the log.", false); }
+    }
+
+    private void OnAddToStartMenuClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var shortcutPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "iscLauncher.lnk");
+            // .NET has no API for .lnk files; Windows' scripting shell is the simplest way to write one
+            dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+            var shortcut = shell.CreateShortcut(shortcutPath);
+            shortcut.TargetPath = Environment.ProcessPath;
+            shortcut.WorkingDirectory = AppContext.BaseDirectory;
+            shortcut.Save();
+            ShowStatus("iscLauncher is in the Start menu.", true);
+        }
+        catch (Exception ex) { ShowStatus($"Couldn't add the Start menu shortcut: {ex.Message}", false); }
+    }
+
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
 
     private void ShowInfo(string message) => _status.ShowInfo(message);

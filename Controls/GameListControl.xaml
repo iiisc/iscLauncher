@@ -122,6 +122,11 @@
                                                 Visibility="{x:Bind HasSyncRepo, Mode=OneWay}">
                                         <FontIcon Glyph="&#xE895;" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
                                         <TextBlock Text="Sync" Style="{StaticResource FieldLabelStyle}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"
+                                                    Visibility="{x:Bind HasRemoteChanges, Mode=OneWay}">
+                                            <FontIcon Glyph="&#xE896;" FontSize="10" Foreground="{StaticResource GoldBrush}" />
+                                            <TextBlock Text="New from another PC" Style="{StaticResource FieldLabelStyle}" Foreground="{StaticResource GoldBrush}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </StackPanel>
 

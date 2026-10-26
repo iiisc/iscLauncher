@@ -30,7 +30,7 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 1. Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest).
 2. Extract it anywhere and run `iscLauncher.exe`. Nothing else needs installing.
 
-Requires 64-bit Windows 10 version 1809 or later. If SmartScreen warns on first launch, choose **More info → Run anyway**.
+Requires 64-bit Windows 10 version 1809 or later. If SmartScreen warns on first launch, choose **More info → Run anyway**. To find the app from the Start menu, use **Options → Add to Start Menu**.
 
 The app checks for a new version when it starts. When one is ready, a dot appears on the ⚙ Options button; install it from there.
 
@@ -52,7 +52,7 @@ Syncing goes through a private repo on your GitHub account, one per game. Git co
 3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
 
-You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played.
+You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played. A game with changes waiting shows **New from another PC** in the list.
 
 Before anything is applied you see each addon as new, changed or removed, and can untick what you don't want. You also choose whether to include addon settings (shared by every character) and character settings (layouts, macros, keybinds and per-character addon data). If the repo has a push this PC hasn't pulled yet, Push warns you before overwriting it.
 
@@ -73,9 +73,10 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | Your game library | `games.json` |
 | Backups made before every pull, copy or rollback | `Backups` (the last 3 per game) |
 | Local copies of your sync repos | `SyncCache` |
+| A log of syncs, launches and errors, for when something goes wrong | `log.txt` (**Options → Open Log**) |
 | Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |
 
-**Options → Open** takes you to the folder.
+**Options → Open Folder** takes you there.
 
 ## Troubleshooting
 
@@ -88,7 +89,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 
 ## Uninstall
 
-1. Delete the folder you extracted iscLauncher into, and `%APPDATA%\IscLauncher`.
+1. Delete the folder you extracted iscLauncher into, `%APPDATA%\IscLauncher`, and the Start menu shortcut if you added one.
 2. In **Credential Manager → Windows Credentials**, remove the entries starting with `iscLauncher_`.
 
 ## Privacy

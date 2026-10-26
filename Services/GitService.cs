@@ -68,7 +68,11 @@ public class GitService
                 ["init", "-q"],
                 ["remote", "add", "origin", repoUrl],
                 // Addon files must stay byte-identical to the game's copies, whatever the user's global setting is
-                ["config", "core.autocrlf", "false"]);
+                ["config", "core.autocrlf", "false"],
+                // Only the current files are downloaded; git fetches older versions when Rollback asks for them, so a
+                // repo whose history grows with every push stays quick to open
+                ["config", "remote.origin.promisor", "true"],
+                ["config", "remote.origin.partialclonefilter", "blob:none"]);
             if (!init.Success)
                 return init;
         }
@@ -86,6 +90,14 @@ public class GitService
             ["update-ref", "-d", $"refs/heads/{branch}"],
             ["read-tree", "--empty"],
             ["clean", "-fdxq"]);
+    }
+
+    /// <summary>The remote branch's newest commit, or null if there is none or it can't be reached. Never asks for a login.</summary>
+    public async Task<string?> GetRemoteHeadAsync(string repoUrl, string branch, CancellationToken ct)
+    {
+        var result = await RunGitAsync(["ls-remote", repoUrl, $"refs/heads/{branch}"], ct, quiet: true);
+        var hash = result.Success ? result.Output.Split('\t', 2)[0].Trim() : "";
+        return hash.Length > 0 ? hash : null;
     }
 
     /// <summary>The checked-out commit, or null on a branch with no commits yet.</summary>
@@ -161,10 +173,12 @@ public class GitService
 
         var url = await RunGitAsync(["-C", repoDir, "remote", "get-url", "origin"], ct);
         var autocrlf = await RunGitAsync(["-C", repoDir, "config", "--get", "core.autocrlf"], ct);
-        // Caches cloned by older versions converted line endings, so they're rebuilt once
+        var filter = await RunGitAsync(["-C", repoDir, "config", "--get", "remote.origin.partialclonefilter"], ct);
+        // Caches made by older versions converted line endings and downloaded the whole history, so they're rebuilt once
         return url.Success
             && string.Equals(url.Output.Trim().TrimEnd('/'), repoUrl.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
-            && autocrlf.Output.Trim() == "false";
+            && autocrlf.Output.Trim() == "false"
+            && filter.Output.Trim() == "blob:none";
     }
 
     private async Task<GitResult> RunStepsAsync(string repoDir, CancellationToken ct, params string[][] steps)
@@ -178,7 +192,8 @@ public class GitService
         return new GitResult(true, "");
     }
 
-    private async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null, string? git = null)
+    /// <param name="quiet">For background checks: fail rather than show a login prompt.</param>
+    private async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null, string? git = null, bool quiet = false)
     {
         git ??= _git ?? "git";
         var psi = new ProcessStartInfo
@@ -204,8 +219,10 @@ public class GitService
             psi.Environment["GIT_CONFIG_VALUE_0"] = "AUTHORIZATION: basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"x-access-token:{token}"));
         }
         // The portable Git has no credential manager, so without a token it would wait on a login prompt nobody can see
-        if (git == BundledGit)
+        if (git == BundledGit || quiet)
             psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        if (quiet)
+            psi.Environment["GCM_INTERACTIVE"] = "never";
 
         using var process = new Process { StartInfo = psi };
         try

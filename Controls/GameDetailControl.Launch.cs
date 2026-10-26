@@ -86,7 +86,11 @@ public sealed partial class GameDetailControl
             change = await AddonSyncService.FindUnpulledChangeAsync(session, _syncCts.Token);
         }
         // No network, no git or a cancelled check: launch as if there were nothing to pull
-        catch { return true; }
+        catch (Exception ex)
+        {
+            Log.Write($"Pull check before launching {game.Name} skipped: {ex.Message}");
+            return true;
+        }
         finally { SetSyncBusy(false); }
 
         if (change == null)

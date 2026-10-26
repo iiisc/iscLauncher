@@ -86,6 +86,19 @@ public class GameEntry : INotifyPropertyChanged
     [JsonIgnore]
     public bool HasSyncRepo => !string.IsNullOrWhiteSpace(SyncRepoUrl);
 
+    /// <summary>The sync repo's newest commit as last seen this session, or null if it hasn't been checked.</summary>
+    [JsonIgnore]
+    public string? RemoteHead
+    {
+        get => _remoteHead;
+        // The game list shows HasRemoteChanges, so it's told whenever this changes, wherever that happens
+        set { _remoteHead = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasRemoteChanges))); }
+    }
+    private string? _remoteHead;
+
+    [JsonIgnore]
+    public bool HasRemoteChanges => RemoteHead != null && !string.Equals(RemoteHead, LastSyncedCommit, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Short display label for the executable: "ParentFolder\FileName" or just "FileName".
     /// </summary>
