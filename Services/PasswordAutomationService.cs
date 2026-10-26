@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -22,12 +23,12 @@ public class PasswordAutomationService
     {
         // The poll loop makes blocking Win32 calls (SendMessageTimeout can stall up to 1s
         // while the game loads), so keep it off the caller's UI thread.
-        var (windowHandle, info) = await Task.Run(
+        var windowHandle = await Task.Run(
             () => WaitForGameWindowAsync(processId, cancellationToken), cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
         {
-            return new AutomationResult(false, $"No game window found. {info}");
+            return new AutomationResult(false, $"No game window appeared within {WindowTimeout.TotalSeconds:0} seconds.");
         }
 
         return await TypePasswordAndSubmitAsync(windowHandle, password);
@@ -53,7 +54,10 @@ public class PasswordAutomationService
                     return new AutomationResult(false, "Window lost focus before typing could begin.");
                 }
 
-                if (!SendKeystrokesForString(password))
+                // Windows can keep a keyboard layout per app, so map characters with the game's, not this app's
+                var layout = GetKeyboardLayout(GetWindowThreadProcessId(windowHandle, out _));
+
+                if (!SendKeystrokesForString(password, layout))
                 {
                     return new AutomationResult(false,
                         "SendInput failed to insert all key events. "
@@ -68,7 +72,7 @@ public class PasswordAutomationService
                     return new AutomationResult(false, "Window lost focus after typing password.");
                 }
 
-                if (SendVirtualKey(VK_RETURN) != 2)
+                if (SendVirtualKey(VK_RETURN, layout) != 2)
                 {
                     return new AutomationResult(false, "Failed to send Enter key.");
                 }
@@ -82,23 +86,17 @@ public class PasswordAutomationService
         }
     }
 
-    private static async Task<(IntPtr handle, string info)> WaitForGameWindowAsync(
-        int processId,
-        CancellationToken cancellationToken)
+    private static async Task<IntPtr> WaitForGameWindowAsync(int processId, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
         var currentPid = (uint)Environment.ProcessId;
-        var checkedWindows = new HashSet<string>();
-        var diagnostics = new List<string>();
         IntPtr bestWindow = IntPtr.Zero;
         Stopwatch? respondingSince = null;
 
         // Track PIDs alongside their creation times so we can detect PID reuse
         // and avoid typing a password into an unrelated process that inherited
         // a recycled PID.
-        var knownProcesses = new Dictionary<uint, long>();
-        long rootCreation = GetProcessCreationTime((uint)processId);
-        knownProcesses[(uint)processId] = rootCreation;
+        var knownProcesses = new Dictionary<uint, long> { [(uint)processId] = GetProcessCreationTime((uint)processId) };
 
         while (sw.Elapsed < WindowTimeout)
         {
@@ -113,33 +111,22 @@ public class PasswordAutomationService
                 respondingSince = null;
             }
 
-            // Walk the process tree rooted at the launched PID to discover
-            // child processes that may own the game window (e.g. a launcher
-            // that spawns the real game executable). Unlike name+time matching
-            // this cannot accidentally target a different instance of the game.
-            ExpandProcessTree(knownProcesses);
-
-            foreach (var hWnd in EnumerateVisibleWindows())
+            if (bestWindow == IntPtr.Zero)
             {
-                GetWindowThreadProcessId(hWnd, out uint windowPid);
+                // Walk the process tree rooted at the launched PID to discover
+                // child processes that may own the game window (e.g. a launcher
+                // that spawns the real game executable). Unlike name+time matching
+                // this cannot accidentally target a different instance of the game.
+                ExpandProcessTree(knownProcesses);
 
-                // Guard against PID reuse: verify the process behind this window
-                // is still the one we originally discovered in the tree.
-                if (windowPid == currentPid || !ValidateProcessIdentity(knownProcesses, windowPid))
-                    continue;
-
-                var title = GetWindowTitle(hWnd);
-                if (string.IsNullOrEmpty(title))
-                    continue;
-
-                var key = $"{windowPid}:{title}";
-                if (checkedWindows.Add(key))
+                bestWindow = EnumerateVisibleWindows().FirstOrDefault(hWnd =>
                 {
-                    diagnostics.Add($"Window: '{title}' (PID {windowPid})");
-                }
-
-                if (bestWindow == IntPtr.Zero)
-                    bestWindow = hWnd;
+                    GetWindowThreadProcessId(hWnd, out uint windowPid);
+                    // Guard against PID reuse: the process behind this window must still be the one found in the tree
+                    return windowPid != currentPid
+                        && ValidateProcessIdentity(knownProcesses, windowPid)
+                        && GetWindowTitle(hWnd).Length > 0;
+                });
             }
 
             // Verify the window is processing messages and wait for a
@@ -149,9 +136,7 @@ public class PasswordAutomationService
             {
                 respondingSince ??= Stopwatch.StartNew();
                 if (respondingSince.Elapsed >= StabilizationDelay)
-                {
-                    return (bestWindow, $"Game window found and stable: '{GetWindowTitle(bestWindow)}'");
-                }
+                    return bestWindow;
             }
             else
             {
@@ -161,14 +146,8 @@ public class PasswordAutomationService
             await Task.Delay(PollInterval, cancellationToken);
         }
 
-        if (bestWindow != IntPtr.Zero)
-            return (bestWindow, $"Returning window at timeout: '{GetWindowTitle(bestWindow)}'");
-
-        var treeInfo = string.Join(", ", knownProcesses.Keys);
-        return (IntPtr.Zero,
-            $"Timeout ({WindowTimeout.TotalSeconds}s). Process tree: [{treeInfo}]. "
-            + $"Checked {checkedWindows.Count} window(s). "
-            + string.Join("; ", diagnostics));
+        // A window that never settled is still a better bet than giving up
+        return bestWindow;
     }
 
     /// <summary>
@@ -302,15 +281,15 @@ public class PasswordAutomationService
     /// Sends each character as virtual key events (WM_KEYDOWN/WM_KEYUP) so that
     /// DirectX/OpenGL games that read input via GetAsyncKeyState, DirectInput, or
     /// Raw Input will actually see the keystrokes. Falls back to Unicode input for
-    /// characters that have no virtual key mapping on the current keyboard layout.
+    /// characters that have no virtual key mapping on the game's keyboard layout.
     /// </summary>
-    private static bool SendKeystrokesForString(string text)
+    private static bool SendKeystrokesForString(string text, IntPtr layout)
     {
         var inputList = new List<INPUT>();
 
         foreach (char c in text)
         {
-            short vkResult = VkKeyScanW(c);
+            short vkResult = VkKeyScanExW(c, layout);
 
             if (vkResult == -1)
             {
@@ -327,16 +306,16 @@ public class PasswordAutomationService
             bool needCtrl = (modifiers & 2) != 0;
             bool needAlt = (modifiers & 4) != 0;
 
-            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: false));
-            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: false));
-            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: false));
+            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: false, layout));
+            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: false, layout));
+            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: false, layout));
 
-            inputList.Add(CreateVirtualKeyInput(vk, keyUp: false));
-            inputList.Add(CreateVirtualKeyInput(vk, keyUp: true));
+            inputList.Add(CreateVirtualKeyInput(vk, keyUp: false, layout));
+            inputList.Add(CreateVirtualKeyInput(vk, keyUp: true, layout));
 
-            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: true));
-            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: true));
-            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: true));
+            if (needAlt) inputList.Add(CreateVirtualKeyInput(VK_MENU, keyUp: true, layout));
+            if (needCtrl) inputList.Add(CreateVirtualKeyInput(VK_CONTROL, keyUp: true, layout));
+            if (needShift) inputList.Add(CreateVirtualKeyInput(VK_SHIFT, keyUp: true, layout));
         }
 
         if (inputList.Count == 0)
@@ -347,12 +326,12 @@ public class PasswordAutomationService
         return sent == inputs.Length;
     }
 
-    private static uint SendVirtualKey(ushort vk)
+    private static uint SendVirtualKey(ushort vk, IntPtr layout)
     {
         var inputs = new INPUT[]
         {
-            CreateVirtualKeyInput(vk, keyUp: false),
-            CreateVirtualKeyInput(vk, keyUp: true)
+            CreateVirtualKeyInput(vk, keyUp: false, layout),
+            CreateVirtualKeyInput(vk, keyUp: true, layout)
         };
         return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
@@ -367,13 +346,13 @@ public class PasswordAutomationService
         }}
     };
 
-    private static INPUT CreateVirtualKeyInput(ushort vk, bool keyUp) => new()
+    private static INPUT CreateVirtualKeyInput(ushort vk, bool keyUp, IntPtr layout) => new()
     {
         type = INPUT_KEYBOARD,
         U = { ki = new KEYBDINPUT
         {
             wVk = vk,
-            wScan = (ushort)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC),
+            wScan = (ushort)MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, layout),
             dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u
         }}
     };
@@ -494,10 +473,13 @@ public class PasswordAutomationService
     private static extern uint SendInput(uint count, INPUT[] inputs, int size);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern short VkKeyScanW(char ch);
+    private static extern short VkKeyScanExW(char ch, IntPtr layout);
 
     [DllImport("user32.dll")]
-    private static extern uint MapVirtualKeyW(uint uCode, uint uMapType);
+    private static extern uint MapVirtualKeyExW(uint uCode, uint uMapType, IntPtr layout);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetKeyboardLayout(uint threadId);
 
     private const uint MAPVK_VK_TO_VSC = 0;
     private const uint INPUT_KEYBOARD = 1;

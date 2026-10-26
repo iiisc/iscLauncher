@@ -32,29 +32,22 @@ public class GameLauncherService
             try { Clipboard.Clear(); } catch { }
     }
 
-    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game, int processId)
+    public async Task<LaunchResult> SendPasswordToRunningGameAsync(GameEntry game)
     {
+        if (FindRunningProcessId(game) is not int processId)
+            return new LaunchResult(false, $"{game.Name} isn't running.");
+
         var password = _credentialService.GetCredential(game.CredentialTarget);
         if (string.IsNullOrEmpty(password))
             return new LaunchResult(false, "Password not found in Credential Manager");
 
-        try
-        {
-            Process.GetProcessById(processId);
-        }
-        catch
-        {
-            return new LaunchResult(false, "The game process is no longer running.");
-        }
-
         var result = await _automationService.AutomatePasswordEntryAsync(processId, password);
         if (result.Success)
-            return new LaunchResult(true, "Password sent to running game.", processId);
+            return new LaunchResult(true, "Password sent to running game.");
 
         CopyPasswordToClipboard(password);
         return new LaunchResult(true,
-            $"Auto-entry failed ({result.Message}). Password copied to clipboard - press Ctrl+V to paste.",
-            processId);
+            $"Auto-entry failed ({result.Message}). Password copied to clipboard - press Ctrl+V to paste.");
     }
 
     public async Task<LaunchResult> LaunchGameAsync(GameEntry game)
@@ -76,6 +69,9 @@ public class GameLauncherService
                 return new LaunchResult(false, $"Couldn't start Battle.net: {ex.Message}");
             }
         }
+
+        if (IsRunning(game))
+            return new LaunchResult(false, $"{game.Name} is already running. Use Send Password to log in.");
 
         var realmlistResult = await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
         if (!realmlistResult.Success)
@@ -110,21 +106,7 @@ public class GameLauncherService
                 return new LaunchResult(false, "Failed to start process");
             }
 
-            // Wait for the process to finish initialising its message loop
-            // before we look for its window and start typing.
-            try
-            {
-                await Task.Run(() => process.WaitForInputIdle(15_000));
-            }
-            catch
-            {
-                // WaitForInputIdle can fail for console apps or certain launch
-                // configurations. Continue gracefully — the window-polling loop
-                // in PasswordAutomationService will still wait for readiness.
-            }
-
-            // Optional extra delay for games that need more time after their
-            // message loop is idle (e.g., shader compilation, asset loading).
+            // Some games show their window well before the login screen accepts input
             if (game.StartupDelaySeconds > 0)
                 await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
 
@@ -145,18 +127,26 @@ public class GameLauncherService
         }
     }
 
-    /// <summary>True if this game's exe is running. Battle.net starts official games itself, so this checks by path, not by launch.</summary>
-    public bool IsRunning(GameEntry game)
+    public bool IsRunning(GameEntry game) => FindRunningProcessId(game) != null;
+
+    /// <summary>
+    /// Finds this game's exe among running processes by path, so it's found however it was started:
+    /// by Battle.net, by hand, or before this app was opened.
+    /// </summary>
+    private static int? FindRunningProcessId(GameEntry game)
     {
+        if (string.IsNullOrEmpty(game.ExecutablePath))
+            return null;
+
         var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(game.ExecutablePath));
         try
         {
-            return processes.Any(p =>
+            return processes.FirstOrDefault(p =>
             {
                 try { return string.Equals(p.MainModule?.FileName, game.ExecutablePath, StringComparison.OrdinalIgnoreCase); }
-                // Its path can't be read (e.g. it runs elevated); a process with the same exe name is reason enough to ask
+                // Its path can't be read (e.g. it runs elevated); a process with the same exe name is the best match there is
                 catch { return true; }
-            });
+            })?.Id;
         }
         finally
         {
@@ -171,7 +161,8 @@ public class GameLauncherService
 
         var dataPackage = new DataPackage();
         dataPackage.SetText(password);
-        Clipboard.SetContent(dataPackage);
+        // The timed clear below can't reach Win+V history or other devices, so keep it out of both
+        Clipboard.SetContentWithOptions(dataPackage, new ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false });
 
         var cts = new CancellationTokenSource();
         _clipboardClearCts = cts;

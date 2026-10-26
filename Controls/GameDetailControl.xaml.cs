@@ -31,7 +31,6 @@ public sealed partial class GameDetailControl : UserControl
     private bool _isEditing;
     // A game being added: not in the library until saved
     private bool _isNew;
-    private readonly Dictionary<Guid, int> _runningProcessIds = new();
     // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
     private readonly HashSet<Guid> _busyGames = new();
     private CancellationTokenSource? _syncCts;
@@ -194,64 +193,63 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnLaunchClick(object sender, RoutedEventArgs e)
     {
-        if (_game != null) await LaunchAsync(_game);
+        if (_game is not { } game) return;
+        if (CanSendPassword(game))
+            await RunForGameAsync(game, $"Sending password to {game.Name}...", () => GameLauncherService!.SendPasswordToRunningGameAsync(game));
+        else
+            await LaunchAsync(game);
     }
 
-    /// <summary>Launches the game, or types the password into it if it's already running.</summary>
-    public async Task LaunchAsync(GameEntry game)
+    /// <summary>
+    /// Launches the game. One that's already running is left alone: typing the password into a running game is only
+    /// done from the Send Password button, so a stray double-click can't send it into the game's chat.
+    /// </summary>
+    public Task LaunchAsync(GameEntry game) =>
+        RunForGameAsync(game, $"Launching {game.Name}...", () => GameLauncherService!.LaunchGameAsync(game));
+
+    private async Task RunForGameAsync(GameEntry game, string startMessage, Func<Task<LaunchResult>> action)
     {
         if (!_busyGames.Add(game.Id))
         { ShowStatus($"Still working on {game.Name}...", false); return; }
         try
         {
-            if (_runningProcessIds.TryGetValue(game.Id, out var runningPid))
-                await SendPasswordAsync(game, runningPid);
-            else
-                await StartGameAsync(game);
+            ShowStatus(startMessage, true);
+            var result = await action();
+            ShowStatus(result.Message, result.Success);
+            if (result.ProcessId is int pid)
+                ResetButtonOnExit(game, pid);
         }
         finally
         {
             _busyGames.Remove(game.Id);
+            if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
         }
     }
 
-    private async Task SendPasswordAsync(GameEntry game, int processId)
+    private void ResetButtonOnExit(GameEntry game, int processId)
     {
-        ShowStatus($"Sending password to {game.Name}...", true);
-        var result = await GameLauncherService!.SendPasswordToRunningGameAsync(game, processId);
-        ShowStatus(result.Message, result.Success);
-    }
-
-    private async Task StartGameAsync(GameEntry game)
-    {
-        ShowStatus($"Launching {game.Name}...", true);
-        var result = await GameLauncherService!.LaunchGameAsync(game);
-        ShowStatus(result.Message, result.Success);
-
-        if (result.Success && result.ProcessId is int pid)
+        try
         {
-            try
+            var process = Process.GetProcessById(processId);
+            // Subscribe before enabling so a quick exit isn't missed
+            process.Exited += (_, _) => DispatcherQueue.TryEnqueue(() =>
             {
-                var process = Process.GetProcessById(pid);
-                _runningProcessIds[game.Id] = pid;
-                UpdateLaunchButtonState(game);
-                // The only place running state is cleared; subscribe before enabling so a quick exit isn't missed
-                process.Exited += (s, e) => DispatcherQueue.TryEnqueue(() =>
-                {
-                    _runningProcessIds.Remove(game.Id);
-                    if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
-                });
-                process.EnableRaisingEvents = true;
-            }
-            catch { }
+                if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
+            });
+            process.EnableRaisingEvents = true;
         }
+        catch { }
     }
+
+    // Official games log in through Battle.net, so there's never a password to send
+    private bool CanSendPassword(GameEntry game) =>
+        !BattleNetInstall.IsOfficial(game.ExecutablePath) && GameLauncherService!.IsRunning(game);
 
     private void UpdateLaunchButtonState(GameEntry game)
     {
-        var isRunning = _runningProcessIds.ContainsKey(game.Id);
-        LaunchButtonText.Text = isRunning ? "Send Password" : "Launch";
-        LaunchButtonIcon.Text = isRunning ? "🔑" : "⚔";
+        var sendPassword = CanSendPassword(game);
+        LaunchButtonText.Text = sendPassword ? "Send Password" : "Launch";
+        LaunchButtonIcon.Text = sendPassword ? "🔑" : "⚔";
     }
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
