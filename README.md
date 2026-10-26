@@ -47,10 +47,12 @@ If the password gets typed before the login screen is ready, raise **Startup Del
 
 You need [Git for Windows](https://git-scm.com/download/win) and a **private** GitHub repo for each game. Git asks you to sign in to GitHub the first time.
 
-1. Open the game, choose **Edit Settings**, and paste the repo URL under **Addons**.
+1. Open the game, paste the repo URL under **Addons**, and click **Save Changes**.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
 3. On another PC, add the same game with the same repo and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
+
+You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played.
 
 Before anything is applied you see each addon as new, changed or removed, and can untick what you don't want. You also choose whether to include addon settings (shared by every character) and character settings (layouts, macros, keybinds and per-character addon data). If the repo has a push this PC hasn't pulled yet, Push warns you before overwriting it.
 

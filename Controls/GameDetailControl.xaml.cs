@@ -28,12 +28,12 @@ public sealed partial class GameDetailControl : UserControl
     public IReadOnlyCollection<GameEntry>? Games { get; set; }
 
     private GameEntry? _game;
-    private bool _isEditing;
     // A game being added: not in the library until saved
     private bool _isNew;
     // Games mid-launch or mid-password-entry; both take long enough that a second click would collide
     private readonly HashSet<Guid> _busyGames = new();
     private CancellationTokenSource? _syncCts;
+    private bool _syncBusy;
     private readonly StatusNotifier _status;
 
     public GameEntry? CurrentGame => _game;
@@ -42,14 +42,17 @@ public sealed partial class GameDetailControl : UserControl
     {
         InitializeComponent();
         _status = new StatusNotifier(StatusBar, StatusText);
+
+        foreach (var box in new[] { NameTextBox, ExecutableTextBox, RealmlistTextBox, AccountTextBox, RealmTextBox, SyncRepoUrlTextBox })
+            box.TextChanged += (_, _) => UpdateSaveButtons();
+        PasswordBox.PasswordChanged += (_, _) => UpdateSaveButtons();
+        StartupDelayNumberBox.ValueChanged += (_, _) => UpdateSaveButtons();
     }
 
     public void LoadGame(GameEntry game, string? statusMessage = null)
     {
         _game = game;
-        _isEditing = false;
         _isNew = false;
-        SetEditMode(false);
         ShowOfficial(game.ExecutablePath);
 
         NameTextBox.Text = game.Name;
@@ -65,6 +68,7 @@ public sealed partial class GameDetailControl : UserControl
 
         DetailPivot.SelectedIndex = 0;
         UpdateLaunchButtonState(game);
+        UpdateSaveButtons();
 
         if (statusMessage != null)
             ShowStatus(statusMessage, true);
@@ -76,39 +80,54 @@ public sealed partial class GameDetailControl : UserControl
     {
         LoadGame(new GameEntry());
         _isNew = true;
-        _isEditing = true;
-        SetEditMode(true);
+        UpdateSaveButtons();
         NameTextBox.Focus(FocusState.Programmatic);
     }
 
     public async Task<bool> ConfirmNavigateAwayAsync()
     {
-        if (!_isEditing) return true;
+        if (!HasUnsavedChanges) return true;
         var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Unsaved Changes");
         dialog.Content = "You have unsaved changes that will be lost. Discard them?";
         dialog.PrimaryButtonText = "Discard";
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
-        _isEditing = false;
-        return true;
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
-    private void OnEditClick(object sender, RoutedEventArgs e)
+    private int StartupDelay => double.IsNaN(StartupDelayNumberBox.Value) ? 0 : (int)StartupDelayNumberBox.Value;
+
+    private bool HasUnsavedChanges => _game is { } game && (
+        NameTextBox.Text.Trim() != game.Name
+        || ExecutableTextBox.Text.Trim() != game.ExecutablePath
+        || RealmlistTextBox.Text.NullIfBlank() != game.RealmlistAddress
+        || AccountTextBox.Text.NullIfBlank() != game.AccountName
+        || RealmTextBox.Text.NullIfBlank() != game.RealmName
+        || SyncRepoUrlTextBox.Text.NullIfBlank() != game.SyncRepoUrl
+        || StartupDelay != game.StartupDelaySeconds
+        || PasswordBox.Password.Length > 0);
+
+    // Save and Cancel replace Launch while there's something to save. The addon actions work from the saved settings,
+    // so they wait too.
+    private void UpdateSaveButtons()
     {
-        if (_game == null) return;
-        _isEditing = true;
-        SetEditMode(true);
+        var editing = _isNew || HasUnsavedChanges;
+        LaunchButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        EditModeButtons.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+
+        var hasRepo = _game?.HasSyncRepo == true;
+        CopyAddonsSection.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        SyncButtonsPanel.Visibility = !editing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
+        NoRepoHint.Visibility = !editing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnCancelEditClick(object sender, RoutedEventArgs e)
     {
-        _isEditing = false;
         if (_isNew) EscapeRequested?.Invoke(this, EventArgs.Empty);
         else if (_game != null) LoadGame(_game);
     }
 
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (!_isEditing || _game == null) return;
+        if (_game == null) return;
 
         if (string.IsNullOrWhiteSpace(NameTextBox.Text))
         { ShowStatus("Game name is required.", false); return; }
@@ -123,8 +142,7 @@ public sealed partial class GameDetailControl : UserControl
         game.RealmlistAddress = RealmlistTextBox.Text.NullIfBlank();
         game.AccountName = AccountTextBox.Text.NullIfBlank();
         game.RealmName = RealmTextBox.Text.NullIfBlank();
-        game.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
-            ? 0 : (int)StartupDelayNumberBox.Value;
+        game.StartupDelaySeconds = StartupDelay;
         game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
 
         if (!string.IsNullOrEmpty(PasswordBox.Password))
@@ -139,7 +157,6 @@ public sealed partial class GameDetailControl : UserControl
             await GameRepository!.UpdateGameAsync(game);
         game.NotifyChanged();
 
-        _isEditing = false;
         GameSaved?.Invoke(this, game);
     }
 
@@ -162,31 +179,10 @@ public sealed partial class GameDetailControl : UserControl
         AutomationTab.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void SetEditMode(bool isEditing)
-    {
-        NameTextBox.IsEnabled = isEditing;
-        ExecutableTextBox.IsEnabled = isEditing;
-        RealmlistTextBox.IsEnabled = isEditing;
-        AccountTextBox.IsEnabled = isEditing;
-        RealmTextBox.IsEnabled = isEditing;
-        PasswordBox.IsEnabled = isEditing;
-        StartupDelayNumberBox.IsEnabled = isEditing;
-        SyncRepoUrlTextBox.IsEnabled = isEditing;
-
-        BrowseButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        ViewModeButtons.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        EditModeButtons.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-
-        var hasRepo = _game?.HasSyncRepo == true;
-        CopyAddonsSection.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        SyncButtonsPanel.Visibility = !isEditing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
-        NoRepoHint.Visibility = !isEditing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (_isEditing) return;
+        // While there's something to save, Escape belongs to the Cancel button
+        if (_isNew || HasUnsavedChanges) return;
         EscapeRequested?.Invoke(this, EventArgs.Empty);
         args.Handled = true;
     }
@@ -195,7 +191,8 @@ public sealed partial class GameDetailControl : UserControl
     {
         if (_game is not { } game) return;
         if (CanSendPassword(game))
-            await RunForGameAsync(game, $"Sending password to {game.Name}...", () => GameLauncherService!.SendPasswordToRunningGameAsync(game));
+            await WhileBusyAsync(game, () => RunLauncherAsync($"Sending password to {game.Name}...",
+                () => GameLauncherService!.SendPasswordToRunningGameAsync(game)));
         else
             await LaunchAsync(game);
     }
@@ -204,20 +201,22 @@ public sealed partial class GameDetailControl : UserControl
     /// Launches the game. One that's already running is left alone: typing the password into a running game is only
     /// done from the Send Password button, so a stray double-click can't send it into the game's chat.
     /// </summary>
-    public Task LaunchAsync(GameEntry game) =>
-        RunForGameAsync(game, $"Launching {game.Name}...", () => GameLauncherService!.LaunchGameAsync(game));
+    public async Task LaunchAsync(GameEntry game)
+    {
+        var launched = await WhileBusyAsync(game, async () =>
+            await OfferPullBeforeLaunchAsync(game)
+            && await RunLauncherAsync($"Launching {game.Name}...", () => GameLauncherService!.LaunchGameAsync(game)));
+        if (launched)
+            await AfterGameClosesAsync(game);
+    }
 
-    private async Task RunForGameAsync(GameEntry game, string startMessage, Func<Task<LaunchResult>> action)
+    private async Task<bool> WhileBusyAsync(GameEntry game, Func<Task<bool>> work)
     {
         if (!_busyGames.Add(game.Id))
-        { ShowStatus($"Still working on {game.Name}...", false); return; }
+        { ShowStatus($"Still working on {game.Name}...", false); return false; }
         try
         {
-            ShowStatus(startMessage, true);
-            var result = await action();
-            ShowStatus(result.Message, result.Success);
-            if (result.ProcessId is int pid)
-                ResetButtonOnExit(game, pid);
+            return await work();
         }
         finally
         {
@@ -226,19 +225,81 @@ public sealed partial class GameDetailControl : UserControl
         }
     }
 
-    private void ResetButtonOnExit(GameEntry game, int processId)
+    private async Task<bool> RunLauncherAsync(string startMessage, Func<Task<LaunchResult>> action)
     {
+        ShowStatus(startMessage, true);
+        var result = await action();
+        ShowStatus(result.Message, result.Success);
+        return result.Success;
+    }
+
+    /// <summary>
+    /// For a synced game, offers to pull first when another PC has pushed since this one last synced, so you don't play
+    /// on old settings and later push them over the newer ones. Returns false if the user cancels the launch.
+    /// </summary>
+    private async Task<bool> OfferPullBeforeLaunchAsync(GameEntry game)
+    {
+        if (!game.HasSyncRepo || _syncBusy || GameLauncherService!.IsRunning(game))
+            return true;
+
+        GitCommitEntry? change;
+        _syncCts?.Cancel(); _syncCts?.Dispose();
+        // Being offline shouldn't hold up playing, so the check gives up quickly; Cancel skips it
+        _syncCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        SetSyncBusy(true);
+        ShowStatus($"Checking {game.Name}'s repo for changes from your other PCs...", true);
         try
         {
-            var process = Process.GetProcessById(processId);
-            // Subscribe before enabling so a quick exit isn't missed
-            process.Exited += (_, _) => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
-            });
-            process.EnableRaisingEvents = true;
+            var session = await AddonSyncService!.OpenAsync(game, null, _syncCts.Token);
+            change = await AddonSyncService.FindUnpulledChangeAsync(session, _syncCts.Token);
         }
-        catch { }
+        // No network, no git or a cancelled check: launch as if there were nothing to pull
+        catch { return true; }
+        finally { SetSyncBusy(false); }
+
+        if (change == null)
+            return true;
+
+        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Changes From Another PC");
+        dialog.Content = $"The repo has a push this PC hasn't pulled: “{change.Message}” ({change.DisplayDate}). Pull it before playing?";
+        dialog.PrimaryButtonText = "Pull First";
+        dialog.SecondaryButtonText = "Launch Anyway";
+        switch (await dialog.ShowAsync())
+        {
+            case ContentDialogResult.Primary:
+                await PullAsync(game);
+                return true;
+            case ContentDialogResult.Secondary:
+                return true;
+            default:
+                StatusBar.IsOpen = false;
+                return false;
+        }
+    }
+
+    /// <summary>Resets the Launch button when the game closes and, for a synced game, offers to push what changed while playing.</summary>
+    private async Task AfterGameClosesAsync(GameEntry game)
+    {
+        // Battle.net can take a while to start an official game, or wait on an update first
+        if (!await GameLauncherService!.WaitForExitAsync(game, TimeSpan.FromMinutes(10)))
+            return;
+        if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
+        if (!game.HasSyncRepo)
+            return;
+
+        var reminder = $"{game.Name} closed. Push from the Addons tab to share your changes with your other PCs.";
+        if (_syncBusy) { ShowStatus(reminder, true); return; }
+
+        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Push Your Changes?");
+        dialog.Content = $"You closed {game.Name}. Push its addons and settings so your other PCs get them?";
+        dialog.PrimaryButtonText = "Push";
+        dialog.CloseButtonText = "Not Now";
+        ContentDialogResult answer;
+        // Only one dialog can be open at a time; if another is, the status message is the reminder
+        try { answer = await dialog.ShowAsync(); }
+        catch (Exception) { ShowStatus(reminder, true); return; }
+        if (answer == ContentDialogResult.Primary)
+            await PushAsync(game);
     }
 
     // Official games log in through Battle.net, so there's never a password to send
@@ -254,34 +315,38 @@ public sealed partial class GameDetailControl : UserControl
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
     {
-        if (_game is not { } game) return;
-        await RunSyncAsync("Checking repo...", async (p, ct) =>
+        if (_game is { } game) await PullAsync(game);
+    }
+
+    private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
+    {
+        if (_game is { } game) await PushAsync(game);
+    }
+
+    private Task PullAsync(GameEntry game) =>
+        RunSyncAsync("Checking repo...", async (p, ct) =>
         {
             var session = await AddonSyncService!.OpenAsync(game, p, ct);
             var preview = await AddonSyncService.PreviewPullAsync(session, ct);
-            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, "⚔ Pull from Repo", "Pull",
+            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Pull {game.Name} from Repo", "Pull",
                 "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
             if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
             return await AddonSyncService.PullAsync(session, choice.Addons, choice.Options, p, ct);
         });
-    }
 
-    private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
-    {
-        if (_game is not { } game) return;
-        await RunSyncAsync("Checking repo...", async (p, ct) =>
+    private Task PushAsync(GameEntry game) =>
+        RunSyncAsync("Checking repo...", async (p, ct) =>
         {
             var session = await AddonSyncService!.OpenAsync(game, p, ct);
             var previewTask = AddonSyncService.PreviewPushAsync(session, ct);
             var warningTask = AddonSyncService.DescribeUnpulledChangesAsync(session, ct);
             await Task.WhenAll(previewTask, warningTask);
-            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, "⚔ Push to Repo", "Push",
+            var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Push {game.Name} to Repo", "Push",
                 "Choose what to upload from this PC. The repo keeps every earlier version, so you can roll back.",
                 await warningTask, await previewTask, toRepo: true);
             return choice == null ? null : await AddonSyncService.PushAsync(session, choice.Addons, choice.Options, p, ct);
         });
-    }
 
     private async void OnRollbackClick(object sender, RoutedEventArgs e)
     {
@@ -380,6 +445,7 @@ public sealed partial class GameDetailControl : UserControl
 
     private void SetSyncBusy(bool busy)
     {
+        _syncBusy = busy;
         SyncAddonsButton.IsEnabled = !busy;
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;

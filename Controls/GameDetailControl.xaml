@@ -20,12 +20,9 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Game name editor (edit mode only); the padding stays when it's hidden, so the tabs don't jump -->
-            <StackPanel Grid.Row="0" Padding="32,18,32,0" MaxWidth="600" HorizontalAlignment="Left">
-                <StackPanel x:Name="GameNameEditSection" Spacing="4" Visibility="Collapsed">
-                    <TextBlock Text="Game Name *" Style="{StaticResource FieldLabelStyle}"/>
-                    <TextBox x:Name="NameTextBox" Style="{StaticResource InputStyle}" FontSize="13"/>
-                </StackPanel>
+            <StackPanel Grid.Row="0" Spacing="4" Padding="32,18,32,0">
+                <TextBlock Text="Game Name *" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox x:Name="NameTextBox" Style="{StaticResource InputStyle}" FontSize="13"/>
             </StackPanel>
 
             <InfoBar x:Name="StatusBar"
@@ -68,12 +65,11 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="ExecutableTextBox" Style="{StaticResource InputStyle}" IsReadOnly="True"/>
-                                    <Button x:Name="BrowseButton"
-                                            Grid.Column="1"
+                                    <Button Grid.Column="1"
                                             Click="OnBrowseExecutableClick"
                                             Style="{StaticResource SecondaryButtonStyle}"
                                             Padding="10,0"
-                                            Visibility="Collapsed">
+                                            ToolTipService.ToolTip="Browse for the game's exe">
                                         <FontIcon Glyph="&#xE8DA;" FontSize="11"/>
                                     </Button>
                                 </Grid>
@@ -197,7 +193,7 @@
                                 </Button>
                             </StackPanel>
                             <TextBlock x:Name="NoRepoHint"
-                                       Text="Add a GitHub repo URL in Edit Settings to sync addons between PCs. Git must be installed."
+                                       Text="Add a GitHub repo URL above and save to sync addons between PCs. Git must be installed."
                                        Style="{StaticResource HintTextStyle}"
                                        Visibility="Collapsed"/>
 
@@ -220,20 +216,12 @@
         <Border Grid.Row="1" Background="{StaticResource BgBrush}" Padding="32,16">
             <StackPanel MaxWidth="600" HorizontalAlignment="Left" Orientation="Horizontal" Spacing="12">
 
-                <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="12">
-                    <Button Style="{StaticResource SecondaryButtonStyle}" Height="44" Padding="24,0" FontSize="13" Click="OnEditClick">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE70F;" FontSize="14"/>
-                            <TextBlock Text="Edit Settings"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnLaunchClick">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock x:Name="LaunchButtonIcon" Text="⚔" FontSize="18"/>
-                            <TextBlock x:Name="LaunchButtonText" Text="Launch"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
+                <Button x:Name="LaunchButton" Style="{StaticResource PrimaryButtonStyle}" Height="56" Padding="40,0" Click="OnLaunchClick">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock x:Name="LaunchButtonIcon" Text="⚔" FontSize="18"/>
+                        <TextBlock x:Name="LaunchButtonText" Text="Launch"/>
+                    </StackPanel>
+                </Button>
 
                 <StackPanel x:Name="EditModeButtons" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
                     <Button Style="{StaticResource SecondaryButtonStyle}" Height="44" Padding="24,0" FontSize="13" Click="OnCancelEditClick">

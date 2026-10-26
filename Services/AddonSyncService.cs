@@ -76,18 +76,17 @@ public class AddonSyncService
         return await PreviewPullAsync(s, ct);
     }
 
-    /// <summary>Describes repo changes this PC hasn't pulled yet, or null if it's caught up.</summary>
-    public async Task<string?> DescribeUnpulledChangesAsync(SyncSession s, CancellationToken ct)
-    {
-        if (s.HeadCommit == null || s.HeadCommit == s.Game.LastSyncedCommit)
-            return null;
-
-        var latest = (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault();
-        return latest == null
+    /// <summary>The repo's newest commit if this PC hasn't pulled or pushed it yet, or null if it's caught up.</summary>
+    public async Task<GitCommitEntry?> FindUnpulledChangeAsync(SyncSession s, CancellationToken ct) =>
+        s.HeadCommit == null || s.HeadCommit == s.Game.LastSyncedCommit
             ? null
-            : $"⚠ The repo has changes this PC hasn't pulled. Latest: \"{latest.Message}\" ({latest.DisplayDate}). " +
-              "Pushing replaces them for everything you select. Pull first to keep them.";
-    }
+            : (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault();
+
+    public async Task<string?> DescribeUnpulledChangesAsync(SyncSession s, CancellationToken ct) =>
+        await FindUnpulledChangeAsync(s, ct) is { } latest
+            ? $"⚠ The repo has changes this PC hasn't pulled. Latest: \"{latest.Message}\" ({latest.DisplayDate}). " +
+              "Pushing replaces them for everything you select. Pull first to keep them."
+            : null;
 
     public async Task<string> PullAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
     {
@@ -165,6 +164,14 @@ public class AddonSyncService
                 message += $" Settings weren't copied: {skipped}.";
             return message;
         }, ct);
+
+    /// <summary>Deletes the game's local copy of its repo and its backups, once it's been removed from the library.</summary>
+    public void DeleteLocalData(GameEntry game)
+    {
+        foreach (var dir in new[] { _git.GetLocalCachePath(game), Path.Combine(BackupRoot, game.Id.ToString()) })
+            if (Directory.Exists(dir))
+                AddonFiles.ForceDeleteDirectory(dir);
+    }
 
     public List<CharacterFolder> ListCharacters(GameEntry game) =>
         AddonFiles.Characters(GameDir(game)).Select(c => new CharacterFolder(game, c.Dir, c.Label)).ToList();

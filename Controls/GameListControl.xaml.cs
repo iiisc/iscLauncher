@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Numerics;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
@@ -35,33 +34,6 @@ public sealed partial class GameListControl : UserControl
         _suppressSelectionChange = true;
         GameListView.SelectedItem = game;
         _suppressSelectionChange = false;
-        UpdateSelectionVisuals();
-    }
-
-    public void UpdateSelectionVisuals()
-    {
-        foreach (var item in GameListView.Items)
-        {
-            if ((GameListView.ContainerFromItem(item) as ListViewItem)?.ContentTemplateRoot is not Border border)
-                continue;
-            bool isSelected = item == GameListView.SelectedItem;
-            if (isSelected)
-            {
-                border.BorderBrush = DialogHelper.Res<Brush>("GoldBrush");
-                border.BorderThickness = new Thickness(2);
-                border.Background = DialogHelper.Res<Brush>("Surface3Brush");
-                border.Shadow = new ThemeShadow();
-                border.Translation = new Vector3(0, 0, 8);
-            }
-            else
-            {
-                border.BorderBrush = DialogHelper.Res<Brush>("BorderBrush");
-                border.BorderThickness = new Thickness(1);
-                border.Background = DialogHelper.Res<Brush>("Surface2Brush");
-                border.Shadow = null;
-                border.Translation = new Vector3(0, 0, 0);
-            }
-        }
     }
 
     public void SetAddGameHighlight(bool selected) =>
@@ -90,7 +62,6 @@ public sealed partial class GameListControl : UserControl
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressSelectionChange) return;
-        UpdateSelectionVisuals();
         GameSelected?.Invoke(this, GameListView.SelectedItem as GameEntry);
     }
 
@@ -104,7 +75,7 @@ public sealed partial class GameListControl : UserControl
     {
         if (sender is not Button { Tag: GameEntry game }) return;
         var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Delete Game");
-        dialog.Content = $"Are you sure you want to delete '{game.Name}'? This will also remove the stored password.";
+        dialog.Content = $"Delete '{game.Name}'? This also removes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.";
         dialog.PrimaryButtonText = "Delete";
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             DeleteConfirmed?.Invoke(this, game);

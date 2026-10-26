@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinRT.Interop;
@@ -54,9 +53,6 @@ public sealed partial class MainWindow : Window
         OptionsPanel.CloseRequested += OnOptionsCloseRequested;
 
         Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
-
-        GameList.Loaded += (_, _) =>
-            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, GameList.UpdateSelectionVisuals);
 
         SetWindowSize(hwnd, 900, 650);
         SetupCustomTitleBar();
@@ -121,8 +117,12 @@ public sealed partial class MainWindow : Window
 
     private async void OnDeleteConfirmed(object? sender, GameEntry game)
     {
+        if (GameDetail.CurrentGame?.Id == game.Id)
+            GameDetail.CancelSync();
         _credentialService.DeleteCredential(game.CredentialTarget);
         await _gameRepository.RemoveGameAsync(game.Id);
+        // Leftovers only cost disk space, so a file that's still locked shouldn't fail the delete
+        try { await Task.Run(() => _addonSyncService.DeleteLocalData(game)); } catch { }
         _games.Remove(game);
         GameList.SetSelectedGame(null);
         if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }

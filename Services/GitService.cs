@@ -180,47 +180,26 @@ public class GitService
         using var process = new Process { StartInfo = psi };
         try
         {
-            var stderrBuilder = new StringBuilder();
-
-            if (progress != null)
+            // git writes progress and errors to stderr, line by line
+            var stderr = new StringBuilder();
+            process.ErrorDataReceived += (_, args) =>
             {
-                process.ErrorDataReceived += (_, args) =>
-                {
-                    if (!string.IsNullOrWhiteSpace(args.Data))
-                    {
-                        stderrBuilder.AppendLine(args.Data);
-                        progress.Report(args.Data);
-                    }
-                };
-            }
+                if (string.IsNullOrWhiteSpace(args.Data))
+                    return;
+                lock (stderr)
+                    stderr.AppendLine(args.Data);
+                progress?.Report(args.Data);
+            };
 
             process.Start();
+            process.BeginErrorReadLine();
+            var stdout = await process.StandardOutput.ReadToEndAsync(ct);
+            // Also waits for the last stderr line to be handled
+            await process.WaitForExitAsync(ct);
 
-            if (progress != null)
-                process.BeginErrorReadLine();
-
-            var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-
-            // Only read stderr synchronously if we're not streaming it
-            string stderr;
-            if (progress != null)
-            {
-                await process.WaitForExitAsync(ct);
-                stderr = stderrBuilder.ToString();
-            }
-            else
-            {
-                var errorTask = process.StandardError.ReadToEndAsync(ct);
-                await process.WaitForExitAsync(ct);
-                stderr = await errorTask;
-            }
-
-            var stdout = await outputTask;
-
-            if (process.ExitCode == 0)
-                return new GitResult(true, stdout);
-
-            return new GitResult(false, string.IsNullOrWhiteSpace(stderr) ? stdout : stderr);
+            return process.ExitCode == 0
+                ? new GitResult(true, stdout)
+                : new GitResult(false, stderr.Length == 0 ? stdout : stderr.ToString());
         }
         catch (OperationCanceledException)
         {

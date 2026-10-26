@@ -113,13 +113,12 @@ public class GameLauncherService
             var automationResult = await _automationService.AutomatePasswordEntryAsync(process.Id, password);
             if (automationResult.Success)
             {
-                return new LaunchResult(true, "Game launched and password entered automatically.", process.Id);
+                return new LaunchResult(true, "Game launched and password entered automatically.");
             }
 
             CopyPasswordToClipboard(password);
             return new LaunchResult(true,
-                $"Game launched. Auto-entry failed ({automationResult.Message}). Password copied to clipboard - press Ctrl+V to paste.",
-                process.Id);
+                $"Game launched. Auto-entry failed ({automationResult.Message}). Password copied to clipboard - press Ctrl+V to paste.");
         }
         catch (Exception ex)
         {
@@ -128,6 +127,33 @@ public class GameLauncherService
     }
 
     public bool IsRunning(GameEntry game) => FindRunningProcessId(game) != null;
+
+    /// <summary>
+    /// Waits for the game to start and then close. It's looked for by path, since Battle.net starts official games
+    /// itself. Returns false if it never started within <paramref name="startTimeout"/>, or can't be watched.
+    /// </summary>
+    public async Task<bool> WaitForExitAsync(GameEntry game, TimeSpan startTimeout)
+    {
+        var waiting = Stopwatch.StartNew();
+        int? processId;
+        while ((processId = FindRunningProcessId(game)) == null)
+        {
+            if (waiting.Elapsed > startTimeout)
+                return false;
+            await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(processId.Value);
+            await process.WaitForExitAsync().ConfigureAwait(false);
+        }
+        // Already gone by the time it was opened
+        catch (ArgumentException) { }
+        // Can't be waited on, e.g. it runs elevated
+        catch (Exception) { return false; }
+        return true;
+    }
 
     /// <summary>
     /// Finds this game's exe among running processes by path, so it's found however it was started:
@@ -206,4 +232,4 @@ public class GameLauncherService
     }
 }
 
-public record LaunchResult(bool Success, string Message, int? ProcessId = null);
+public record LaunchResult(bool Success, string Message);
