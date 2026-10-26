@@ -21,7 +21,6 @@ public sealed partial class MainWindow : Window
     private readonly AddonSyncService _addonSyncService = new(new GitService());
     private readonly AppUpdateService _updateService = new();
     private readonly ObservableCollection<GameEntry> _games = new();
-    private bool _checkUpdatesOnStartup;
     private UpdateCheckResult? _startupUpdate;
 
     public MainWindow()
@@ -41,10 +40,7 @@ public sealed partial class MainWindow : Window
         GameDetail.OwnerHwnd = hwnd;
         GameDetail.Games = _games;
 
-        OptionsPanel.GameRepository = _gameRepository;
-        OptionsPanel.CredentialService = _credentialService;
         OptionsPanel.AppUpdateService = _updateService;
-        OptionsPanel.Games = _games;
 
         GameList.GameSelected     += OnGameSelected;
         GameList.LaunchRequested  += OnLaunchRequested;
@@ -55,8 +51,7 @@ public sealed partial class MainWindow : Window
         GameDetail.GameSaved      += OnGameSaved;
         GameDetail.EscapeRequested += OnDetailEscapeRequested;
 
-        OptionsPanel.CloseRequested               += OnOptionsCloseRequested;
-        OptionsPanel.CheckUpdatesOnStartupChanged += (_, v) => _checkUpdatesOnStartup = v;
+        OptionsPanel.CloseRequested += OnOptionsCloseRequested;
 
         Closed += (_, _) => _gameLauncherService.CancelPendingClipboardClear();
 
@@ -96,7 +91,9 @@ public sealed partial class MainWindow : Window
     private void ShowOptions()
     {
         ShowPanel(OptionsPanel);
-        OptionsPanel.Activate(_checkUpdatesOnStartup);
+        OptionsPanel.Activate();
+        if (_startupUpdate != null)
+            OptionsPanel.ShowAvailableUpdate(_startupUpdate);
     }
 
     /// <summary>Asks to discard unsaved edits, then stops any sync tied to the current game.</summary>
@@ -173,10 +170,8 @@ public sealed partial class MainWindow : Window
         {
             var library = await _gameRepository.LoadAsync();
             foreach (var game in library.Games) _games.Add(game);
-            GameDetail.SetComputerName(library.EffectiveComputerName);
-            _checkUpdatesOnStartup = library.CheckUpdatesOnStartup;
             if (_games.Count > 0) { GameList.SetSelectedGame(_games[0]); ShowDetail(_games[0]); }
-            if (_checkUpdatesOnStartup) _ = CheckForUpdatesSilentlyAsync();
+            _ = CheckForUpdatesSilentlyAsync();
         }
         catch (Exception ex)
         {
@@ -194,20 +189,11 @@ public sealed partial class MainWindow : Window
             if (result.UpdateAvailable && result.DownloadUrl != null)
             {
                 _startupUpdate = result;
-                UpdateBar.Message = $"Version {result.LatestVersion} is ready to install.";
-                UpdateBar.IsOpen = true;
+                GameList.ShowUpdateAvailable(result.LatestVersion);
             }
         }
         // Being offline or rate-limited at startup isn't worth interrupting for; Options can check again
         catch { }
-    }
-
-    private async void OnUpdateBarClick(object sender, RoutedEventArgs e)
-    {
-        if (_startupUpdate == null || !await TryLeaveDetailAsync()) return;
-        UpdateBar.IsOpen = false;
-        ShowOptions();
-        OptionsPanel.ShowAvailableUpdate(_startupUpdate);
     }
 
     private void SetWindowSize(IntPtr hwnd, int width, int height)

@@ -33,6 +33,7 @@ public class AddonSyncService
 
     private readonly GitService _git;
     private readonly GameRepository _gameRepository = new();
+    private const string SyncBranch = "main";
 
     public AddonSyncService(GitService git)
     {
@@ -51,7 +52,7 @@ public class AddonSyncService
 
         progress?.Report("Fetching from repo...");
         var cachePath = _git.GetLocalCachePath(game);
-        var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), Branch(game), cachePath, progress, ct);
+        var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), SyncBranch, cachePath, progress, ct);
         if (!mirror.Success)
             throw new SyncException($"Couldn't fetch from the repo: {mirror.Output.Trim()}");
 
@@ -121,7 +122,7 @@ public class AddonSyncService
 
         var repoAddons = AddonFiles.AddonNames(s.RepoAddOns);
         var characters = AddonFiles.CharacterCount(s.CachePath);
-        var pcName = await _gameRepository.GetComputerNameAsync();
+        var pcName = Environment.MachineName;
         var subject = $"sync: {s.Game.Name} — {repoAddons.Count} addon(s), {characters} character(s) [{pcName}]";
         var message = string.Join("\n", new[] { subject, "", "Addons:" }.Concat(repoAddons.Select(n => $"  - {n}")));
 
@@ -136,7 +137,7 @@ public class AddonSyncService
     /// <summary>Commits the files restored by <see cref="PreviewRollbackAsync"/> for everyone, then applies the chosen parts to this PC.</summary>
     public async Task<string> RollbackAsync(SyncSession s, GitCommitEntry target, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
     {
-        var pcName = await _gameRepository.GetComputerNameAsync();
+        var pcName = Environment.MachineName;
         var subject = $"rollback: {s.Game.Name} — restore to {target.Hash}: {target.Message} [{pcName}]";
         var message = string.IsNullOrWhiteSpace(target.Body) ? subject : $"{subject}\n\n{target.Body}";
 
@@ -197,7 +198,7 @@ public class AddonSyncService
             throw new SyncException($"Git commit failed: {commit.Output.Trim()}");
 
         progress?.Report("Pushing...");
-        var push = await _git.PushAsync(s.CachePath, Branch(s.Game), ct);
+        var push = await _git.PushAsync(s.CachePath, SyncBranch, ct);
         if (!push.Success)
             throw new SyncException("Push failed. Check that you have write access to the repo, or try again if someone " +
                 $"else pushed in the meantime. {push.Output.Trim()}");
@@ -213,8 +214,6 @@ public class AddonSyncService
     }
 
     internal static string GameDir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath) ?? "";
-
-    private static string Branch(GameEntry game) => game.SyncBranch.NullIfBlank() ?? "main";
 
     private static void Backup(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, CancellationToken ct) =>
         AddonFiles.Backup(Path.Combine(BackupRoot, game.Id.ToString()), GameDir(game), addonNames, includeWtf, ct);

@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using iscLauncher.Helpers;
-using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -15,16 +13,11 @@ namespace iscLauncher.Controls;
 public sealed partial class OptionsPanelControl : UserControl
 {
     public event EventHandler? CloseRequested;
-    public event EventHandler<bool>? CheckUpdatesOnStartupChanged;
 
-    public GameRepository? GameRepository { get; set; }
-    public CredentialService? CredentialService { get; set; }
     public AppUpdateService? AppUpdateService { get; set; }
-    public IReadOnlyCollection<GameEntry>? Games { get; set; }
 
     private UpdateCheckResult? _pendingUpdate;
     private CancellationTokenSource? _updateCts;
-    private bool _suppressSave;
     private readonly StatusNotifier _status;
 
     public OptionsPanelControl()
@@ -33,7 +26,7 @@ public sealed partial class OptionsPanelControl : UserControl
         _status = new StatusNotifier(StatusBar, StatusText);
     }
 
-    public void Activate(bool checkUpdatesOnStartup)
+    public void Activate()
     {
         VersionText.Text = $"v{Services.AppUpdateService.CurrentVersion}";
         StatusBar.IsOpen = false;
@@ -43,10 +36,6 @@ public sealed partial class OptionsPanelControl : UserControl
         CheckUpdatesText.Text = "Check for Updates";
         _pendingUpdate = null;
         _updateCts?.Cancel();
-
-        _suppressSave = true;
-        CheckUpdatesOnStartupToggle.IsOn = checkUpdatesOnStartup;
-        _suppressSave = false;
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -122,14 +111,6 @@ public sealed partial class OptionsPanelControl : UserControl
         CheckUpdatesText.Text = "Download & Install";
     }
 
-    private async void OnCheckUpdatesOnStartupToggled(object sender, RoutedEventArgs e)
-    {
-        if (_suppressSave) return;
-        var newValue = CheckUpdatesOnStartupToggle.IsOn;
-        await GameRepository!.SetCheckUpdatesOnStartupAsync(newValue);
-        CheckUpdatesOnStartupChanged?.Invoke(this, newValue);
-    }
-
     private void OnOpenDataFolderClick(object sender, RoutedEventArgs e)
     {
         try
@@ -139,22 +120,6 @@ public sealed partial class OptionsPanelControl : UserControl
                 Services.GameRepository.AppDataFolder) { UseShellExecute = true });
         }
         catch { ShowStatus("Could not open data folder.", false); }
-    }
-
-    private async void OnRemoveAllPasswordsClick(object sender, RoutedEventArgs e)
-    {
-        if (Games == null || Games.Count == 0)
-        { ShowStatus("No stored passwords to remove.", false); return; }
-
-        var dialog = DialogHelper.CreateThemedDialog(XamlRoot, "Remove All Passwords");
-        dialog.Content = $"This will permanently delete passwords for all {Games.Count} game(s) from Windows Credential Manager. This cannot be undone.";
-        dialog.PrimaryButtonText = "Remove All";
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        int removed = 0;
-        foreach (var game in Games)
-            if (CredentialService!.DeleteCredential(game.CredentialTarget)) removed++;
-        ShowStatus($"Removed {removed} password(s).", true);
     }
 
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);

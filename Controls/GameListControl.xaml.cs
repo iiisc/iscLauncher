@@ -70,6 +70,12 @@ public sealed partial class GameListControl : UserControl
     public void SetOptionsHighlight(bool selected) =>
         OptionsButtonIcon.Foreground = ApplyHighlight(OptionsButton, selected);
 
+    public void ShowUpdateAvailable(string version)
+    {
+        UpdateDot.Visibility = Visibility.Visible;
+        ToolTipService.SetToolTip(OptionsButton, $"Options: version {version} is ready to install");
+    }
+
     /// <summary>Styles the button's frame and returns the foreground brush for its content.</summary>
     private static Brush ApplyHighlight(Button button, bool selected)
     {

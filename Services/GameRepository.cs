@@ -70,14 +70,6 @@ public class GameRepository
     public Task RemoveGameAsync(Guid gameId) =>
         MutateAsync(library => { library.Games.RemoveAll(g => g.Id == gameId); return true; });
 
-    public async Task<string> GetComputerNameAsync() => (await LoadAsync()).EffectiveComputerName;
-
-    public Task SetComputerNameAsync(string name) =>
-        MutateAsync(library => { library.ComputerName = string.IsNullOrWhiteSpace(name) ? null : name.Trim(); return true; });
-
-    public Task SetCheckUpdatesOnStartupAsync(bool value) =>
-        MutateAsync(library => { library.CheckUpdatesOnStartup = value; return true; });
-
     /// <summary>Load, apply <paramref name="change"/>, and save only if it returns true.</summary>
     private async Task MutateAsync(Func<GameLibrary, bool> change)
     {

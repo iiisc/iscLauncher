@@ -62,7 +62,6 @@ public sealed partial class GameDetailControl : UserControl
         PasswordBox.Password = string.Empty;
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
-        SyncBranchTextBox.Text = game.SyncBranch ?? string.Empty;
         UpdateLastSyncedText(game);
 
         DetailPivot.SelectedIndex = 0;
@@ -82,8 +81,6 @@ public sealed partial class GameDetailControl : UserControl
         SetEditMode(true);
         NameTextBox.Focus(FocusState.Programmatic);
     }
-
-    public void SetComputerName(string name) => ComputerNameTextBox.Text = name;
 
     public async Task<bool> ConfirmNavigateAwayAsync()
     {
@@ -130,7 +127,6 @@ public sealed partial class GameDetailControl : UserControl
         game.StartupDelaySeconds = double.IsNaN(StartupDelayNumberBox.Value)
             ? 0 : (int)StartupDelayNumberBox.Value;
         game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
-        game.SyncBranch = SyncBranchTextBox.Text.NullIfBlank();
 
         if (!string.IsNullOrEmpty(PasswordBox.Password))
             CredentialService!.SaveCredential(game.CredentialTarget, PasswordBox.Password);
@@ -177,8 +173,6 @@ public sealed partial class GameDetailControl : UserControl
         PasswordBox.IsEnabled = isEditing;
         StartupDelayNumberBox.IsEnabled = isEditing;
         SyncRepoUrlTextBox.IsEnabled = isEditing;
-        SyncBranchTextBox.IsEnabled = isEditing;
-        ComputerNameTextBox.IsEnabled = isEditing;
 
         BrowseButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
         GameNameEditSection.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
@@ -394,13 +388,6 @@ public sealed partial class GameDetailControl : UserControl
             LastSyncedText.Visibility = Visibility.Visible;
         }
         else { LastSyncedText.Visibility = Visibility.Collapsed; }
-    }
-
-    private async void OnComputerNameLostFocus(object sender, RoutedEventArgs e)
-    {
-        var name = ComputerNameTextBox.Text?.Trim() ?? "";
-        if (name.Length == 0) ComputerNameTextBox.Text = Environment.MachineName;
-        try { await GameRepository!.SetComputerNameAsync(name); } catch { }
     }
 
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);

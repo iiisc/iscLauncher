@@ -207,23 +207,6 @@
                                          PlaceholderText="e.g., https://github.com/user/wow-sync.git"
                                          FontSize="12"/>
                             </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Branch" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBox x:Name="SyncBranchTextBox"
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         PlaceholderText="main"
-                                         FontSize="12"/>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Computer Name" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBox x:Name="ComputerNameTextBox"
-                                         Style="{StaticResource ThemedTextBoxStyle}"
-                                         Height="32"
-                                         Padding="8,4"
-                                         FontSize="12"
-                                         PlaceholderText="e.g., Gaming PC, Laptop..."
-                                         LostFocus="OnComputerNameLostFocus"/>
-                            </StackPanel>
 
                             <TextBlock x:Name="LastSyncedText"
                                        FontFamily="{StaticResource BodyFont}"

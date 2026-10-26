@@ -56,12 +56,6 @@ public class GameEntry : INotifyPropertyChanged
     public string? SyncRepoUrl { get; set; }
 
     /// <summary>
-    /// Branch to clone/pull (defaults to "main" in service logic when null).
-    /// </summary>
-    [JsonPropertyName("syncBranch")]
-    public string? SyncBranch { get; set; }
-
-    /// <summary>
     /// UTC timestamp of the last successful pull or push.
     /// </summary>
     [JsonPropertyName("lastSynced")]

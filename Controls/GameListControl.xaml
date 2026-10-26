@@ -168,7 +168,18 @@
                     Style="{StaticResource AddGameButtonStyle}"
                     Height="56"
                     ToolTipService.ToolTip="Options">
-                <FontIcon x:Name="OptionsButtonIcon" Glyph="&#xE713;" FontSize="16"/>
+                <Grid>
+                    <FontIcon x:Name="OptionsButtonIcon" Glyph="&#xE713;" FontSize="16"/>
+                    <Ellipse x:Name="UpdateDot"
+                             Width="8" Height="8"
+                             HorizontalAlignment="Right" VerticalAlignment="Top"
+                             Margin="0,-4,-6,0"
+                             Visibility="Collapsed">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{StaticResource EmeraldLightColor}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </Grid>
             </Button>
         </Grid>
     </Grid>

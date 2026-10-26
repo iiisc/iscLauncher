@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Concurrent;
-using System.Drawing;
-using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Storage;
+using Windows.Storage.FileProperties;
 
 namespace iscLauncher.Services;
 
@@ -13,17 +12,7 @@ public static class IconExtractor
     // Cache icons by executable path to avoid re-extracting
     private static readonly ConcurrentDictionary<string, BitmapImage?> _iconCache = new();
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool DestroyIcon(IntPtr hIcon);
-
-    /// <summary>
-    /// Gets the icon from an executable asynchronously, with caching for performance.
-    /// The P/Invoke and bitmap work runs on a background thread; the BitmapImage is
-    /// created on the calling (UI) thread.
-    /// </summary>
+    /// <summary>Gets the executable's icon, cached by path. Returns null if Windows can't provide one.</summary>
     public static async Task<BitmapImage?> GetIconFromExecutableAsync(string executablePath)
     {
         if (string.IsNullOrEmpty(executablePath))
@@ -32,20 +21,21 @@ public static class IconExtractor
         if (_iconCache.TryGetValue(executablePath, out var cachedIcon))
             return cachedIcon;
 
-        var bytes = await Task.Run(() => ExtractIconBytes(executablePath));
-        if (bytes == null)
+        BitmapImage? icon;
+        try
         {
-            _iconCache.TryAdd(executablePath, null);
-            return null;
+            var file = await StorageFile.GetFileFromPathAsync(executablePath);
+            using var thumbnail = await file.GetThumbnailAsync(ThumbnailMode.SingleItem, 40);
+            icon = new BitmapImage();
+            await icon.SetSourceAsync(thumbnail);
+        }
+        catch
+        {
+            icon = null;
         }
 
-        var bitmapImage = new BitmapImage();
-        using var memoryStream = new MemoryStream(bytes);
-        var randomAccessStream = memoryStream.AsRandomAccessStream();
-        bitmapImage.SetSource(randomAccessStream);
-
-        _iconCache.TryAdd(executablePath, bitmapImage);
-        return bitmapImage;
+        _iconCache[executablePath] = icon;
+        return icon;
     }
 
     /// <summary>
@@ -54,35 +44,5 @@ public static class IconExtractor
     public static void InvalidateCache(string executablePath)
     {
         _iconCache.TryRemove(executablePath, out _);
-    }
-
-    private static byte[]? ExtractIconBytes(string executablePath)
-    {
-        if (!File.Exists(executablePath))
-            return null;
-
-        IntPtr hIcon = IntPtr.Zero;
-        try
-        {
-            hIcon = ExtractIcon(IntPtr.Zero, executablePath, 0);
-            if (hIcon == IntPtr.Zero || hIcon.ToInt64() == 1)
-                return null;
-
-            using var icon = Icon.FromHandle(hIcon);
-            using var bitmap = icon.ToBitmap();
-            using var memoryStream = new MemoryStream();
-
-            bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
-            return memoryStream.ToArray();
-        }
-        catch
-        {
-            return null;
-        }
-        finally
-        {
-            if (hIcon != IntPtr.Zero && hIcon.ToInt64() != 1)
-                DestroyIcon(hIcon);
-        }
     }
 }

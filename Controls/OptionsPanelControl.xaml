@@ -82,30 +82,6 @@
                                          Foreground="{StaticResource EmeraldBrush}"
                                          Visibility="Collapsed"
                                          CornerRadius="4"/>
-                            <Rectangle Height="1" Fill="{StaticResource BorderBrush}" Opacity="0.4"/>
-                            <Grid ColumnSpacing="12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="Check for updates on startup"
-                                               FontFamily="{StaticResource BodyFont}"
-                                               FontSize="11"
-                                               Foreground="{StaticResource TextMutedBrush}"/>
-                                    <TextBlock Text="Silently checks for a new version when the app starts"
-                                               FontFamily="{StaticResource BodyFont}"
-                                               FontSize="10"
-                                               Foreground="{StaticResource TextDimBrush}"/>
-                                </StackPanel>
-                                <ToggleSwitch x:Name="CheckUpdatesOnStartupToggle"
-                                              Grid.Column="1"
-                                              IsOn="False"
-                                              OnContent="" OffContent=""
-                                              Margin="0"
-                                              VerticalAlignment="Center"
-                                              Toggled="OnCheckUpdatesOnStartupToggled"/>
-                            </Grid>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -142,45 +118,6 @@
                                 </Button>
                             </Grid>
                         </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <!-- SECURITY -->
-                <StackPanel Spacing="12">
-                    <TextBlock Text="SECURITY" Style="{StaticResource SectionHeaderStyle}"/>
-                    <Border Background="{StaticResource SurfaceBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1" CornerRadius="6" Padding="14,10">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="Stored Passwords"
-                                           FontFamily="{StaticResource BodyFont}"
-                                           FontSize="11"
-                                           Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBlock Text="Remove all passwords from Windows Credential Manager"
-                                           FontFamily="{StaticResource BodyFont}"
-                                           FontSize="10"
-                                           Foreground="{StaticResource TextDimBrush}"/>
-                            </StackPanel>
-                            <Button Grid.Column="1"
-                                    Click="OnRemoveAllPasswordsClick"
-                                    Background="Transparent"
-                                    BorderBrush="{StaticResource CrimsonBrush}"
-                                    BorderThickness="1" CornerRadius="6"
-                                    Height="40" Padding="14,0" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{StaticResource CrimsonBrush}"/>
-                                    <TextBlock Text="Remove All"
-                                               FontFamily="{StaticResource DisplayFont}"
-                                               FontSize="12"
-                                               Foreground="{StaticResource CrimsonBrush}"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
                     </Border>
                 </StackPanel>
 

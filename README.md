@@ -62,7 +62,7 @@ Requires a **private** GitHub repository.
 2. **Push** to upload addons and WTF settings. **Pull** to apply them on another machine.
 3. **Rollback** to revert to the previous commit if needed.
 
-A configurable **computer name** is included in each commit message to identify which machine made the push.
+Each commit message includes the computer's name, so you can tell which machine made the push.
 
 ---
 

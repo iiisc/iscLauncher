@@ -53,27 +53,15 @@ public class AppUpdateService
 
         if (root.TryGetProperty("assets", out var assets))
         {
-            string? zipUrl = null, zipName = null;
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = asset.GetProperty("name").GetString() ?? "";
-                var browserUrl = asset.GetProperty("browser_download_url").GetString();
-                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    downloadUrl = browserUrl;
+                    downloadUrl = asset.GetProperty("browser_download_url").GetString();
                     assetName = name;
                     break;
                 }
-                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    zipUrl = browserUrl;
-                    zipName = name;
-                }
-            }
-            if (downloadUrl == null && zipUrl != null)
-            {
-                downloadUrl = zipUrl;
-                assetName = zipName;
             }
         }
 
@@ -119,21 +107,13 @@ public class AppUpdateService
         var currentExe = Environment.ProcessPath
             ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
 
-        string newExePath;
-        if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-        {
-            var extractDir = Path.Combine(tempDir, "extracted");
-            if (Directory.Exists(extractDir))
-                Directory.Delete(extractDir, true);
-            await Task.Run(() => ZipFile.ExtractToDirectory(destPath, extractDir), ct).ConfigureAwait(false);
-            newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories)
-                .FirstOrDefault()
-                ?? throw new FileNotFoundException("No executable found in the update package.");
-        }
-        else
-        {
-            newExePath = destPath;
-        }
+        var extractDir = Path.Combine(tempDir, "extracted");
+        if (Directory.Exists(extractDir))
+            Directory.Delete(extractDir, true);
+        await Task.Run(() => ZipFile.ExtractToDirectory(destPath, extractDir), ct).ConfigureAwait(false);
+        var newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories)
+            .FirstOrDefault()
+            ?? throw new FileNotFoundException("No executable found in the update package.");
 
         // The script runs after this process exits, so it must report its own failure: otherwise the user is left
         // on the old version (or with no app running) and never finds out why
