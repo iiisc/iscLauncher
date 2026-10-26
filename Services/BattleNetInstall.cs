@@ -1,7 +1,12 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 namespace iscLauncher.Services;
 
@@ -14,6 +19,41 @@ public record BattleNetInstall(string LauncherPath, string? ProductCode)
     private static readonly Regex ProductOrFolder = new(@"wow[a-z_]*|_[a-z_]+_");
 
     public static bool IsOfficial(string exePath) => LauncherFor(exePath) != null;
+
+    /// <summary>
+    /// The game exe of every official version on this PC. Battle.net registers each install for uninstalling, which is
+    /// more reliable than Blizzard's own registry key: private-server clients overwrite that one with their own folder.
+    /// </summary>
+    public static List<string> FindInstalledGames()
+    {
+        using var uninstall = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall");
+        if (uninstall == null)
+            return [];
+
+        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in uninstall.GetSubKeyNames())
+        {
+            using var key = uninstall.OpenSubKey(name);
+            if (key?.GetValue("DisplayName") is string displayName && displayName.StartsWith("World of Warcraft", StringComparison.Ordinal)
+                && key.GetValue("InstallLocation") is string root && Directory.Exists(root))
+                roots.Add(root.TrimEnd('\\'));
+        }
+
+        // Wow*.exe skips the crash reporter that sits beside each version's game exe
+        return roots
+            .SelectMany(root => Directory.GetDirectories(root, "_*_"))
+            .SelectMany(dir => Directory.GetFiles(dir, "Wow*.exe"))
+            .Where(IsOfficial)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>A name for an official version from its folder: _classic_era_ becomes "WoW Classic Era".</summary>
+    public static string VersionName(string exePath)
+    {
+        var folder = Path.GetFileName(Path.GetDirectoryName(exePath))!.Trim('_').Replace('_', ' ');
+        return "WoW " + CultureInfo.InvariantCulture.TextInfo.ToTitleCase(folder);
+    }
 
     public static BattleNetInstall? Find(string exePath)
     {

@@ -57,6 +57,11 @@
                     </PivotItem.Header>
                     <ScrollViewer Padding="32,14,32,14">
                         <StackPanel Spacing="14">
+                            <StackPanel x:Name="FoundInstallsSection" Spacing="6" Visibility="Collapsed">
+                                <TextBlock Text="FOUND ON THIS PC" Style="{StaticResource SectionHeaderStyle}"/>
+                                <StackPanel x:Name="FoundInstallsPanel" Orientation="Horizontal" Spacing="8"/>
+                            </StackPanel>
+
                             <StackPanel Spacing="6">
                                 <TextBlock Text="EXECUTABLE" Style="{StaticResource SectionHeaderStyle}"/>
                                 <Grid ColumnSpacing="8">
@@ -167,11 +172,11 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="SyncRepoUrlTextBox" Style="{StaticResource InputStyle}" PlaceholderText="e.g., https://github.com/user/wow-sync.git"/>
-                                    <Button x:Name="CreateRepoButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Click="OnCreateRepoClick"
-                                            ToolTipService.ToolTip="Create a private repo on your GitHub account for this game">
+                                    <Button x:Name="SetUpSyncButton" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Click="OnSetUpSyncClick"
+                                            ToolTipService.ToolTip="Pick or create a private repo on your GitHub account for this game">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <FontIcon Glyph="&#xE710;" FontSize="14"/>
-                                            <TextBlock Text="Create Repo"/>
+                                            <TextBlock Text="Set Up Sync"/>
                                         </StackPanel>
                                     </Button>
                                 </Grid>
@@ -206,7 +211,7 @@
                                 </Button>
                             </StackPanel>
                             <TextBlock x:Name="NoRepoHint"
-                                       Text="Click Create Repo to sync this game's addons and settings between your PCs, or paste the URL of a repo you already have and save."
+                                       Text="Click Set Up Sync to sync this game's addons and settings between your PCs, or paste a repo URL and save."
                                        Style="{StaticResource HintTextStyle}"
                                        Visibility="Collapsed"/>
 

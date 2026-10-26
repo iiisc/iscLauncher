@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -90,6 +91,19 @@ public class GitHubService
     }
 
     public void SignOut() => _credentials.DeleteCredential(TokenTarget);
+
+    /// <summary>The user's own private repos, most recently updated first, as name and clone URL.</summary>
+    public async Task<List<(string Name, string CloneUrl)>> ListPrivateReposAsync(CancellationToken ct)
+    {
+        using var response = await SendAsync(HttpMethod.Get,
+            "https://api.github.com/user/repos?visibility=private&affiliation=owner&sort=updated&per_page=100", null, ct);
+        if (response?.IsSuccessStatusCode != true)
+            return [];
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.EnumerateArray()
+            .Select(repo => (repo.GetProperty("name").GetString()!, repo.GetProperty("clone_url").GetString()!))
+            .ToList();
+    }
 
     /// <summary>
     /// Creates a private repo, or reuses the user's private repo of that name, such as the one this game already syncs

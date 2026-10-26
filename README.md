@@ -36,7 +36,7 @@ The app checks for a new version when it starts. When one is ready, a dot appear
 
 ## Getting started
 
-1. Click **+ Add Game** and pick the game's `.exe`.
+1. Click **+ Add Game**. Official versions on this PC are listed under **Found on this PC**, one click each; otherwise pick the game's `.exe`.
    - **Private server:** fill in the realmlist address, account and realm, and set your password under **Automation**.
    - **Official install:** pick the exe inside the version folder, for example `World of Warcraft\_classic_era_\WowClassic.exe`. The app recognises it and hides the settings that don't apply.
 2. Click **Save Changes**, then **Launch**.
@@ -47,9 +47,9 @@ If the password gets typed before the login screen is ready, raise **Startup Del
 
 Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
 
-1. Open the game's **Addons** tab and click **Create Repo**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
+1. Open the game's **Addons** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
-3. On another PC, add the same game, click **Create Repo** with the same repo name, and **Pull**. The app finds the existing repo instead of making a new one.
+3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
 
 You mostly don't need the buttons: when you launch a synced game and another PC has pushed since this one last synced, the app offers to pull first. When the game closes, it offers to push what changed while you played.
