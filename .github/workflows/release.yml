@@ -32,7 +32,6 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            git fetch --tags --force -q
             $latest = git tag -l 'v*' |
               Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
               ForEach-Object { [version]($_ -replace '^v', '') } |
@@ -41,20 +40,11 @@ jobs:
             if (-not $latest) { $latest = [version]'0.0.0' }
             $ver = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
           } else {
-            $ver = "${{ github.ref_name }}" -replace '^v', ''
-            if ($ver -notmatch '^\d+\.\d+\.\d+$') {
-              Write-Error "Tag '${{ github.ref_name }}' does not contain a valid version. Expected: v<major>.<minor>.<patch>"
-              exit 1
-            }
+            # The trigger only fires for v<major>.<minor>.<patch> tags
+            $ver = "${{ github.ref_name }}".TrimStart('v')
           }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
           echo "TAG=v$ver" >> $env:GITHUB_OUTPUT
-
-      - name: Create and push tag (manual dispatch only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git tag ${{ steps.version.outputs.TAG }} ${{ github.sha }}
-          git push origin ${{ steps.version.outputs.TAG }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -68,6 +58,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # Unpackaged and self-contained come from the project file; these make it one compressed exe
       - name: Publish x64
         run: >
           dotnet publish iscLauncher.csproj
@@ -75,8 +66,6 @@ jobs:
           -r win-x64
           -p:PublishSingleFile=true
           -p:SelfContained=true
-          -p:WindowsAppSDKSelfContained=true
-          -p:WindowsPackageType=None
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
           -p:PublishReadyToRun=true
@@ -85,62 +74,20 @@ jobs:
           -p:Version=${{ steps.version.outputs.VERSION }}
           -o publish
 
-      - name: Sign executables with Authenticode
+      # Runs only when a signing certificate is stored in the repo's secrets
+      - name: Sign
         if: env.HAS_SIGNING_CERT == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $certBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
-          $certPath  = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
-          [IO.File]::WriteAllBytes($certPath, $certBytes)
-
+          $certPath = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}"))
           try {
-            # Locate signtool.exe from the Windows SDK
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" `
-                          -Recurse -Filter "signtool.exe" |
-                        Where-Object { $_.FullName -match "x64" } |
-                        Sort-Object FullName -Descending |
-                        Select-Object -First 1 -ExpandProperty FullName
-
-            if (-not $signtool) {
-              Write-Error "signtool.exe not found in Windows SDK"
-              exit 1
-            }
-
-            Write-Host "Using signtool: $signtool"
-
-            # Sign all .exe and .dll files in the publish folder
-            $files = Get-ChildItem publish -Include *.exe,*.dll -Recurse
-            if ($files.Count -eq 0) {
-              Write-Error "No .exe or .dll files found in publish folder"
-              exit 1
-            }
-
-            foreach ($file in $files) {
-              Write-Host "Signing $($file.FullName)..."
-              & $signtool sign /f $certPath `
-                               /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" `
-                               /tr http://timestamp.digicert.com `
-                               /td sha256 `
-                               /fd sha256 `
-                               /v $file.FullName
-              if ($LASTEXITCODE -ne 0) {
-                Write-Error "Failed to sign $($file.FullName) (exit code $LASTEXITCODE)"
-                exit 1
-              }
-            }
-
-            # Verify that signatures were applied
-            foreach ($file in $files) {
-              $sig = Get-AuthenticodeSignature $file.FullName
-              if ($sig.Status -eq 'NotSigned') {
-                Write-Error "No signature found on $($file.FullName)"
-                exit 1
-              }
-              Write-Host "Verified signature on $($file.Name): Status=$($sig.Status), Issuer=$($sig.SignerCertificate.Issuer)"
-            }
-
-            Write-Host "All files signed successfully."
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+              Where-Object FullName -match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            $files = (Get-ChildItem publish -Include *.exe, *.dll -Recurse).FullName
+            & $signtool sign /f $certPath /p "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $files
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
           }
           finally {
             Remove-Item $certPath -Force -ErrorAction SilentlyContinue
@@ -169,17 +116,20 @@ jobs:
       # commits since the previous release instead. The app shows them before updating.
       - name: Write release notes
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ steps.version.outputs.TAG }}"
-          $previous = git tag -l 'v*' --sort=-v:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' -and $_ -ne $tag } | Select-Object -First 1
+          # The latest published release, not the newest tag: an older failed run may have left a tag without a release
+          $previous = gh release view --json tagName --jq .tagName 2>$null
           $range = if ($previous) { "$previous..HEAD" } else { "HEAD" }
           git log $range --no-merges --format='- %s' | Out-File -Encoding utf8 notes.md
 
       - name: Create GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
+          # Only created now, after the build succeeded, so a failed run doesn't use up a version number
+          target_commitish: ${{ github.sha }}
           body_path: notes.md
           files: |
             iscLauncher-${{ steps.version.outputs.TAG }}-win-x64.zip

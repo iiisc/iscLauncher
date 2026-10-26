@@ -14,6 +14,8 @@
     <!-- Ships as a plain exe, so debug runs the same way instead of as an MSIX package -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Still needed although the app isn't packaged: the single-file release build uses it to embed resources.pri -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
