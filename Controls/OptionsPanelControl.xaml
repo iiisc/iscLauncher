@@ -69,8 +69,10 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                 <TextBlock x:Name="GitHubAccountText" Text="Not signed in" Style="{StaticResource FieldLabelStyle}"/>
-                                <TextBlock Text="Lets the app sync addons between your PCs and create the sync repos for you."
+                                <TextBlock Text="Lets the app sync addons between your PCs, using only the repos you give it on GitHub."
                                            Style="{StaticResource HintTextStyle}"/>
+                                <HyperlinkButton x:Name="ChooseReposLink" Content="Choose which repos it can use" Click="OnChooseReposClick"
+                                                 Padding="0" FontSize="12" Foreground="{StaticResource GoldBrush}" Visibility="Collapsed"/>
                             </StackPanel>
                             <Button x:Name="GitHubButton" Grid.Column="1" Click="OnGitHubClick" Style="{StaticResource SecondaryButtonStyle}"
                                     AutomationProperties.Name="{x:Bind GitHubButtonText.Text, Mode=OneWay}">

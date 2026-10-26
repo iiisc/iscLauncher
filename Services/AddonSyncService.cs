@@ -68,7 +68,8 @@ public class AddonSyncService
         var cachePath = _git.GetLocalCachePath(game);
         var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), SyncBranch, cachePath, progress, ct);
         if (!mirror.Success)
-            throw new AppException($"Couldn't fetch from the repo. Check the URL, and for a private repo that you're signed in to GitHub under Options. {mirror.Output.Trim()}");
+            throw new AppException("Couldn't fetch from the repo. Check the URL, that you're signed in to GitHub under Options, and that the repo " +
+                $"is one of the repos you've given iscLauncher (Options → Choose which repos it can use). {mirror.Output.Trim()}");
 
         var head = await _git.GetHeadAsync(cachePath, ct);
         game.RemoteHead = head;

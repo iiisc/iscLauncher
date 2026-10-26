@@ -43,7 +43,7 @@ public sealed partial class GameDetailControl : UserControl
     public void Initialize(AppServices services)
     {
         _services = services;
-        services.GitHub.SignInTurnedDownChanged += (_, _) => DispatcherQueue.TryEnqueue(() => { if (_game != null) UpdateSyncStatus(_game); });
+        services.GitHub.SignInProblemChanged += (_, _) => DispatcherQueue.TryEnqueue(() => { if (_game != null) UpdateSyncStatus(_game); });
     }
 
     public void LoadGame(GameEntry game, string? statusMessage = null)

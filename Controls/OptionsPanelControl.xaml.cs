@@ -51,16 +51,17 @@ public sealed partial class OptionsPanelControl : UserControl
         GitHubButtonText.Text = signedIn ? "Sign Out" : "Sign In";
         if (signedIn && await _services.GitHub.GetLoginAsync() is { } login)
             GitHubAccountText.Text = $"Signed in to GitHub as {login}";
-        else if (_services.GitHub.SignInTurnedDown)
+        else if (_services.GitHub.SignInProblem is { } problem)
         {
-            GitHubAccountText.Text = "GitHub turned down this PC's sign-in. Sign in again.";
+            GitHubAccountText.Text = $"{problem}. Sign in again.";
             GitHubButtonText.Text = "Sign In";
         }
+        ChooseReposLink.Visibility = _services.GitHub.Token != null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnGitHubClick(object sender, RoutedEventArgs e)
     {
-        if (_services.GitHub.Token != null && !_services.GitHub.SignInTurnedDown)
+        if (_services.GitHub.Token != null && _services.GitHub.SignInProblem == null)
         {
             _services.GitHub.SignOut();
             ShowStatus("Signed out of GitHub.", true);
@@ -68,15 +69,25 @@ public sealed partial class OptionsPanelControl : UserControl
         else
         {
             GitHubButton.IsEnabled = false;
+            // The sign-in it replaces could reach every repo, and signing in here doesn't take that access back on GitHub
+            var outdated = _services.GitHub.SignInProblem == GitHubService.Outdated;
             try
             {
                 if (await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) is { } login)
-                    ShowStatus($"Signed in to GitHub as {login}.", true);
+                    ShowStatus(outdated
+                        ? $"Signed in to GitHub as {login}. Now revoke the old access on GitHub: Settings → Applications → Authorized OAuth Apps → iscLauncher → Revoke."
+                        : $"Signed in to GitHub as {login}.", true);
             }
             catch (Exception ex) { ShowStatus($"GitHub sign-in failed: {ex.Message}", false); }
             finally { GitHubButton.IsEnabled = true; }
         }
         await ShowGitHubAccountAsync();
+    }
+
+    private void OnChooseReposClick(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(GitHubService.InstallUrl) { UseShellExecute = true }); }
+        catch { ShowStatus("Could not open browser.", false); }
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

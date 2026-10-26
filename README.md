@@ -51,6 +51,7 @@ To remove a game from the library, right-click its card (or select it and press 
 Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
 
 1. Open the game's **Sync** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
+   - iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach. For a new game, create a private repo on GitHub, then add it under **Choose iscLauncher's Repos**; the dialog links to both and lists the repo once it's added.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
 3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
@@ -98,17 +99,22 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | Password typed too early, or not at all | Raise **Startup Delay** under **Automation** |
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
 | "Git wasn't found" | Download the latest release, which includes Git, or install [Git for Windows](https://git-scm.com/download/win) |
-| Push or pull fails | Check the repo URL, and that you're signed in to GitHub under **Options** |
+| Push or pull fails | Check the repo URL, that you're signed in to GitHub under **Options**, and that the repo is one of those you've given iscLauncher (**Options → Choose which repos it can use**) |
 | "GitHub turned down this PC's sign-in" | Sign in again under **Options**. GitHub drops a sign-in when you revoke it, or when you've signed in on more than ten PCs since |
 
 ## Uninstall
 
 1. Delete the folder you extracted iscLauncher into, `%APPDATA%\IscLauncher`, and the Start menu shortcut if you added one.
 2. In **Credential Manager → Windows Credentials**, remove the entries starting with `iscLauncher_`.
+3. On GitHub, uninstall iscLauncher under **Settings → Applications → Installed GitHub Apps**.
 
 ## Privacy
 
-iscLauncher only talks to GitHub: to check for new versions, to sign you in and create sync repos, to push and pull your sync repos, and to download addon updates. Game passwords never leave your PC. Signing in gives the app access to your repositories, which GitHub only offers as one permission; it only uses the repos you sync with. You can sign out under **Options**, or revoke access any time on GitHub under **Settings → Applications**.
+iscLauncher only talks to GitHub: to check for new versions, to sign you in, to push and pull your sync repos, and to download addon updates. Game passwords never leave your PC.
+
+Signing in lets the app read and write the files of the repos you've given it, and nothing else: GitHub refuses it any other repo, and it can't change a repo's settings or delete one. You choose those repos on GitHub, and can change them any time under **Options → Choose which repos it can use**. To take the access back, sign out under **Options**, or uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
+
+Versions before the switch to these per-repo permissions asked GitHub for access to every repo. If you used one, the app asks you to sign in again; then revoke the old access under **Settings → Applications → Authorized OAuth Apps → iscLauncher**.
 
 ## Building from source
 

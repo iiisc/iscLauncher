@@ -19,8 +19,8 @@ namespace iscLauncher.Controls;
 public sealed partial class GameDetailControl
 {
     /// <summary>
-    /// Links this game to a private GitHub repo, signing in first if needed: one the user picks (e.g. the repo this game
-    /// already syncs with on another PC) or a new one. Saves the game with it.
+    /// Links this game to one of the private repos the user has given iscLauncher on GitHub, signing in first if
+    /// needed, and saves the game with it.
     /// </summary>
     private async void OnSetUpSyncClick(object sender, RoutedEventArgs e)
     {
@@ -28,24 +28,17 @@ public sealed partial class GameDetailControl
         SetUpSyncButton.IsEnabled = false;
         try
         {
-            if (_services.GitHub.Token == null && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) == null)
+            if ((_services.GitHub.Token == null || _services.GitHub.SignInProblem != null)
+                && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) == null)
                 return;
 
-            ShowInfo("Looking up your repos on GitHub...");
-            var repos = await _services.GitHub.ListPrivateReposAsync(CancellationToken.None);
-            StatusBar.IsOpen = false;
-
-            var name = await SetUpSyncDialog.ShowAsync(XamlRoot, repos.Select(r => r.Name).ToList(), NameTextBox.Text);
-            if (name == null)
+            var url = await SetUpSyncDialog.ShowAsync(XamlRoot, NameTextBox.Text, GitHubService.InstallUrl,
+                () => _services.GitHub.ListSyncReposAsync(CancellationToken.None));
+            if (url == null)
                 return;
-
-            var isNew = !repos.Any(r => r.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            ShowInfo(isNew ? "Creating the repo on GitHub..." : "Linking the repo...");
-            SyncRepoUrlTextBox.Text = await _services.GitHub.CreateRepoAsync(name, CancellationToken.None);
+            SyncRepoUrlTextBox.Text = url;
             if (await SaveAsync())
-                ShowStatus(isNew
-                    ? "Sync is set up. Push to upload this PC's addons and settings."
-                    : "Sync is set up. Pull to bring this game's addons and settings onto this PC.", true);
+                ShowStatus("Sync is set up. Push to upload this PC's addons and settings to a new repo, or pull to bring the repo's onto this PC.", true);
         }
         catch (Exception ex) { ShowStatus($"Couldn't set up sync: {ex.Message}", false); }
         finally { SetUpSyncButton.IsEnabled = true; }
@@ -269,7 +262,7 @@ public sealed partial class GameDetailControl
         SyncStatusPanel.Visibility = game.HasSyncRepo ? Visibility.Visible : Visibility.Collapsed;
         var lastSynced = game.LastSynced is DateTime ts ? $"last synced {Ago(DateTime.UtcNow - ts)}" : "not synced from this PC yet";
         var (glyph, brush, text) =
-            _services.GitHub.SignInTurnedDown ? ("\uE7BA", "CrimsonBrush", "GitHub turned down this PC's sign-in, so it can't sync. Sign in again under Options.")
+            _services.GitHub.SignInProblem is { } problem ? ("\uE7BA", "CrimsonBrush", $"{problem}. Sign in again under Options to sync.")
             : game.HasRemoteChanges ? ("", "GoldBrush", $"New from another PC: pull to get it ({lastSynced})")
             : game.RemoteHead != null ? ("", "EmeraldForegroundBrush", $"Up to date with the repo ({lastSynced})")
             : ("", "TextMutedBrush", char.ToUpper(lastSynced[0]) + lastSynced[1..]);
