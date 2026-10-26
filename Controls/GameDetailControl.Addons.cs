@@ -15,7 +15,7 @@ using Microsoft.UI.Xaml.Media;
 
 namespace iscLauncher.Controls;
 
-// The Addons tab
+// The Sync tab, and the Addons tab's list
 public sealed partial class GameDetailControl
 {
     /// <summary>
@@ -135,11 +135,11 @@ public sealed partial class GameDetailControl
     // Listing a game's addons checks its GitHub repos, which means downloading them, so that waits until the tab is opened
     private void OnPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (InstalledTabShown && _installedView == null && _game != null && !_isNew)
+        if (AddonsTabShown && _installedView == null && _game != null && !_isNew)
             ShowInstalledAddons(_game);
     }
 
-    private bool InstalledTabShown => DetailPivot.SelectedItem as PivotItem == InstalledTab;
+    private bool AddonsTabShown => DetailPivot.SelectedItem as PivotItem == AddonsTab;
 
     private void ShowInstalledAddons(GameEntry game)
     {
@@ -153,16 +153,16 @@ public sealed partial class GameDetailControl
             return message;
         });
         _installedView = view;
-        InstalledHost.Child = view;
+        AddonsHost.Child = view;
         _ = view.CheckAllAsync();
     }
 
-    /// <summary>Drops the Installed tab's list, so it's built afresh the next time the tab is opened.</summary>
+    /// <summary>Drops the Addons tab's list, so it's built afresh the next time the tab is opened.</summary>
     private void CloseInstalledAddons()
     {
         _installedView?.Close();
         _installedView = null;
-        InstalledHost.Child = null;
+        AddonsHost.Child = null;
         AddonUpdateService.DiscardDownloads();
     }
 
@@ -207,8 +207,8 @@ public sealed partial class GameDetailControl
             if (message != null) ShowStatus(message, true);
             else StatusBar.IsOpen = false;
             if (_game != null) UpdateSyncStatus(_game);
-            // A pull, rollback or restore can change the addons; an update from the Installed tab already shows itself
-            if (!InstalledTabShown) CloseInstalledAddons();
+            // A pull, rollback or restore can change the addons; an update from the Addons tab already shows itself
+            if (!AddonsTabShown) CloseInstalledAddons();
         }
         catch (OperationCanceledException) { ShowStatus("Cancelled.", false); }
         catch (AppException ex)

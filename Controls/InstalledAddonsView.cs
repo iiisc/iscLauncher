@@ -16,7 +16,7 @@ using static iscLauncher.Helpers.DialogHelper;
 namespace iscLauncher.Controls;
 
 /// <summary>
-/// The Installed tab: every addon in a game, one row per GitHub repo it's connected to and the rest by name. Checks the
+/// The Addons tab: every addon in a game, one row per GitHub repo it's connected to and the rest by name. Checks the
 /// repos for updates, lets the user connect addons to their repos, and asks its host to install the updates picked.
 /// </summary>
 public sealed class InstalledAddonsView : UserControl

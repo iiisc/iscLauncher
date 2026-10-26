@@ -129,7 +129,7 @@ public sealed partial class GameDetailControl
         if (!game.HasSyncRepo)
             return;
 
-        var reminder = $"{game.Name} closed. Push from the Addons tab to share your changes with your other PCs.";
+        var reminder = $"{game.Name} closed. Push from the Sync tab to share your changes with your other PCs.";
         if (_syncBusy) { ShowInfo(reminder); return; }
 
         ContentDialogResult answer;

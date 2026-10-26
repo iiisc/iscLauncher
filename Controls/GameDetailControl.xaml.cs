@@ -70,11 +70,11 @@ public sealed partial class GameDetailControl : UserControl
 
         // Syncing is what a synced game is opened for; reloading the same game (e.g. after saving) keeps the tab
         if (otherGame || DetailPivot.SelectedItem == null)
-            DetailPivot.SelectedItem = game.HasSyncRepo ? AddonsTab : GeneralTab;
+            DetailPivot.SelectedItem = game.HasSyncRepo ? SyncTab : GeneralTab;
         UpdateLaunchButtonState(game);
         UpdateSaveButtons();
-        // A save of the game on the Installed tab lists it afresh, in case its executable moved
-        if (InstalledTabShown)
+        // A save of the game on the Addons tab lists it afresh, in case its executable moved
+        if (AddonsTabShown)
             ShowInstalledAddons(game);
 
         if (statusMessage != null)

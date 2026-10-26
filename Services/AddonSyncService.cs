@@ -299,7 +299,7 @@ public class AddonSyncService
         catch (Exception ex) when (ex is not AppException)
         {
             throw new AppException($"Stopped partway through changing {game.Name}'s files: {ex.Message} " +
-                "Restore a Backup on the Addons tab puts back what was there before.", ex);
+                "Restore a Backup on the Sync tab puts back what was there before.", ex);
         }
         AddonFiles.PruneBackups(BackupDir(game));
     }

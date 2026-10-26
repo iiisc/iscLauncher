@@ -102,11 +102,11 @@
                 </ScrollViewer>
             </PivotItem>
 
-            <PivotItem x:Name="AddonsTab" AutomationProperties.Name="Addons">
+            <PivotItem x:Name="SyncTab" AutomationProperties.Name="Sync">
                 <PivotItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE895;" FontSize="12"/>
-                        <TextBlock Text="Addons" FontSize="12"/>
+                        <TextBlock Text="Sync" FontSize="12"/>
                     </StackPanel>
                 </PivotItem.Header>
                 <ScrollViewer Padding="32,14,32,14">
@@ -208,14 +208,14 @@
                 </ScrollViewer>
             </PivotItem>
 
-            <PivotItem x:Name="InstalledTab" AutomationProperties.Name="Installed">
+            <PivotItem x:Name="AddonsTab" AutomationProperties.Name="Addons">
                 <PivotItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE8FD;" FontSize="12"/>
-                        <TextBlock Text="Installed" FontSize="12"/>
+                        <TextBlock Text="Addons" FontSize="12"/>
                     </StackPanel>
                 </PivotItem.Header>
-                <Border x:Name="InstalledHost" Padding="32,14,32,14"/>
+                <Border x:Name="AddonsHost" Padding="32,14,32,14"/>
             </PivotItem>
         </Pivot>
 

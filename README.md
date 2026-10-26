@@ -50,7 +50,7 @@ To remove a game from the library, right-click its card (or select it and press 
 
 Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
 
-1. Open the game's **Addons** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
+1. Open the game's **Sync** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
 3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.
@@ -69,7 +69,7 @@ WoW saves addon settings when you log out, which would undo changes made while i
 
 ## Updating addons
 
-The **Installed** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
+The **Addons** tab lists every addon in the game and whether it's connected to its project on GitHub. When you open it, it downloads the newest version of each connected addon and compares it with what you have, so you can see which have updates. Then choose **Update All**, or tick the ones you want and choose **Update Selected**; what they replace is backed up first. For a synced game, push afterwards and your other PCs get the update when they pull.
 
 Addons that name their GitHub project in their `.toc` file are connected by themselves. For others, find the project on GitHub (searching for the addon's name and your game version usually turns it up), click **Connect** on the addon and paste the link. A project can hold several addons; the ones you have are connected together, and the ones you don't are left out.
 
@@ -82,7 +82,7 @@ Everything the app stores lives in `%APPDATA%\IscLauncher`, apart from passwords
 | What | Where |
 |------|-------|
 | Your game library | `games.json` |
-| Backups made before every pull, copy, rollback or update | `Backups` (the last 3 per game; put one back with **Addons → Restore a Backup**) |
+| Backups made before every pull, copy, rollback or update | `Backups` (the last 3 per game; put one back with **Sync → Restore a Backup**) |
 | Local copies of your sync repos | `SyncCache` |
 | A log of syncs, launches and errors, for when something goes wrong | `log.txt` (**Options → Open Log**) |
 | Game passwords and your GitHub sign-in | Windows Credential Manager, entries named `iscLauncher_...` |
