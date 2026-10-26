@@ -18,7 +18,6 @@ public sealed partial class MainWindow : Window
 {
     private readonly AppServices _services;
     private UpdateCheckResult? _startupUpdate;
-    // The game to go back to when Options closes
     private GameEntry? _gameBeforeOptions;
 
     public MainWindow()

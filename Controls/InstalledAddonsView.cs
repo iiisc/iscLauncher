@@ -44,7 +44,7 @@ public sealed class InstalledAddonsView : UserControl
     private Task _installing = Task.CompletedTask;
 
     /// <summary>Installs the updates the user picked, then <see cref="RescanAsync"/>; set by the host.</summary>
-    public Func<List<AddonUpdate>, Task>? InstallAsync { get; init; }
+    public required Func<List<AddonUpdate>, Task> InstallAsync { get; init; }
 
     /// <summary>The game's sources changed: connected, removed, or found to hold other addons. The host saves them.</summary>
     public event EventHandler? SourcesChanged;
@@ -95,12 +95,7 @@ public sealed class InstalledAddonsView : UserControl
         _installing.ContinueWith(_ => AddonUpdateService.Discard(_downloadDir), TaskScheduler.Default);
     }
 
-    private async void Install(List<AddonUpdate> picked)
-    {
-        if (InstallAsync == null) return;
-        _installing = InstallAsync(picked);
-        await _installing;
-    }
+    private async void Install(List<AddonUpdate> picked) => await (_installing = InstallAsync(picked));
 
     /// <summary>Lists the game's addons again and compares them with the downloads, after something changed them.</summary>
     public async Task RescanAsync()

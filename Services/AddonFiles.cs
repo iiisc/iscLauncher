@@ -196,9 +196,11 @@ public static partial class AddonFiles
             {
                 // Only the header names a home; lines below it list the addon's files
                 if (line.StartsWith("##"))
+                {
                     repo ??= GitHubRepo(line);
-                if (DependencyField.Match(line) is { Success: true } dependency)
-                    dependencies.AddRange(dependency.Groups[2].Value.Split(',').Select(d => d.Trim()).Where(d => d.Length > 0));
+                    if (DependencyField.Match(line) is { Success: true } dependency)
+                        dependencies.AddRange(dependency.Groups[2].Value.Split(',').Select(d => d.Trim()).Where(d => d.Length > 0));
+                }
                 var match = TocField.Match(line);
                 if (!match.Success)
                     continue;
