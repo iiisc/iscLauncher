@@ -10,8 +10,9 @@ using static iscLauncher.Helpers.DialogHelper;
 namespace iscLauncher.Dialogs;
 
 /// <summary>
-/// Picks the repo a game syncs with from the ones the user has given iscLauncher on GitHub. The app can't create repos
-/// (that permission would also let it change their settings), so a new one is made on GitHub, which this links to.
+/// Picks the repo a game syncs with from the ones the user has given iscLauncher on GitHub, or walks them through
+/// making one. The app can't create repos (that permission would also let it change their settings), so making the
+/// repo and giving it to iscLauncher happen on GitHub, one step at a time; signing in is step 1, before this dialog.
 /// </summary>
 public static class SetUpSyncDialog
 {
@@ -21,6 +22,9 @@ public static class SetUpSyncDialog
         Func<Task<List<(string Name, string CloneUrl)>?>> listAsync)
     {
         List<(string Name, string CloneUrl)> repos = [];
+        var installed = false;
+
+        var pickText = BodyText("Pick the repo this game syncs with, such as the one it uses on another PC.");
         var repoBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Header = "Repo" };
         var refresh = new Button { Content = "Refresh", Style = Res<Style>("SecondaryButtonStyle"), VerticalAlignment = VerticalAlignment.Bottom };
         var note = WarningText("");
@@ -30,27 +34,47 @@ public static class SetUpSyncDialog
         Grid.SetColumn(refresh, 1);
         picker.Children.Add(repoBox);
         picker.Children.Add(refresh);
+        var newRepo = new HyperlinkButton { Content = "Set Up a New Repo Instead", Padding = new Thickness(0), Foreground = Res<Microsoft.UI.Xaml.Media.Brush>("GoldBrush") };
+        var pick = Panel(pickText, picker, note, newRepo);
 
         var description = Uri.EscapeDataString("WoW addons and settings, synced by iscLauncher");
-        var links = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-        links.Children.Add(Link("Create a Repo on GitHub",
-            $"https://github.com/new?name={SuggestedRepoName(gameName)}&visibility=private&description={description}"));
-        links.Children.Add(Link("Choose iscLauncher's Repos", installUrl));
+        var make = Panel(
+            SectionLabel("STEP 2 OF 3 · MAKE A REPO"),
+            BodyText("A repo is a private folder on GitHub that only you can see. iscLauncher keeps this game's addons " +
+                "and settings in it, so your other PCs can pull them."),
+            Link("Create the Repo on GitHub",
+                $"https://github.com/new?name={SuggestedRepoName(gameName)}&visibility=private&description={description}"),
+            Dim("GitHub fills everything in. Click Create repository there, then come back and click Next."));
 
-        var panel = new StackPanel { Spacing = 10 };
-        panel.Children.Add(BodyText("Pick the repo this game syncs with, such as the one it uses on another PC. " +
-            "iscLauncher can only see the private repos you've given it on GitHub."));
-        panel.Children.Add(picker);
-        panel.Children.Add(note);
-        panel.Children.Add(SectionLabel("A NEW REPO"));
-        panel.Children.Add(BodyText("1. Create a private repo on GitHub.\n2. Add it to the repos iscLauncher can use.\n3. Pick it here once it shows up."));
-        panel.Children.Add(links);
+        var giveSteps = BodyText("");
+        var give = Panel(
+            SectionLabel("STEP 3 OF 3 · GIVE IT TO ISCLAUNCHER"),
+            BodyText("iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach."),
+            giveSteps,
+            Link("Open iscLauncher on GitHub", installUrl),
+            Dim("Waiting for the repo to show up here..."));
 
         var dialog = CreateThemedDialog(xamlRoot, "Set Up Sync");
-        dialog.Content = panel;
-        dialog.PrimaryButtonText = "Use This Repo";
-        dialog.IsPrimaryButtonEnabled = false;
-        SetWidth(dialog, 520, 640);
+        // One width for every step, so the dialog doesn't jump around as the text changes
+        SetWidth(dialog, 560, 560);
+
+        // Repos that were there before the walk-through, so the one it made can be told apart
+        HashSet<string> known = [];
+        var view = pick;
+        void Show(StackPanel next)
+        {
+            view = next;
+            if (view == make)
+                known = repos.Select(r => r.Name).ToHashSet();
+            if (view == give)
+                giveSteps.Text = installed
+                    ? "On GitHub, click Configure next to your account, add the new repo under Repository access, and click Save."
+                    : "On GitHub, choose your account if it asks where to install, pick Only select repositories, select the new repo, and click Install.";
+            dialog.Content = view;
+            dialog.PrimaryButtonText = view == pick ? "Use This Repo" : view == make ? "Next" : "";
+            dialog.IsPrimaryButtonEnabled = view != pick || repoBox.SelectedIndex >= 0;
+            dialog.SecondaryButtonText = view == give || (view == make && repos.Count > 0) ? "Back" : "";
+        }
 
         var loading = false;
         async Task LoadAsync(bool quietly)
@@ -61,45 +85,77 @@ public static class SetUpSyncDialog
             if (!quietly)
                 note.Text = "Looking up your repos on GitHub...";
             var picked = repoBox.SelectedItem as string;
+            var failed = false;
             try
             {
                 var found = await listAsync();
+                installed = found != null;
                 repos = found ?? [];
-                note.Text = found == null ? "iscLauncher isn't installed on your GitHub account yet. Choose iscLauncher's repos below; this list updates by itself."
-                    : repos.Count == 0 ? "iscLauncher hasn't been given any private repos yet."
-                    : "";
+                note.Text = "";
             }
             catch (Exception ex)
             {
                 note.Text = $"Couldn't look up your repos: {ex.Message}";
+                failed = true;
             }
             var names = repos.Select(r => r.Name).ToList();
             if (!names.SequenceEqual(repoBox.ItemsSource as List<string> ?? []))
             {
+                // A new repo from the walk-through is picked; otherwise a refresh keeps the user's pick
+                var made = view != pick ? names.FirstOrDefault(n => !known.Contains(n)) : null;
+                picked = made ?? picked;
                 repoBox.ItemsSource = names;
-                // A refresh keeps the user's pick
                 repoBox.SelectedIndex = picked != null && names.Contains(picked) ? names.IndexOf(picked) : names.Count > 0 ? 0 : -1;
+                if (made != null)
+                {
+                    pickText.Text = $"{made} is ready. Click Use This Repo.";
+                    Show(pick);
+                }
             }
+            if (!quietly && !failed && repos.Count == 0 && view == pick)
+                Show(make);
             refresh.IsEnabled = true;
             loading = false;
         }
 
-        // Repos are created and given to the app on github.com, so the list follows along while the user does that
-        var poll = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        poll.Tick += async (_, _) => await LoadAsync(quietly: true);
         repoBox.SelectionChanged += (_, _) => dialog.IsPrimaryButtonEnabled = repoBox.SelectedIndex >= 0;
         refresh.Click += async (_, _) => await LoadAsync(quietly: false);
+        newRepo.Click += (_, _) => Show(make);
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            if (view != make) return;
+            args.Cancel = true;
+            Show(give);
+        };
+        dialog.SecondaryButtonClick += (_, args) =>
+        {
+            args.Cancel = true;
+            Show(view == give ? make : pick);
+        };
+
+        // Repos are made and given to the app on github.com, so the list follows along while the user does that
+        var poll = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        poll.Tick += async (_, _) => await LoadAsync(quietly: true);
         dialog.Opened += async (_, _) =>
         {
             poll.Start();
             await LoadAsync(quietly: false);
         };
 
+        Show(pick);
         var result = await dialog.ShowAsync();
         poll.Stop();
         if (result != ContentDialogResult.Primary || repoBox.SelectedIndex < 0)
             return null;
         return repos[repoBox.SelectedIndex].CloneUrl;
+    }
+
+    private static StackPanel Panel(params UIElement[] children)
+    {
+        var panel = new StackPanel { Spacing = 10 };
+        foreach (var child in children)
+            panel.Children.Add(child);
+        return panel;
     }
 
     private static HyperlinkButton Link(string text, string url) =>

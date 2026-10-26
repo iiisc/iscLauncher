@@ -51,7 +51,8 @@ To remove a game from the library, right-click its card (or select it and press 
 Syncing goes through a private repo on your GitHub account, one per game. Git comes with the app, so there's nothing else to install.
 
 1. Open the game's **Sync** tab and click **Set Up Sync**. The first time, you sign in with GitHub: the app shows a short code to enter on github.com, so your GitHub password never goes through the app.
-   - iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach. For a new game, create a private repo on GitHub, then add it under **Choose iscLauncher's Repos**; the dialog links to both and lists the repo once it's added.
+   - New to GitHub? Create a free account from GitHub's sign-in page when the app sends you there. If that takes a while, the app swaps in a new code once the old one runs out.
+   - iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach. If you haven't given it one yet, or you click **Set Up a New Repo Instead**, the dialog walks you through making a private repo on GitHub and giving it to iscLauncher, then picks it once it shows up.
 2. **Push** uploads this PC's addons (`Interface\AddOns`) and settings (`WTF\Account`).
 3. On another PC, add the same game, click **Set Up Sync**, pick the repo from the list, and **Pull**.
 4. **Rollback** restores an earlier push for every PC. It adds a new commit, so nothing in the history is lost.

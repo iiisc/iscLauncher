@@ -85,8 +85,11 @@ public class GitHubService
             DateTime.UtcNow.AddSeconds(json.GetProperty("expires_in").GetInt32()));
     }
 
-    /// <summary>Waits for the user to approve the code on github.com, then stores the token. Returns the GitHub username.</summary>
-    public async Task<string> CompleteSignInAsync(DeviceSignIn signIn, CancellationToken ct)
+    /// <summary>
+    /// Waits for the user to approve the code on github.com, then stores the token. Returns the GitHub username, or
+    /// null if the code expired first.
+    /// </summary>
+    public async Task<string?> CompleteSignInAsync(DeviceSignIn signIn, CancellationToken ct)
     {
         var interval = signIn.IntervalSeconds;
         while (DateTime.UtcNow < signIn.ExpiresAt)
@@ -116,11 +119,13 @@ public class GitHubService
                     break;
                 case "access_denied":
                     throw new AppException("Sign-in was cancelled on GitHub.");
+                case "expired_token":
+                    return null;
                 default:
-                    throw new AppException("The sign-in code expired. Try again.");
+                    throw new AppException($"GitHub refused the sign-in ({json.GetProperty("error").GetString()}).");
             }
         }
-        throw new AppException("The sign-in code expired. Try again.");
+        return null;
     }
 
     /// <summary>The signed-in GitHub username, or null if not signed in or the sign-in no longer works.</summary>

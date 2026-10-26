@@ -29,7 +29,7 @@ public sealed partial class GameDetailControl
         try
         {
             if ((_services.GitHub.Token == null || _services.GitHub.SignInProblem != null)
-                && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) == null)
+                && await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub, "STEP 1 OF 3 · SIGN IN") == null)
                 return;
 
             var url = await SetUpSyncDialog.ShowAsync(XamlRoot, NameTextBox.Text, GitHubService.InstallUrl,
