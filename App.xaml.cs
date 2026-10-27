@@ -56,22 +56,30 @@ public partial class App : Application
             return;
         }
 
-        _ = Task.Run(DeleteUnpackedCopies);
+        _ = Task.Run(DeleteUpdateLeftovers);
         _window = new MainWindow();
         main.Activated += (_, _) => _window.DispatcherQueue.TryEnqueue(BringToFront);
         _window.Activate();
     }
 
-    // Up to v1.1.11 the app was one exe, which unpacked about 265 MB here for every new version and never cleaned up
-    private static void DeleteUnpackedCopies()
+    // The files the last update replaced, which were in use until now. And up to v1.1.11 the app was one exe, which
+    // unpacked about 265 MB into %TEMP% for every new version and never cleaned up.
+    private static void DeleteUpdateLeftovers()
     {
-        var dir = Path.Combine(Path.GetTempPath(), ".net", "iscLauncher");
-        try
+        foreach (var dir in new[]
+                 {
+                     Path.Combine(AppContext.BaseDirectory, Services.AppUpdateService.OldVersionDir),
+                     Path.Combine(Path.GetTempPath(), ".net", "iscLauncher")
+                 })
         {
-            if (Directory.Exists(dir))
-                Directory.Delete(dir, true);
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            // The old version may still be closing; the next start tries again
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private void BringToFront()

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using iscLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.Windows.AppLifecycle;
 
 namespace iscLauncher.Controls;
 
@@ -139,7 +141,10 @@ public sealed partial class OptionsPanelControl : UserControl
                     UpdateProgressBar.Value = p;
                     StatusText.Text = $"Downloading update... {(int)(p * 100)}%";
                 });
-                await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
+                var exe = await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
+                // Still registered as the running copy, this one would be handed the new version's start and it would close
+                AppInstance.GetCurrent().UnregisterKey();
+                Process.Start(exe);
                 Application.Current.Exit();
             }
             catch (Exception ex)

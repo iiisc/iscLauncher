@@ -1,10 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -76,32 +76,94 @@ public class AppUpdateService
         return new UpdateCheckResult(IsNewer(latestVersion, currentVersion), latestVersion, downloadUrl, assetName, sha256, notes);
     }
 
-    // Downloads the release asset and writes the swap script, then launches it.
-    // The caller is responsible for calling Application.Current.Exit() on the UI thread.
-    public async Task DownloadAndApplyAsync(UpdateCheckResult update, IProgress<double>? progress = null, CancellationToken ct = default)
+    /// <summary>Where the files an update replaced are moved, since they're in use until the app restarts.</summary>
+    internal const string OldVersionDir = "iscLauncher-old";
+
+    /// <summary>
+    /// Downloads and checks the release, then puts it in place of the running app. Returns the exe to start before this
+    /// one exits. If it fails, the app is left as it was.
+    /// </summary>
+    public async Task<string> DownloadAndApplyAsync(UpdateCheckResult update, IProgress<double>? progress = null, CancellationToken ct = default)
     {
         // The update replaces the app itself, so a download that can't be verified isn't installed
         if (update.Sha256 == null)
             throw new InvalidOperationException("this release has no checksum to verify it against. Download it from GitHub instead.");
 
         var tempDir = Path.Combine(Path.GetTempPath(), "iscLauncherUpdate");
-        Directory.CreateDirectory(tempDir);
-        var zipPath = Path.Combine(tempDir, update.AssetName!);
-
-        await DownloadAsync(update.DownloadUrl!, zipPath, progress, ct).ConfigureAwait(false);
-        await VerifyAsync(zipPath, update.Sha256, ct).ConfigureAwait(false);
-
-        var currentExe = Environment.ProcessPath
-            ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
-        var scriptPath = await PrepareSwapAsync(zipPath, tempDir, currentExe, Environment.ProcessId, ct).ConfigureAwait(false);
-
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        try
         {
-            FileName = "powershell.exe",
-            Arguments = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
-            UseShellExecute = true,
-            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-        });
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, true);
+            Directory.CreateDirectory(tempDir);
+            var zipPath = Path.Combine(tempDir, update.AssetName!);
+            await DownloadAsync(update.DownloadUrl!, zipPath, progress, ct).ConfigureAwait(false);
+            await VerifyAsync(zipPath, update.Sha256, ct).ConfigureAwait(false);
+
+            var releaseDir = Path.Combine(tempDir, "release");
+            await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, releaseDir), ct).ConfigureAwait(false);
+            var currentExe = Environment.ProcessPath ?? throw new InvalidOperationException("the app couldn't find its own exe.");
+            // Not cancellable: it's quick, and stopping halfway would need the same undoing as a failure
+            await Task.Run(() => SwapIn(releaseDir, currentExe), CancellationToken.None).ConfigureAwait(false);
+            return currentExe;
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    /// <summary>
+    /// Moves the release's files into the app's folder. Windows won't let a running program's files be overwritten, but it
+    /// does let them be moved, so each one being replaced goes into <see cref="OldVersionDir"/> first, for the next start to
+    /// delete. If anything fails, every file is put back.
+    /// </summary>
+    internal static void SwapIn(string releaseDir, string currentExe)
+    {
+        if (!File.Exists(Path.Combine(releaseDir, "iscLauncher.exe")))
+            throw new FileNotFoundException("The update package has no iscLauncher.exe.");
+        var appDir = Path.GetDirectoryName(currentExe)!;
+        var oldDir = Path.Combine(appDir, OldVersionDir);
+        // Left by an earlier update; that version isn't running, so its files can go
+        if (Directory.Exists(oldDir))
+            Directory.Delete(oldDir, true);
+
+        var replaced = new List<(string File, string MovedTo)>();
+        var added = new List<string>();
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(releaseDir, "*", SearchOption.AllDirectories))
+            {
+                var name = Path.GetRelativePath(releaseDir, file);
+                // A copy of the app the user renamed keeps its name
+                var target = name == "iscLauncher.exe" ? currentExe : Path.Combine(appDir, name);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                if (File.Exists(target))
+                {
+                    var movedTo = Path.Combine(oldDir, Path.GetRelativePath(appDir, target));
+                    Directory.CreateDirectory(Path.GetDirectoryName(movedTo)!);
+                    File.Move(target, movedTo);
+                    replaced.Add((target, movedTo));
+                }
+                else
+                    added.Add(target);
+                File.Move(file, target);
+            }
+        }
+        catch
+        {
+            foreach (var file in added)
+                try { File.Delete(file); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            foreach (var (file, movedTo) in replaced)
+            {
+                try
+                {
+                    File.Delete(file);
+                    File.Move(movedTo, file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+            throw;
+        }
     }
 
     internal static async Task DownloadAsync(string url, string destPath, IProgress<double>? progress, CancellationToken ct)
@@ -140,53 +202,6 @@ public class AppUpdateService
         if (!actual.Equals(sha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("the download doesn't match GitHub's checksum, so nothing was installed. Try again.");
     }
-
-    /// <summary>
-    /// Unpacks the release next to it and writes the script that, once process <paramref name="processId"/> has exited,
-    /// copies it over the app folder and restarts <paramref name="currentExe"/>. Returns the script's path.
-    /// </summary>
-    internal static async Task<string> PrepareSwapAsync(string zipPath, string tempDir, string currentExe, int processId, CancellationToken ct)
-    {
-        var extractDir = Path.Combine(tempDir, "extracted");
-        if (Directory.Exists(extractDir))
-            Directory.Delete(extractDir, true);
-        await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extractDir), ct).ConfigureAwait(false);
-        // By name: the release has other exes beside the app
-        var newExePath = Path.Combine(extractDir, "iscLauncher.exe");
-        if (!File.Exists(newExePath))
-            throw new FileNotFoundException("The update package has no iscLauncher.exe.");
-        var appDir = Path.GetDirectoryName(currentExe)!;
-
-        // The script runs after this process exits, so it must report its own failure: otherwise the user is left
-        // on the old version (or with no app running) and never finds out why
-        var scriptPath = Path.Combine(tempDir, "update.ps1");
-        var script = $$"""
-            Wait-Process -Id {{processId}} -Timeout 30 -ErrorAction SilentlyContinue
-            $copied = $false
-            for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
-                try {
-                    # Everything else in the release (the bundled Git) goes next to the app; robocopy merges folders
-                    robocopy {{PsQuote(extractDir)}} {{PsQuote(appDir)}} /E /XF {{PsQuote(Path.GetFileName(newExePath))}} /NJH /NJS /NFL /NDL /NP | Out-Null
-                    if ($LASTEXITCODE -ge 8) { throw "robocopy failed" }
-                    Copy-Item -LiteralPath {{PsQuote(newExePath)}} -Destination {{PsQuote(currentExe)}} -Force -ErrorAction Stop
-                    $copied = $true
-                }
-                catch { Start-Sleep -Milliseconds 500 }
-            }
-            if (-not $copied) {
-                Add-Type -AssemblyName PresentationFramework
-                [System.Windows.MessageBox]::Show("The update couldn't be installed, so the current version will start instead. Try again from Options, or download the new version from GitHub.", 'iscLauncher update') | Out-Null
-            }
-            Start-Process -FilePath {{PsQuote(currentExe)}}
-            if ($copied) { Remove-Item -LiteralPath {{PsQuote(tempDir)}} -Recurse -Force -ErrorAction SilentlyContinue }
-            """;
-        // Windows PowerShell reads BOM-less files as ANSI, which would mangle non-ASCII characters in the paths
-        await File.WriteAllTextAsync(scriptPath, script, Encoding.UTF8, ct).ConfigureAwait(false);
-        return scriptPath;
-    }
-
-    // Single-quoted PowerShell strings are literal; a doubled quote escapes an apostrophe (e.g. C:\Users\O'Brien)
-    private static string PsQuote(string value) => $"'{value.Replace("'", "''")}'";
 
     private static bool IsNewer(string latest, string current)
     {
