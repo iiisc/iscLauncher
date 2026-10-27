@@ -139,19 +139,11 @@ public sealed class AddonFilesTests : IDisposable
     }
 
     [Fact]
-    public void RestoreReadsTheOldLayoutAndNeverWritesOutsideTheGame()
+    public void RestoreNeverWritesOutsideTheGame()
     {
         var game = Path.Combine(_root, "game");
         Directory.CreateDirectory(game);
-        var zipPath = Path.Combine(_root, "old.zip");
-        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
-        {
-            using (var w = new StreamWriter(zip.CreateEntry("Account/ACC/SavedVariables/Foo.lua").Open())) w.Write("old format");
-            using (var w = new StreamWriter(zip.CreateEntry("AddOns/../../escaped.txt").Open())) w.Write("bad");
-        }
-        AddonFiles.RestoreBackup(zipPath, game, default);
-
-        Assert.Equal("old format", File.ReadAllText(Path.Combine(game, @"WTF\Account\ACC\SavedVariables\Foo.lua")));
+        AddonFiles.RestoreBackup(Zip("bad.zip", ("AddOns/../../escaped.txt", "bad")), game, default);
         Assert.False(File.Exists(Path.Combine(_root, "escaped.txt")));
     }
 

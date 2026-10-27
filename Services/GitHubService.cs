@@ -32,7 +32,6 @@ public class GitHubService
     private const string TokenTarget = "iscLauncher_github";
 
     public const string TurnedDown = "GitHub turned down this PC's sign-in";
-    public const string Outdated = "iscLauncher now asks GitHub only for the repos you choose";
 
     /// <summary>Where the user installs iscLauncher on their account, or changes which repos it can use.</summary>
     public static string InstallUrl => $"https://github.com/apps/{AppSlug}/installations/new";
@@ -41,16 +40,7 @@ public class GitHubService
 
     private readonly CredentialService _credentials;
 
-    public GitHubService(CredentialService credentials)
-    {
-        _credentials = credentials;
-        // Sign-ins from before the GitHub App could reach every repo on the account, so they're dropped
-        if (Token?.StartsWith("gho_", StringComparison.Ordinal) == true)
-        {
-            _credentials.DeleteCredential(TokenTarget);
-            SignInProblem = Outdated;
-        }
-    }
+    public GitHubService(CredentialService credentials) => _credentials = credentials;
 
     public string? Token => _credentials.GetCredential(TokenTarget);
 
@@ -59,7 +49,7 @@ public class GitHubService
 
     /// <summary>
     /// Why the user needs to sign in again, or null: <see cref="TurnedDown"/> when GitHub refused the saved sign-in
-    /// (revoked, or pushed out by newer ones, since GitHub keeps only the latest ten per app), or <see cref="Outdated"/>.
+    /// (revoked, or pushed out by newer ones, since GitHub keeps only the latest ten per app).
     /// Sync can't work until they do.
     /// </summary>
     public string? SignInProblem

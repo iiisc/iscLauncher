@@ -34,10 +34,8 @@ public class GitService
     public const string MinGitName = "MinGit 2.56";
     public const int MinGitDownloadMB = 38;
 
-    // An installed Git goes first: its credential manager can still sign in to repos the app's GitHub login doesn't
-    // cover. Releases up to v1.1.11 shipped Git next to the app, and updating leaves it there.
-    private static readonly string[] Candidates =
-        ["git", Path.Combine(DownloadedGitDir, "cmd", "git.exe"), Path.Combine(AppContext.BaseDirectory, "git", "cmd", "git.exe")];
+    // An installed Git goes first: its credential manager can still sign in to repos the app's GitHub login doesn't cover
+    private static readonly string[] Candidates = ["git", Path.Combine(DownloadedGitDir, "cmd", "git.exe")];
 
     private readonly Func<string?> _gitHubToken;
 
@@ -218,13 +216,7 @@ public class GitService
             return false;
 
         var url = await RunGitAsync(["-C", repoDir, "remote", "get-url", "origin"], ct);
-        var autocrlf = await RunGitAsync(["-C", repoDir, "config", "--get", "core.autocrlf"], ct);
-        var filter = await RunGitAsync(["-C", repoDir, "config", "--get", "remote.origin.partialclonefilter"], ct);
-        // Caches made by older versions converted line endings and downloaded the whole history, so they're rebuilt once
-        return url.Success
-            && string.Equals(url.Output.Trim().TrimEnd('/'), repoUrl.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
-            && autocrlf.Output.Trim() == "false"
-            && filter.Output.Trim() == "blob:none";
+        return url.Success && string.Equals(url.Output.Trim().TrimEnd('/'), repoUrl.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<GitResult> RunStepsAsync(string repoDir, CancellationToken ct, params string[][] steps)

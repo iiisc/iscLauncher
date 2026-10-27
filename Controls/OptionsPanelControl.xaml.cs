@@ -71,14 +71,10 @@ public sealed partial class OptionsPanelControl : UserControl
         else
         {
             GitHubButton.IsEnabled = false;
-            // The sign-in it replaces could reach every repo, and signing in here doesn't take that access back on GitHub
-            var outdated = _services.GitHub.SignInProblem == GitHubService.Outdated;
             try
             {
                 if (await GitHubSignInDialog.ShowAsync(XamlRoot, _services.GitHub) is { } login)
-                    ShowStatus(outdated
-                        ? $"Signed in to GitHub as {login}. Now revoke the old access on GitHub: Settings → Applications → Authorized OAuth Apps → iscLauncher → Revoke."
-                        : $"Signed in to GitHub as {login}.", true);
+                    ShowStatus($"Signed in to GitHub as {login}.", true);
             }
             catch (Exception ex) { ShowStatus($"GitHub sign-in failed: {ex.Message}", false); }
             finally { GitHubButton.IsEnabled = true; }

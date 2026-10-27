@@ -140,10 +140,7 @@ public static partial class AddonFiles
         entry.ExtractToFile(target, overwrite: true);
     }
 
-    private static string? BackupSettingsPath(string entry) =>
-        entry.StartsWith(ZipSettings + "/") ? entry
-        : entry.StartsWith("Account/") ? Path.Combine("WTF", entry)
-        : null;
+    private static string? BackupSettingsPath(string entry) => entry.StartsWith(ZipSettings + "/") ? entry : null;
 
     private static void AddToZip(ZipArchive zip, string dir, string prefix, CancellationToken ct)
     {
