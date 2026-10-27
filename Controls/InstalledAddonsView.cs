@@ -20,7 +20,7 @@ namespace iscLauncher.Controls;
 /// The Addons tab: every addon in a game, one row per GitHub repo it's connected to and the rest by name. Checks the
 /// repos for updates, lets the user connect addons to their repos, and asks its host to install the updates picked.
 /// </summary>
-public sealed class InstalledAddonsView : UserControl
+public sealed partial class InstalledAddonsView : UserControl
 {
     private static readonly StringComparer IgnoreCase = StringComparer.OrdinalIgnoreCase;
 

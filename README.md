@@ -78,6 +78,8 @@ Requires the .NET 10 SDK.
 dotnet build
 ```
 
+`dotnet publish -c Release` builds the release itself, compiled to native code, which also needs Visual Studio's **Desktop development with C++** workload. If it fails with "'vswhere.exe' is not recognized", add `C:\Program Files (x86)\Microsoft Visual Studio\Installer` to your PATH.
+
 To release, run the **Release** workflow from the Actions tab. It runs the tests, then makes a draft release of the next patch version, or the version you type in, such as `1.2.0`. Rewrite its notes for users (the app shows them before updating) and publish it.
 
 ## License

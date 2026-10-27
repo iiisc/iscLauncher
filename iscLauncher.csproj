@@ -12,9 +12,8 @@
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishReadyToRun>true</PublishReadyToRun>
-    <!-- Leaves out the parts of .NET and the Windows projections the app never calls: 150 fewer files, half the size -->
-    <PublishTrimmed>true</PublishTrimmed>
+    <!-- Compiled to native code holding only the parts of .NET the app calls, so no .NET runtime files ship with it -->
+    <PublishAot>true</PublishAot>
     <!-- The COM and P/Invoke source generators the Start menu shortcut uses write unsafe code -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
@@ -42,13 +41,10 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- Shipped with .NET and the Windows App SDK but never loaded by this app: .NET's debugger, crash-dump and symbol
-         support, its alternative garbage collectors and HTTP/3, and Windows App SDK features it doesn't use
-         (notifications, background tasks, camera, deployment, the new pickers, OAuth, power info, restarting, the
-         bootstrapper that only framework-dependent apps need, and WebView2). The dump reader also comes under a
-         versioned name, matched below. -->
+    <!-- Windows App SDK features the app never uses, which it ships anyway: notifications, background tasks, camera,
+         deployment, the new pickers, OAuth, power info, restarting, the bootstrapper that only framework-dependent apps
+         need, and WebView2 -->
     <UnusedPublishFiles>
-      ;createdump.exe;mscordbi.dll;mscordaccore.dll;Microsoft.DiaSymReader.Native.amd64.dll;clrgc.dll;clrgcexp.dll;msquic.dll;
       ;Microsoft.Windows.AppNotifications.winmd;Microsoft.Windows.AppNotifications.Builder.winmd;Microsoft.Windows.BadgeNotifications.winmd;
       ;Microsoft.Windows.PushNotifications.winmd;PushNotificationsLongRunningTask.ProxyStub.dll;
       ;Microsoft.Windows.ApplicationModel.Background.winmd;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.winmd;
@@ -63,7 +59,7 @@
   <Target Name="LeaveOutUnusedFiles" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                             Condition="$([System.String]::Copy('$(UnusedPublishFiles)').Contains(';%(Filename)%(Extension);')) Or $([System.String]::Copy('%(Filename)').StartsWith('mscordaccore_'))" />
+                             Condition="$([System.String]::Copy('$(UnusedPublishFiles)').Contains(';%(Filename)%(Extension);'))" />
       <!-- WinUI's own text in 85 other languages, a folder each. The app is in English, and Windows falls back to en-us. -->
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.mui' And !$([System.String]::Copy('%(RelativePath)').StartsWith('en-us'))" />
     </ItemGroup>
