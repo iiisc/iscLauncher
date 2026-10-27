@@ -413,6 +413,9 @@ public sealed class InstalledAddonsView : UserControl
             {
                 Content = content,
                 Style = Res<Style>("SecondaryButtonStyle"),
+                // The style's fixed height cuts off a description that wraps
+                Height = double.NaN,
+                Padding = new Thickness(12, 8, 12, 8),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left
             };
