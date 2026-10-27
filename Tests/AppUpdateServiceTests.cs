@@ -82,6 +82,9 @@ public sealed class AppUpdateServiceTests : IDisposable
         var zipPath = Path.Combine(_root, "release.zip");
         using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
         {
+            // Listed before the app, so picking the first exe at the top would install the wrong one
+            using (var other = new StreamWriter(zip.CreateEntry("createdump.exe").Open()))
+                other.Write("not the app");
             zip.CreateEntryFromFile(newExe, "iscLauncher.exe");
             using var git = new StreamWriter(zip.CreateEntry("git/cmd/git.exe").Open());
             git.Write("new git");

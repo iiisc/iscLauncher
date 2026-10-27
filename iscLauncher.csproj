@@ -15,7 +15,7 @@
     <!-- Ships as a plain exe, so debug runs the same way instead of as an MSIX package -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <!-- Still needed although the app isn't packaged: the single-file release build uses it to embed resources.pri -->
+    <!-- Still needed although the app isn't packaged: it builds iscLauncher.pri, which holds the compiled XAML -->
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <!-- The test project lives inside this folder but builds on its own -->
@@ -29,7 +29,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
+    <!-- Just WinUI: the full Windows App SDK also ships its AI, ML and Widgets runtimes, about 50 MB the app doesn't use -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="1.8.260204000" />
   </ItemGroup>
+
+  <!-- Unused, and older versions' updaters install the first exe they find at the top of the release, so the app must be the only one -->
+  <Target Name="LeaveOutOtherExes" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'createdump.exe' Or '%(Filename)%(Extension)' == 'RestartAgent.exe'" />
+    </ItemGroup>
+  </Target>
 </Project>

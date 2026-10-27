@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -152,10 +151,10 @@ public class AppUpdateService
         if (Directory.Exists(extractDir))
             Directory.Delete(extractDir, true);
         await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extractDir), ct).ConfigureAwait(false);
-        // The app is the only exe at the top; the bundled Git's are in subfolders
-        var newExePath = Directory.GetFiles(extractDir, "*.exe", SearchOption.TopDirectoryOnly)
-            .FirstOrDefault()
-            ?? throw new FileNotFoundException("No executable found in the update package.");
+        // By name: the release has other exes beside the app
+        var newExePath = Path.Combine(extractDir, "iscLauncher.exe");
+        if (!File.Exists(newExePath))
+            throw new FileNotFoundException("The update package has no iscLauncher.exe.");
         var appDir = Path.GetDirectoryName(currentExe)!;
 
         // The script runs after this process exits, so it must report its own failure: otherwise the user is left

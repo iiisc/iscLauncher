@@ -68,16 +68,14 @@ jobs:
       - name: Test
         run: dotnet test Tests/iscLauncher.Tests.csproj -c Release
 
-      # Unpackaged and self-contained come from the project file; these make it one compressed exe
+      # Unpackaged comes from the project file. A folder rather than one exe: a single-file build unpacks itself into
+      # %TEMP% for every new version and starts several times slower.
       - name: Publish x64
         run: >
           dotnet publish iscLauncher.csproj
           -c Release
           -r win-x64
-          -p:PublishSingleFile=true
           -p:SelfContained=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
           -p:PublishReadyToRun=true
           -p:DebugType=none
           -p:DebugSymbols=false
