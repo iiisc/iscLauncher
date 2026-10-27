@@ -34,6 +34,13 @@ public static partial class AddonFiles
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase) { ".lua", ".toc", ".xml", ".txt", ".md" };
 
     private static readonly HashSet<string> BackupExtensions = new(StringComparer.OrdinalIgnoreCase) { ".old", ".bak" };
+    // Left by Windows, macOS and backups. The repo's .gitignore keeps them out, so comparisons skip them too.
+    private static readonly HashSet<string> UnsyncedNames = new(StringComparer.OrdinalIgnoreCase) { "Thumbs.db", ".DS_Store", "desktop.ini" };
+
+    /// <summary>The .gitignore a sync repo starts with.</summary>
+    public static string GitIgnore => string.Join("\n", BackupExtensions.Select(e => "*" + e).Concat(UnsyncedNames)) + "\n";
+
+    private static bool IsUnsynced(string name) => UnsyncedNames.Contains(name) || BackupExtensions.Contains(Path.GetExtension(name));
     private static readonly Regex TocField = new(@"^##\s*(Interface|Version)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
     // WoW treats any field starting with "Dep" as a required dependency, as well as RequiredDeps
     private static readonly Regex DependencyField = new(@"^##\s*(Dep\w*|RequiredDeps)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
@@ -265,6 +272,7 @@ public static partial class AddonFiles
     // FileInfo from enumeration already carries the size, so comparing lengths costs no extra file system calls
     private static Dictionary<string, FileInfo> RelativeFiles(string dir) =>
         new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(f => !IsUnsynced(f.Name))
             .ToDictionary(f => Path.GetRelativePath(dir, f.FullName), StringComparer.OrdinalIgnoreCase);
 
     private static bool IsText(string path) => TextExtensions.Contains(Path.GetExtension(path));

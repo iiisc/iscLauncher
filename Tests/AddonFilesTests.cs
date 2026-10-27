@@ -95,6 +95,22 @@ public sealed class AddonFilesTests : IDisposable
         Assert.Contains("2.0", File.ReadAllText(Path.Combine(folder, "Foo.toc")));
     }
 
+    // The repo's .gitignore keeps these out, so a game copy that has them is still the same addon
+    [Fact]
+    public void FilesSyncLeavesOutDontMakeAnAddonDiffer()
+    {
+        var repo = Path.Combine(_root, "repo");
+        var game = Path.Combine(_root, "game");
+        Addon(repo, "Foo", "1.0");
+        Addon(game, "Foo", "1.0");
+        var folder = Path.Combine(AddonFiles.GameAddOnsDir(game), "Foo");
+        foreach (var file in new[] { ".DS_Store", "Thumbs.db", "desktop.ini", "Foo.lua.bak", @"Media\Old.blp.old" })
+            Write(Path.Combine(folder, file), "not synced");
+
+        Assert.Empty(AddonFiles.Compare(AddonFiles.GameAddOnsDir(game), AddonFiles.GameAddOnsDir(repo), false, 0, default).Diffs);
+        Assert.Empty(AddonFiles.Compare(AddonFiles.GameAddOnsDir(repo), AddonFiles.GameAddOnsDir(game), false, 0, default).Diffs);
+    }
+
     [Fact]
     public void RestoringABackupPutsBackExactlyWhatItHolds()
     {

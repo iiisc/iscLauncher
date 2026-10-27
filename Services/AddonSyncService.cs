@@ -132,7 +132,7 @@ public class AddonSyncService
 
         var gitignorePath = Path.Combine(s.CachePath, ".gitignore");
         if (!File.Exists(gitignorePath))
-            await File.WriteAllTextAsync(gitignorePath, "*.old\n*.bak\nThumbs.db\n.DS_Store\n", ct);
+            await File.WriteAllTextAsync(gitignorePath, AddonFiles.GitIgnore, ct);
 
         var repoAddons = AddonFiles.AddonNames(s.RepoAddOns);
         var characters = AddonFiles.CharacterCount(s.CachePath);
