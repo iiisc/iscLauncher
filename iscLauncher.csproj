@@ -14,6 +14,8 @@
     <SelfContained>true</SelfContained>
     <!-- Compiled to native code holding only the parts of .NET the app calls, so no .NET runtime files ship with it -->
     <PublishAot>true</PublishAot>
+    <!-- A 2 MB smaller exe, for a start too slow to notice -->
+    <OptimizationPreference>Size</OptimizationPreference>
     <!-- The COM and P/Invoke source generators the Start menu shortcut uses write unsafe code -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
@@ -41,18 +43,12 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- Windows App SDK features the app never uses, which it ships anyway: notifications, background tasks, camera,
-         deployment, the new pickers, OAuth, power info, restarting, the bootstrapper that only framework-dependent apps
-         need, and WebView2 -->
+    <!-- Windows App SDK files the app never loads: push notifications, background tasks, restarting, the bootstrapper
+         that only framework-dependent apps need, WebView2 and Visual Studio's designer support -->
     <UnusedPublishFiles>
-      ;Microsoft.Windows.AppNotifications.winmd;Microsoft.Windows.AppNotifications.Builder.winmd;Microsoft.Windows.BadgeNotifications.winmd;
-      ;Microsoft.Windows.PushNotifications.winmd;PushNotificationsLongRunningTask.ProxyStub.dll;
-      ;Microsoft.Windows.ApplicationModel.Background.winmd;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.winmd;
-      ;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;Microsoft.Windows.Media.Capture.winmd;
-      ;Microsoft.Windows.Management.Deployment.winmd;Microsoft.Windows.Security.AccessControl.winmd;Microsoft.Windows.Storage.winmd;
-      ;Microsoft.Windows.Storage.Pickers.winmd;Microsoft.Security.Authentication.OAuth.winmd;Microsoft.Windows.System.winmd;
-      ;Microsoft.Windows.System.Power.winmd;Microsoft.Windows.Globalization.winmd;Microsoft.Windows.ApplicationModel.DynamicDependency.winmd;
+      ;PushNotificationsLongRunningTask.ProxyStub.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;
       ;RestartAgent.exe;Microsoft.WindowsAppRuntime.Bootstrap.dll;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;
+      ;Microsoft.UI.Designer.dll;
     </UnusedPublishFiles>
   </PropertyGroup>
 
@@ -60,6 +56,8 @@
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
                              Condition="$([System.String]::Copy('$(UnusedPublishFiles)').Contains(';%(Filename)%(Extension);'))" />
+      <!-- WinRT type descriptions, which native code has compiled in -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.winmd'" />
       <!-- WinUI's own text in 85 other languages, a folder each. The app is in English, and Windows falls back to en-us. -->
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.mui' And !$([System.String]::Copy('%(RelativePath)').StartsWith('en-us'))" />
     </ItemGroup>
