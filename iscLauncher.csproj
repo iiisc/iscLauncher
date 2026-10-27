@@ -41,10 +41,29 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="1.8.260204000" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- Shipped with .NET and the Windows App SDK but never loaded by this app: .NET's debugger, crash-dump and symbol
+         support, its alternative garbage collectors and HTTP/3, and Windows App SDK features it doesn't use
+         (notifications, background tasks, camera, deployment, the new pickers, OAuth, power info, restarting, the
+         bootstrapper that only framework-dependent apps need, and WebView2). The dump reader also comes under a
+         versioned name, matched below. -->
+    <UnusedPublishFiles>
+      ;createdump.exe;mscordbi.dll;mscordaccore.dll;Microsoft.DiaSymReader.Native.amd64.dll;clrgc.dll;clrgcexp.dll;msquic.dll;
+      ;Microsoft.Windows.AppNotifications.winmd;Microsoft.Windows.AppNotifications.Builder.winmd;Microsoft.Windows.BadgeNotifications.winmd;
+      ;Microsoft.Windows.PushNotifications.winmd;PushNotificationsLongRunningTask.ProxyStub.dll;
+      ;Microsoft.Windows.ApplicationModel.Background.winmd;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.winmd;
+      ;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;Microsoft.Windows.Media.Capture.winmd;
+      ;Microsoft.Windows.Management.Deployment.winmd;Microsoft.Windows.Security.AccessControl.winmd;Microsoft.Windows.Storage.winmd;
+      ;Microsoft.Windows.Storage.Pickers.winmd;Microsoft.Security.Authentication.OAuth.winmd;Microsoft.Windows.System.winmd;
+      ;Microsoft.Windows.System.Power.winmd;Microsoft.Windows.Globalization.winmd;Microsoft.Windows.ApplicationModel.DynamicDependency.winmd;
+      ;RestartAgent.exe;Microsoft.WindowsAppRuntime.Bootstrap.dll;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;
+    </UnusedPublishFiles>
+  </PropertyGroup>
+
   <Target Name="LeaveOutUnusedFiles" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
-      <!-- Unused by the app -->
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'createdump.exe' Or '%(Filename)%(Extension)' == 'RestartAgent.exe'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="$([System.String]::Copy('$(UnusedPublishFiles)').Contains(';%(Filename)%(Extension);')) Or $([System.String]::Copy('%(Filename)').StartsWith('mscordaccore_'))" />
       <!-- WinUI's own text in 85 other languages, a folder each. The app is in English, and Windows falls back to en-us. -->
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.mui' And !$([System.String]::Copy('%(RelativePath)').StartsWith('en-us'))" />
     </ItemGroup>
