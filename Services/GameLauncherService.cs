@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
@@ -157,12 +159,9 @@ public class GameLauncherService
         var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(game.ExecutablePath));
         try
         {
-            return processes.FirstOrDefault(p =>
-            {
-                try { return string.Equals(p.MainModule?.FileName, game.ExecutablePath, StringComparison.OrdinalIgnoreCase); }
-                // Its path can't be read (e.g. it runs elevated); a process with the same exe name is the best match there is
-                catch { return true; }
-            })?.Id;
+            // A process whose path can't be read at all is still the best match there is
+            return processes.FirstOrDefault(p => ImagePath(p.Id) is not { } path
+                || string.Equals(path, game.ExecutablePath, StringComparison.OrdinalIgnoreCase))?.Id;
         }
         finally
         {
@@ -170,6 +169,39 @@ public class GameLauncherService
                 process.Dispose();
         }
     }
+
+    /// <summary>
+    /// The process's exe, or null if it can't be opened. Process.MainModule can't read it from a game running as
+    /// administrator, which made any elevated copy of the exe count as every game using that exe name.
+    /// </summary>
+    internal static string? ImagePath(int processId)
+    {
+        var handle = OpenProcess(ProcessQueryLimitedInformation, false, (uint)processId);
+        if (handle == IntPtr.Zero)
+            return null;
+        try
+        {
+            var path = new StringBuilder(1024);
+            var size = (uint)path.Capacity;
+            return QueryFullProcessImageName(handle, 0, path, ref size) ? path.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
+    // Granted even for elevated processes, unlike the access Process.MainModule needs
+    private const uint ProcessQueryLimitedInformation = 0x1000;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+    private static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder path, ref uint size);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
 
     private void CopyPasswordToClipboard(string password)
     {
