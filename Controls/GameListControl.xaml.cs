@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Threading.Tasks;
+using System.IO;
 using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
@@ -21,15 +20,17 @@ public sealed partial class GameListControl : UserControl
     public event EventHandler? AddGameRequested;
     public event EventHandler? OptionsRequested;
     public event EventHandler<GameEntry>? RemoveRequested;
+    public event EventHandler? Reordered;
 
     private bool _suppressSelectionChange;
     // The card the shared right-click menu was opened on
     private GameEntry? _menuGame;
+    private ObservableCollection<GameEntry> _games = [];
 
     public GameListControl() => InitializeComponent();
 
     public void SetGames(ObservableCollection<GameEntry> games) =>
-        GameListView.ItemsSource = games;
+        GameListView.ItemsSource = _games = games;
 
     public GameEntry? SelectedGame => GameListView.SelectedItem as GameEntry;
 
@@ -86,51 +87,47 @@ public sealed partial class GameListControl : UserControl
     }
 
     // The menu sits on the list's container for each card, which doesn't carry the game as its DataContext
-    private void OnGameMenuOpening(object? sender, object e) =>
+    private void OnGameMenuOpening(object? sender, object e)
+    {
         _menuGame = (sender as MenuFlyout)?.Target is { } card ? GameListView.ItemFromContainer(card) as GameEntry : null;
+        var index = _menuGame == null ? -1 : _games.IndexOf(_menuGame);
+        MoveToTopItem.Visibility = MoveUpItem.Visibility = index > 0 ? Visibility.Visible : Visibility.Collapsed;
+        MoveDownItem.Visibility = index >= 0 && index < _games.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnMoveToTopClick(object sender, RoutedEventArgs e) => MoveMenuGame(_ => 0);
+    private void OnMoveUpClick(object sender, RoutedEventArgs e) => MoveMenuGame(index => index - 1);
+    private void OnMoveDownClick(object sender, RoutedEventArgs e) => MoveMenuGame(index => index + 1);
+
+    private void MoveMenuGame(Func<int, int> newIndex)
+    {
+        if (_menuGame == null) return;
+        // Moving a card takes it out of the list and puts it back, which would deselect it and close the game on screen
+        var selected = SelectedGame;
+        _suppressSelectionChange = true;
+        var index = _games.IndexOf(_menuGame);
+        _games.Move(index, newIndex(index));
+        SetSelectedGame(selected);
+        Reordered?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnRemoveMenuClick(object sender, RoutedEventArgs e)
     {
         if (_menuGame != null) RemoveRequested?.Invoke(this, _menuGame);
     }
 
-    private void OnGameIconLoaded(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// The client's version, e.g. "WoW 3.3.5", or failing that "Folder\Wow.exe". An official install's name already says
+    /// its version, so its tag is "Battle.net".
+    /// </summary>
+    public static string ClientLabel(string exe)
     {
-        if (sender is Image image && image.DataContext is GameEntry game)
-            Watch(image, game, () => _ = LoadIconAsync(image, game));
-    }
-
-    private void OnClientLabelLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is TextBlock label && label.DataContext is GameEntry game)
-            Watch(label, game, () => label.Text = ClientLabel(game));
-    }
-
-    // x:Bind can't derive these from the exe, so they're refreshed whenever the entry changes (e.g. a new executable)
-    private static void Watch(FrameworkElement element, GameEntry game, Action refresh)
-    {
-        PropertyChangedEventHandler onChanged = (_, _) => refresh();
-        game.PropertyChanged += onChanged;
-        element.Unloaded += (_, _) => game.PropertyChanged -= onChanged;
-        refresh();
-    }
-
-    /// <summary>The client's version, e.g. "WoW 3.3.5". An official install's name already says that, so its tag is "Battle.net".</summary>
-    private static string ClientLabel(GameEntry game)
-    {
-        var exe = game.ExecutablePath;
         if (BattleNetInstall.IsOfficial(exe))
             return "Battle.net";
-        return AddonFiles.ClientVersion(exe) is { } version ? $"WoW {version}" : game.ExecutableDisplayPath;
-    }
-
-    private static async Task LoadIconAsync(Image image, GameEntry game)
-    {
-        var icon = await IconExtractor.GetIconFromExecutableAsync(game.ExecutablePath);
-        image.Source = icon;
-        if (image.Parent is Grid grid)
-            foreach (var child in grid.Children)
-                if (child is FontIcon fallback) { fallback.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed; break; }
+        if (AddonFiles.ClientVersion(exe) is { } version)
+            return $"WoW {version}";
+        var folder = Path.GetFileName(Path.GetDirectoryName(exe));
+        return string.IsNullOrEmpty(folder) ? Path.GetFileName(exe) : $@"{folder}\{Path.GetFileName(exe)}";
     }
 
     private void OnAddGameClick(object sender, RoutedEventArgs e) =>

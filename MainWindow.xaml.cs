@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
         GameList.AddGameRequested += OnAddGameRequested;
         GameList.OptionsRequested += OnOptionsRequested;
         GameList.RemoveRequested  += async (_, game) => await GameDetail.ConfirmRemoveAsync(game);
+        GameList.Reordered        += async (_, _) => await _services.Library.SaveAsync();
 
         GameDetail.GameSaved      += OnGameSaved;
         GameDetail.EscapeRequested += OnDetailEscapeRequested;

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
 using System.Text.Json.Serialization;
 
 namespace iscLauncher.Models;
@@ -123,20 +122,4 @@ public class GameEntry : INotifyPropertyChanged
 
     [JsonIgnore]
     public bool HasRemoteChanges => RemoteHead != null && !string.Equals(RemoteHead, LastSyncedCommit, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Short display label for the executable: "ParentFolder\FileName" or just "FileName".
-    /// </summary>
-    [JsonIgnore]
-    public string ExecutableDisplayPath
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(ExecutablePath)) return string.Empty;
-            var dir = Path.GetDirectoryName(ExecutablePath);
-            var dirName = string.IsNullOrEmpty(dir) ? null : Path.GetFileName(dir);
-            var fileName = Path.GetFileName(ExecutablePath);
-            return dirName != null ? $"{dirName}\\{fileName}" : fileName;
-        }
-    }
 }
