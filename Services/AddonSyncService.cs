@@ -42,7 +42,7 @@ public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 public class AddonSyncService
 {
 
-    private static readonly string BackupRoot = Path.Combine(GameRepository.AppDataFolder, "Backups");
+    private static readonly string BackupRoot = Path.Combine(GameRepository.LocalDataFolder, "Backups");
 
     private readonly GitService _git;
     private readonly GameRepository _gameRepository;

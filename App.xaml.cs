@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using iscLauncher.Helpers;
+using iscLauncher.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
@@ -56,6 +58,7 @@ public partial class App : Application
         }
 
         _ = Task.Run(DeleteUpdateLeftovers);
+        MoveLocalDataOutOfRoaming();
         _window = new MainWindow();
         main.Activated += (_, _) => _window.DispatcherQueue.TryEnqueue(BringToFront);
         _window.Activate();
@@ -67,7 +70,7 @@ public partial class App : Application
     {
         foreach (var dir in new[]
                  {
-                     Path.Combine(AppContext.BaseDirectory, Services.AppUpdateService.OldVersionDir),
+                     Path.Combine(AppContext.BaseDirectory, AppUpdateService.OldVersionDir),
                      Path.Combine(Path.GetTempPath(), ".net", "iscLauncher")
                  })
         {
@@ -78,6 +81,38 @@ public partial class App : Application
             }
             // The old version may still be closing; the next start tries again
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    // Up to v1.1.12 sync caches and backups were in the roaming profile. On the same drive this is a rename, so it's
+    // done before anything can use them.
+    private static void MoveLocalDataOutOfRoaming()
+    {
+        foreach (var name in new[] { "SyncCache", "Backups" })
+        {
+            var from = Path.Combine(GameRepository.AppDataFolder, name);
+            if (!Directory.Exists(from))
+                continue;
+            try
+            {
+                // Game by game, since the new folder may already exist
+                foreach (var game in Directory.GetDirectories(from))
+                {
+                    var to = Path.Combine(GameRepository.LocalDataFolder, name, Path.GetFileName(game));
+                    if (Directory.Exists(to))
+                        continue;
+                    Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                    Directory.Move(game, to);
+                }
+                if (!Directory.EnumerateFileSystemEntries(from).Any())
+                    Directory.Delete(from);
+            }
+            // A profile redirected to another drive can't be renamed across; the cache is fetched again, and the old
+            // backups stay where they are
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Write($"Couldn't move {name} out of the roaming profile: {ex.Message}");
+            }
         }
     }
 

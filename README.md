@@ -52,7 +52,7 @@ Addons that name their GitHub project in their `.toc` are connected by themselve
 
 ## Your data
 
-Everything lives in `%APPDATA%\IscLauncher` (**Options → Open Folder**): your library, backups (the last 3 per game, restored with **Sync → Restore a Backup**) and a log. Passwords and your GitHub sign-in are in Windows Credential Manager under `iscLauncher_...`.
+Your library and a log live in `%APPDATA%\IscLauncher` (**Options → Open Folder**). What belongs to this PC alone is in `%LOCALAPPDATA%\IscLauncher`: each synced game's copy of its repo, backups (the last 3 per game, restored with **Sync → Restore a Backup**) and Git, if the app downloaded it. Passwords and your GitHub sign-in are in Windows Credential Manager under `iscLauncher_...`.
 
 iscLauncher only talks to GitHub, and only to the repos you give it: it can't see your other projects, or change any repo's settings. Change its repos under **Options → Choose which repos it can use**. Game passwords never leave your PC.
 
@@ -68,7 +68,7 @@ iscLauncher only talks to GitHub, and only to the repos you give it: it can't se
 
 ## Uninstall
 
-Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` (Git, if the app downloaded it) and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
+Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
 
 ## Building from source
 

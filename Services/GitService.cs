@@ -22,11 +22,10 @@ public record GitCommitEntry(string Hash, string Message, string Body, string Da
 
 public class GitService
 {
-    private static readonly string SyncCacheRoot = Path.Combine(GameRepository.AppDataFolder, "SyncCache");
+    private static readonly string SyncCacheRoot = Path.Combine(GameRepository.LocalDataFolder, "SyncCache");
 
     /// <summary>Where the Git that the app downloads for a PC without one is kept.</summary>
-    public static readonly string DownloadedGitDir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IscLauncher", "Git");
+    public static readonly string DownloadedGitDir = Path.Combine(GameRepository.LocalDataFolder, "Git");
 
     // Git for Windows' portable build, made for apps to carry. Pinned and checked, since the app runs it; the Update
     // MinGit workflow proposes a new pin when there's a newer one.

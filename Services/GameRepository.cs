@@ -19,6 +19,14 @@ public class GameRepository
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
 
+    /// <summary>
+    /// What belongs to this PC alone: sync caches, backups and the downloaded Git. Out of the roaming profile, which a
+    /// work PC may copy to a server at every sign-in.
+    /// </summary>
+    public static readonly string LocalDataFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "IscLauncher");
+
     private readonly string _filePath;
 
     // A sync finishing while a game is being saved would otherwise have two writes share the temp file
