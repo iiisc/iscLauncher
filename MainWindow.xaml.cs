@@ -9,7 +9,6 @@ using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Media.Imaging;
 using WinRT.Interop;
 
 namespace iscLauncher;
@@ -232,9 +231,10 @@ public sealed partial class MainWindow : Window
     {
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-        if (File.Exists(iconPath))
-            TitleBarIcon.Source = new BitmapImage(new Uri(iconPath));
+        _ = ShowTitleBarIconAsync();
     }
+
+    // Taken from the exe, which has the icon built in, so no .ico file has to ship beside it
+    private async Task ShowTitleBarIconAsync() =>
+        TitleBarIcon.Source = await IconExtractor.GetIconFromExecutableAsync(Environment.ProcessPath!);
 }

@@ -32,23 +32,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\AppIcon.ico">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- Just WinUI: the full Windows App SDK also ships its AI, ML and Widgets runtimes, about 50 MB the app doesn't use -->
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="1.8.260204000" />
   </ItemGroup>
 
   <PropertyGroup>
     <!-- Windows App SDK files the app never loads: push notifications, background tasks, restarting, the bootstrapper
-         that only framework-dependent apps need, WebView2 and Visual Studio's designer support -->
+         that only framework-dependent apps need, WebView2, Visual Studio's designer support and the map control's page -->
     <UnusedPublishFiles>
       ;PushNotificationsLongRunningTask.ProxyStub.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;
       ;RestartAgent.exe;Microsoft.WindowsAppRuntime.Bootstrap.dll;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;
-      ;Microsoft.UI.Designer.dll;
+      ;Microsoft.UI.Designer.dll;map.html;
     </UnusedPublishFiles>
   </PropertyGroup>
 
