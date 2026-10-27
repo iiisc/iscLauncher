@@ -59,11 +59,11 @@ public class GameEntry : INotifyPropertyChanged
     [JsonPropertyName("syncRepoUrl")]
     public string? SyncRepoUrl { get; set; }
 
-    /// <summary>When this PC last pulled or pushed, in UTC.</summary>
     /// <summary>Whether closing the game offers to push what changed while playing.</summary>
     [JsonPropertyName("offerPushOnClose")]
     public bool OfferPushOnClose { get; set; } = true;
 
+    /// <summary>When this PC last pulled or pushed, in UTC.</summary>
     [JsonPropertyName("lastSynced")]
     public DateTime? LastSynced { get; set; }
 

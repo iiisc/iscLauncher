@@ -92,8 +92,13 @@ public class AddonSyncService
     public Task<bool> HasLocalChangesAsync(GameEntry game, CancellationToken ct)
     {
         var s = new SyncSession(game, _git.GetLocalCachePath(game), null);
-        return Task.Run(() => AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct).Diffs.Count > 0
-            || !AddonFiles.SettingsEqual(s.GameWtfAccount, s.RepoWtfAccount, ct), ct);
+        return Task.Run(() =>
+        {
+            // Character settings are only pushed when asked for, so they only count once the repo holds some
+            var options = new SyncOptions(AddonSettings: true, CharacterSettings: AddonFiles.CharacterCount(s.CachePath) > 0);
+            return AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct).Diffs.Count > 0
+                || !AddonFiles.SettingsEqual(s.GameWtfAccount, s.RepoWtfAccount, options, ct);
+        }, ct);
     }
 
     public Task<AddonPreview> PreviewPushAsync(SyncSession s, CancellationToken ct) =>

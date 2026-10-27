@@ -106,6 +106,27 @@ public sealed class AddonSyncServiceTests : System.IDisposable
     }
 
     [Fact]
+    public async Task SettingsTheRepoDoesntHoldDontMakeClosingTheGameOfferAPush()
+    {
+        var remote = _sandbox.NewRemote();
+        var game = _sandbox.AddGame("pc", remote);
+        Addon(Dir(game), "Questie", "7.1");
+        var addonSettings = Path.Combine(Dir(game), @"WTF\Account\ACC\SavedVariables\Questie.lua");
+        var characterSettings = Path.Combine(Dir(game), @"WTF\Account\ACC\Realm\Hero\layout-local.txt");
+        Write(addonSettings, "QuestieDB = 1");
+        Write(characterSettings, "layout");
+
+        // The push dialog's defaults: addon settings, but not character settings
+        var session = await Sync.OpenAsync(game, null, _ct);
+        await Sync.PushAsync(session, (await Sync.PreviewPushAsync(session, _ct)).Diffs, new SyncOptions(true, false), null, _ct);
+        Write(characterSettings, "moved a frame");
+        Assert.False(await Sync.HasLocalChangesAsync(game, _ct));
+
+        Write(addonSettings, "QuestieDB = 2");
+        Assert.True(await Sync.HasLocalChangesAsync(game, _ct));
+    }
+
+    [Fact]
     public async Task PullingFromAnEmptyRepoIsRefused()
     {
         var remote = _sandbox.NewRemote();

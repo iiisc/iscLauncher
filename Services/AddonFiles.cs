@@ -241,10 +241,10 @@ public static partial class AddonFiles
         return $"made for client {string.Join("/", majors.Select(m => $"{m}.x"))}, this game is {clientMajor}.x";
     }
 
-    private static bool DirectoriesEqual(string a, string b, CancellationToken ct)
+    private static bool DirectoriesEqual(string a, string b, CancellationToken ct) => FilesEqual(RelativeFiles(a), RelativeFiles(b), ct);
+
+    private static bool FilesEqual(Dictionary<string, FileInfo> filesA, Dictionary<string, FileInfo> filesB, CancellationToken ct)
     {
-        var filesA = RelativeFiles(a);
-        var filesB = RelativeFiles(b);
         if (filesA.Count != filesB.Count)
             return false;
 
