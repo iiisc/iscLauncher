@@ -45,15 +45,22 @@ public class GameLauncherService
     }
 
     /// <summary>
-    /// Starts the game and logs in, or for an official install opens it in Battle.net. Returns what happened; throws
-    /// <see cref="AppException"/> if it couldn't.
+    /// An official install with no saved password. Started directly, an official game shows its own login screen, so
+    /// one with a password is launched and logged in like any other.
+    /// </summary>
+    public bool OpensInBattleNet(GameEntry game) =>
+        BattleNetInstall.IsOfficial(game.ExecutablePath) && string.IsNullOrEmpty(_credentialService.GetCredential(game.CredentialTarget));
+
+    /// <summary>
+    /// Starts the game and logs in, or opens it in Battle.net (see <see cref="OpensInBattleNet"/>). Returns what
+    /// happened; throws <see cref="AppException"/> if it couldn't.
     /// </summary>
     public async Task<string> LaunchGameAsync(GameEntry game)
     {
         if (!File.Exists(game.ExecutablePath))
             throw new AppException("Executable not found: " + game.ExecutablePath);
 
-        if (BattleNetInstall.Find(game.ExecutablePath) is { } official)
+        if (OpensInBattleNet(game) && BattleNetInstall.Find(game.ExecutablePath) is { } official)
         {
             try
             {
@@ -69,8 +76,12 @@ public class GameLauncherService
         if (IsRunning(game))
             throw new AppException($"{game.Name} is already running. Use Send Password to log in.");
 
-        await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
-        await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
+        // An official client reads neither, and remembers the account's email itself
+        if (!BattleNetInstall.IsOfficial(game.ExecutablePath))
+        {
+            await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
+            await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
+        }
         var password = _credentialService.GetCredential(game.CredentialTarget);
 
         Process process;

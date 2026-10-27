@@ -58,7 +58,7 @@
                         </StackPanel>
 
                         <TextBlock x:Name="OfficialNote"
-                                   Text="Official Blizzard install. Open in Battle.net takes you to it there, where you press Play. Battle.net handles login, so realm, account and password settings don't apply."
+                                   Text="Official Blizzard install. With a password saved under Automation, Launch starts the game and logs in to the account it remembers. Without one, Open in Battle.net takes you to it there, where you press Play."
                                    Style="{StaticResource HintTextStyle}"
                                    Visibility="Collapsed"/>
 
@@ -83,7 +83,12 @@
                 </PivotItem.Header>
                 <ScrollViewer Padding="32,14,32,14">
                     <StackPanel Spacing="14">
-                        <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}"/>
+                        <StackPanel Spacing="4">
+                            <!-- WinUI's own reveal eye is drawn over the start of the password, so it's shown from the checkbox instead -->
+                            <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}" PasswordRevealMode="Hidden"/>
+                            <CheckBox x:Name="ShowPasswordCheckBox" Content="Show password" FontSize="12"
+                                      Checked="OnShowPasswordChanged" Unchecked="OnShowPasswordChanged"/>
+                        </StackPanel>
                         <StackPanel Spacing="4">
                             <NumberBox x:Name="StartupDelayNumberBox"
                                        Header="Startup delay (seconds)"

@@ -36,7 +36,7 @@ public sealed partial class GameDetailControl
         { ShowStatus("Wait for the addon sync to finish before launching.", false); return; }
         var launched = await WhileBusyAsync(game, async () =>
             await OfferPullBeforeLaunchAsync(game)
-            && await RunLauncherAsync(BattleNetInstall.IsOfficial(game.ExecutablePath) ? "Opening Battle.net..." : $"Launching {game.Name}...",
+            && await RunLauncherAsync(_services.Launcher.OpensInBattleNet(game) ? "Opening Battle.net..." : $"Launching {game.Name}...",
                 () => _services.Launcher.LaunchGameAsync(game)));
         if (launched)
             await AfterGameClosesAsync(game);
@@ -140,15 +140,15 @@ public sealed partial class GameDetailControl
             await PushAsync(game);
     }
 
-    // Official games log in through Battle.net, so there's never a password to send
+    // A game Battle.net logged in has no password to send
     private bool CanSendPassword(GameEntry game) =>
-        !BattleNetInstall.IsOfficial(game.ExecutablePath) && _services.Launcher.IsRunning(game);
+        !_services.Launcher.OpensInBattleNet(game) && _services.Launcher.IsRunning(game);
 
     private void UpdateLaunchButtonState(GameEntry game)
     {
         var sendPassword = CanSendPassword(game);
         LaunchButtonText.Text = sendPassword ? "Send Password"
-            : BattleNetInstall.IsOfficial(game.ExecutablePath) ? "Open in Battle.net"
+            : _services.Launcher.OpensInBattleNet(game) ? "Open in Battle.net"
             : "Launch";
         LaunchButtonIcon.Text = sendPassword ? "🔑" : "⚔";
     }

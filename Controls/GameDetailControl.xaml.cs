@@ -63,6 +63,7 @@ public sealed partial class GameDetailControl : UserControl
         RealmTextBox.Text = game.RealmName ?? string.Empty;
         StartupDelayNumberBox.Value = game.StartupDelaySeconds;
         PasswordBox.Password = string.Empty;
+        ShowPasswordCheckBox.IsChecked = false;
         PasswordBox.PlaceholderText = _services.Credentials.GetCredential(game.CredentialTarget) != null
             ? "A password is saved. Type a new one to replace it."
             : "No password saved";
@@ -207,19 +208,16 @@ public sealed partial class GameDetailControl : UserControl
         ShowOfficial(file.Path);
     }
 
-    // Battle.net handles login for official installs, so the login settings don't apply
+    // Official clients find their own servers and remember the account, so only the password applies
     private void ShowOfficial(string exePath)
     {
         var official = BattleNetInstall.IsOfficial(exePath);
         OfficialNote.Visibility = official ? Visibility.Visible : Visibility.Collapsed;
         ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
-        // A collapsed PivotItem still shows its header, so the tab is taken out of the Pivot instead
-        var hasTab = DetailPivot.Items.Contains(AutomationTab);
-        if (official && hasTab)
-            DetailPivot.Items.Remove(AutomationTab);
-        else if (!official && !hasTab)
-            DetailPivot.Items.Insert(1, AutomationTab);
     }
+
+    private void OnShowPasswordChanged(object sender, RoutedEventArgs e) =>
+        PasswordBox.PasswordRevealMode = ShowPasswordCheckBox.IsChecked == true ? PasswordRevealMode.Visible : PasswordRevealMode.Hidden;
 
     public async Task ConfirmRemoveAsync(GameEntry game)
     {
