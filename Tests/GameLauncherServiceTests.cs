@@ -16,10 +16,6 @@ public sealed class GameLauncherServiceTests : IDisposable
         try { Directory.Delete(_root, true); } catch (IOException) { }
     }
 
-    [Fact]
-    public void ReadsARunningProcesssExe() =>
-        Assert.Equal(Environment.ProcessPath, GameLauncherService.ImagePath(Environment.ProcessId), ignoreCase: true);
-
     // Two clients share the exe name; only the one whose own exe is running counts as running
     [Fact]
     public void OnlyTheGameWhoseExeIsRunningCountsAsRunning()

@@ -185,7 +185,7 @@ public class GameLauncherService
     /// The process's exe, or null if it can't be opened. Process.MainModule can't read it from a game running as
     /// administrator, which made any elevated copy of the exe count as every game using that exe name.
     /// </summary>
-    internal static string? ImagePath(int processId)
+    private static string? ImagePath(int processId)
     {
         var handle = OpenProcess(ProcessQueryLimitedInformation, false, (uint)processId);
         if (handle == IntPtr.Zero)

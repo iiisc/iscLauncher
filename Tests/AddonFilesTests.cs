@@ -112,23 +112,6 @@ public sealed class AddonFilesTests : IDisposable
     }
 
     [Fact]
-    public void SettingsDifferOnlyWhenASyncedFileDoes()
-    {
-        var game = ModernGame();
-        var repo = Path.Combine(_root, "repo");
-        var gameAccount = AddonFiles.WtfAccountDir(game);
-        var repoAccount = AddonFiles.WtfAccountDir(repo);
-        Assert.False(AddonFiles.SettingsEqual(gameAccount, repoAccount, default));
-
-        // The game's .bak file isn't copied, so it mustn't count as a difference
-        AddonFiles.CopyWtf(gameAccount, repoAccount, new SyncOptions(true, true), mirror: false, default);
-        Assert.True(AddonFiles.SettingsEqual(gameAccount, repoAccount, default));
-
-        Write(Path.Combine(game, @"WTF\Account\123#1\SavedVariables\Questie.lua"), "changed while playing");
-        Assert.False(AddonFiles.SettingsEqual(gameAccount, repoAccount, default));
-    }
-
-    [Fact]
     public void RestoringABackupPutsBackExactlyWhatItHolds()
     {
         var game = Path.Combine(_root, "game");

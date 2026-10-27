@@ -44,6 +44,8 @@ public sealed class AddonSyncServiceTests : System.IDisposable
 
         var firstPush = Git(remote, "rev-parse", "main");
         Assert.Equal(firstPush, pcA.LastSyncedCommit);
+        // What the push left out (the Blizzard_ folder, the .bak file) mustn't make closing the game offer another push
+        Assert.False(await Sync.HasLocalChangesAsync(pcA, _ct));
         var reloaded = new GameRepository(Path.Combine(_sandbox.Root, "games.json"));
         await reloaded.LoadAsync();
         Assert.Equal(firstPush, reloaded.Games.Single(g => g.Id == pcA.Id).LastSyncedCommit);
@@ -74,6 +76,7 @@ public sealed class AddonSyncServiceTests : System.IDisposable
         // A updates one addon and drops another; B is told it's behind before it pushes
         Addon(dirA, "Questie", "7.3", body: "new code");
         Directory.Delete(Path.Combine(dirA, @"Interface\AddOns\Details"), true);
+        Assert.True(await Sync.HasLocalChangesAsync(pcA, _ct));
         session = await Sync.OpenAsync(pcA, null, _ct);
         preview = await Sync.PreviewPushAsync(session, _ct);
         var questie = preview.Diffs.Single(d => d.Name == "Questie");

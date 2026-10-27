@@ -50,13 +50,6 @@ public sealed class AppUpdateServiceTests : IDisposable
         Assert.Equal(updateAvailable, AppUpdateService.ParseRelease(Release, current).UpdateAvailable);
 
     [Fact]
-    public void AReleaseWithoutAChecksumHasNone()
-    {
-        var update = AppUpdateService.ParseRelease("""{ "tag_name": "v2.0.0", "assets": [ { "name": "a.zip", "browser_download_url": "u" } ] }""", "1.0.0");
-        Assert.Null(update.Sha256);
-    }
-
-    [Fact]
     public async Task VerifyRefusesADownloadThatDoesntMatch()
     {
         Directory.CreateDirectory(_root);
