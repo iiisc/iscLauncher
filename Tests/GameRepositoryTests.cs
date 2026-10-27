@@ -45,4 +45,16 @@ public sealed class GameRepositoryTests : IDisposable
         await reloaded.LoadAsync();
         Assert.Equal(byReflection, JsonSerializer.Serialize(new GameLibrary { Games = [.. reloaded.Games] }, new JsonSerializerOptions { WriteIndented = true }));
     }
+
+    [Fact]
+    public async Task AGameSavedBeforeThePushOfferSettingStillGetsOffered()
+    {
+        var path = Path.Combine(_root, "games.json");
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(path, """{ "games": [ { "name": "Warmane", "syncRepoUrl": "https://github.com/owner/repo.git" } ] }""");
+
+        var library = new GameRepository(path);
+        await library.LoadAsync();
+        Assert.True(Assert.Single(library.Games).OfferPushOnClose);
+    }
 }

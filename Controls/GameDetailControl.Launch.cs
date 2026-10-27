@@ -122,8 +122,15 @@ public sealed partial class GameDetailControl
         if (!await _services.Launcher.WaitForExitAsync(game, TimeSpan.FromMinutes(10)))
             return;
         if (_game?.Id == game.Id) UpdateLaunchButtonState(game);
-        if (!game.HasSyncRepo)
+        if (!game.HasSyncRepo || !game.OfferPushOnClose)
             return;
+        // Asking after every session, changed or not, would soon train the user to dismiss it unread
+        try
+        {
+            if (!await _services.Sync.HasLocalChangesAsync(game, default))
+                return;
+        }
+        catch (Exception ex) { Log.Write($"Couldn't check {game.Name} for changes to push: {ex.Message}"); }
 
         var reminder = $"{game.Name} closed. Push from the Sync tab to share your changes with your other PCs.";
         if (_syncBusy) { ShowInfo(reminder); return; }

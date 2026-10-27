@@ -85,6 +85,17 @@ public class AddonSyncService
             AddonFiles.ClientMajorVersion(s.Game.ExecutablePath), ct) with { Characters = AddonFiles.CharacterCount(s.CachePath) }, ct);
     }
 
+    /// <summary>
+    /// Whether a push would change anything: the game's addons or settings differ from this PC's copy of the repo, as of
+    /// its last pull, push or check. Nothing is fetched, so it's quick and works offline.
+    /// </summary>
+    public Task<bool> HasLocalChangesAsync(GameEntry game, CancellationToken ct)
+    {
+        var s = new SyncSession(game, _git.GetLocalCachePath(game), null);
+        return Task.Run(() => AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct).Diffs.Count > 0
+            || !AddonFiles.SettingsEqual(s.GameWtfAccount, s.RepoWtfAccount, ct), ct);
+    }
+
     public Task<AddonPreview> PreviewPushAsync(SyncSession s, CancellationToken ct) =>
         Task.Run(() => AddonFiles.Compare(s.GameAddOns, s.RepoAddOns, includeRemoved: true, clientMajor: 0, ct)
             with { Characters = AddonFiles.CharacterCount(s.GameDir) }, ct);

@@ -168,6 +168,7 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+                        <CheckBox x:Name="OfferPushCheckBox" Content="Offer to push when I close the game, if anything changed" FontSize="12"/>
                         <TextBlock x:Name="NoRepoHint"
                                    Text="Click Set Up Sync to sync this game's addons and settings between your PCs, or paste a repo URL and save."
                                    Style="{StaticResource HintTextStyle}"

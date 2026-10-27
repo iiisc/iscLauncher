@@ -38,6 +38,8 @@ public sealed partial class GameDetailControl : UserControl
             box.TextChanged += (_, _) => UpdateSaveButtons();
         PasswordBox.PasswordChanged += (_, _) => UpdateSaveButtons();
         StartupDelayNumberBox.ValueChanged += (_, _) => UpdateSaveButtons();
+        OfferPushCheckBox.Checked += (_, _) => UpdateSaveButtons();
+        OfferPushCheckBox.Unchecked += (_, _) => UpdateSaveButtons();
     }
 
     public void Initialize(AppServices services)
@@ -69,6 +71,7 @@ public sealed partial class GameDetailControl : UserControl
             : "No password saved";
 
         SyncRepoUrlTextBox.Text = game.SyncRepoUrl ?? string.Empty;
+        OfferPushCheckBox.IsChecked = game.OfferPushOnClose;
         UpdateSyncStatus(game);
         CloseInstalledAddons();
 
@@ -135,6 +138,7 @@ public sealed partial class GameDetailControl : UserControl
         || RealmTextBox.Text.NullIfBlank() != game.RealmName
         || SyncRepoUrlTextBox.Text.NullIfBlank() != game.SyncRepoUrl
         || StartupDelay != game.StartupDelaySeconds
+        || OfferPushCheckBox.IsChecked != game.OfferPushOnClose
         || PasswordBox.Password.Length > 0);
 
     // Save and Cancel replace Launch while there's something to save. The addon actions work from the saved settings,
@@ -151,6 +155,7 @@ public sealed partial class GameDetailControl : UserControl
         var hasRepo = _game?.HasSyncRepo == true;
         CopyAddonsSection.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         SyncButtonsPanel.Visibility = !editing && hasRepo ? Visibility.Visible : Visibility.Collapsed;
+        OfferPushCheckBox.Visibility = hasRepo ? Visibility.Visible : Visibility.Collapsed;
         NoRepoHint.Visibility = !editing && !hasRepo ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -181,6 +186,7 @@ public sealed partial class GameDetailControl : UserControl
         game.RealmName = RealmTextBox.Text.NullIfBlank();
         game.StartupDelaySeconds = StartupDelay;
         game.SyncRepoUrl = SyncRepoUrlTextBox.Text.NullIfBlank();
+        game.OfferPushOnClose = OfferPushCheckBox.IsChecked == true;
 
         if (!string.IsNullOrEmpty(PasswordBox.Password))
             _services.Credentials.SaveCredential(game.CredentialTarget, PasswordBox.Password);

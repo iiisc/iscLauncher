@@ -42,6 +42,12 @@ public static partial class AddonFiles
         }
     }
 
+    /// <summary>Whether two WTF\Account folders hold the same settings, leaving out the files a sync doesn't copy.</summary>
+    public static bool SettingsEqual(string accountRootA, string accountRootB, CancellationToken ct) =>
+        Directory.Exists(accountRootA) && Directory.Exists(accountRootB)
+            ? DirectoriesEqual(accountRootA, accountRootB, ct)
+            : Directory.Exists(accountRootA) == Directory.Exists(accountRootB);
+
     /// <summary>Copies the SavedVariables files of the named addons between two account folders or two character folders.</summary>
     public static void CopySavedVariables(string sourceDir, string targetDir, IEnumerable<string> addons)
     {
