@@ -1,0 +1,118 @@
+name: Update MinGit
+
+# The app downloads a pinned MinGit for PCs without Git (see GitService), and Git for Windows ships security fixes, so
+# this looks for a newer one each week and opens a pull request that moves the pin
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: update-mingit
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find the latest MinGit
+        id: latest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh api repos/git-for-windows/git/releases/latest | ConvertFrom-Json
+          # The plain 64-bit build, not the 32-bit, ARM or BusyBox ones
+          $asset = $release.assets | Where-Object name -match '^MinGit-[\d.]+-64-bit\.zip$'
+          if (-not $asset) { Write-Error "Git for Windows $($release.tag_name) has no 64-bit MinGit."; exit 1 }
+          $version = $asset.name -replace '^MinGit-([\d.]+)-64-bit\.zip$', '$1'
+          $branch = "update-mingit-$version"
+          $pinned = (Get-Content Services/GitService.cs -Raw).Contains($asset.browser_download_url)
+          $proposed = gh pr list --repo ${{ github.repository }} --head $branch --state open --json number --jq length
+          $needed = -not $pinned -and $proposed -eq '0'
+          if ($pinned) { "MinGit $version is already pinned." } elseif (-not $needed) { "A pull request for MinGit $version is already open." }
+          echo "NEEDED=$needed" >> $env:GITHUB_OUTPUT
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "BRANCH=$branch" >> $env:GITHUB_OUTPUT
+          echo "URL=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+          echo "DIGEST=$($asset.digest)" >> $env:GITHUB_OUTPUT
+          echo "MB=$([math]::Round($asset.size / 1MB))" >> $env:GITHUB_OUTPUT
+
+      - name: Download and check it
+        if: steps.latest.outputs.NEEDED == 'True'
+        shell: pwsh
+        env:
+          URL: ${{ steps.latest.outputs.URL }}
+          DIGEST: ${{ steps.latest.outputs.DIGEST }}
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP mingit.zip
+          Invoke-WebRequest $env:URL -OutFile $zip
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ("sha256:$sha" -ne $env:DIGEST) { Write-Error "The download doesn't match GitHub's checksum ($env:DIGEST)."; exit 1 }
+          Expand-Archive $zip -DestinationPath (Join-Path $env:RUNNER_TEMP mingit)
+          echo "SHA=$sha" >> $env:GITHUB_ENV
+
+      - name: Setup .NET
+        if: steps.latest.outputs.NEEDED == 'True'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Pull requests opened with this workflow's token don't start CI, so the checks run here, with the new Git
+      - name: Run the sync tests with it
+        if: steps.latest.outputs.NEEDED == 'True'
+        shell: pwsh
+        run: |
+          # First on the PATH, so the tests drive this Git instead of the runner's
+          $env:PATH = "$(Join-Path $env:RUNNER_TEMP mingit\cmd);$env:PATH"
+          git --version
+          dotnet test Tests/iscLauncher.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Move the pin
+        if: steps.latest.outputs.NEEDED == 'True'
+        shell: pwsh
+        env:
+          URL: ${{ steps.latest.outputs.URL }}
+          VERSION: ${{ steps.latest.outputs.VERSION }}
+          MB: ${{ steps.latest.outputs.MB }}
+        run: |
+          $file = 'Services/GitService.cs'
+          $code = Get-Content $file -Raw
+          $code = $code -replace '(MinGitUrl = ")[^"]+', ('${1}' + $env:URL)
+          $code = $code -replace '(MinGitSha256 = ")[^"]+', ('${1}' + $env:SHA)
+          $code = $code -replace '(MinGitName = "MinGit )[^"]+', ('${1}' + ($env:VERSION -replace '^(\d+\.\d+).*', '$1'))
+          $code = $code -replace '(MinGitDownloadMB = )\d+', ('${1}' + $env:MB)
+          # A renamed constant would otherwise leave the old pin in place without anyone noticing
+          if (-not ($code.Contains($env:URL) -and $code.Contains($env:SHA))) { Write-Error "GitService.cs no longer has the MinGit constants this updates."; exit 1 }
+          [IO.File]::WriteAllText($file, $code)
+          git diff --stat
+
+      - name: Open a pull request
+        if: steps.latest.outputs.NEEDED == 'True'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.latest.outputs.VERSION }}
+          BRANCH: ${{ steps.latest.outputs.BRANCH }}
+          URL: ${{ steps.latest.outputs.URL }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c $env:BRANCH
+          git commit -am "Download MinGit $env:VERSION for PCs without Git"
+          # Forced, so a run that failed after pushing can push again
+          git push --force "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git" $env:BRANCH
+          $body = "Moves the MinGit that the app downloads for PCs without Git to $env:VERSION ($env:URL). The download matched GitHub's checksum, and the tests passed with it as the Git on the PATH."
+          gh pr create --repo ${{ github.repository }} --head $env:BRANCH --title "Download MinGit $env:VERSION" --body $body

@@ -28,7 +28,8 @@ public class GitService
     public static readonly string DownloadedGitDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IscLauncher", "Git");
 
-    // Git for Windows' portable build, made for apps to carry. Pinned and checked, since the app runs it.
+    // Git for Windows' portable build, made for apps to carry. Pinned and checked, since the app runs it; the Update
+    // MinGit workflow proposes a new pin when there's a newer one.
     private const string MinGitUrl = "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/MinGit-2.56.0.2-64-bit.zip";
     private const string MinGitSha256 = "da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be";
     public const string MinGitName = "MinGit 2.56";
