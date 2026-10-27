@@ -29,8 +29,8 @@ public sealed partial class InstalledAddonsView : UserControl
     private readonly string _addOnsDir;
     private readonly string _downloadDir = AddonUpdateService.NewDownloadDir();
     // Each installed addon's version and the repo its .toc names, read once per listing
-    private Dictionary<string, (string? Version, string? Repo)> _toc;
-    private readonly List<AddonSource> _sources;
+    private Dictionary<string, (string? Version, string? Repo)> _toc = [];
+    private readonly List<AddonSource> _sources = [];
     private readonly Dictionary<string, AddonUpdate> _results = new(IgnoreCase);
     private readonly HashSet<string> _checking = new(IgnoreCase);
     private readonly HashSet<string> _ticked = new(IgnoreCase);
@@ -54,8 +54,7 @@ public sealed partial class InstalledAddonsView : UserControl
         _game = game;
         _service = service;
         _addOnsDir = AddonFiles.GameAddOnsDir(game);
-        _toc = AddonFiles.InstalledAddons(_addOnsDir);
-        _sources = AddonUpdateService.Sources(game, _toc);
+        _summary.Text = "Reading the game's addons...";
         _message.Visibility = Visibility.Collapsed;
 
         _updateSelected.Click += (_, _) => Install(Available.Where(u => _ticked.Contains(u.Repo)).ToList());
@@ -78,13 +77,25 @@ public sealed partial class InstalledAddonsView : UserControl
         layout.Children.Add(header);
         layout.Children.Add(scroller);
         Content = layout;
-        Render();
     }
 
     private bool HasGame => File.Exists(_game.ExecutablePath);
 
-    /// <summary>Checks every connected repo for updates.</summary>
-    public Task CheckAllAsync() => HasGame ? CheckAsync([.. _sources]) : Task.CompletedTask;
+    /// <summary>Lists the game's addons, then checks every connected repo for updates.</summary>
+    public async Task LoadAsync()
+    {
+        // With many addons, reading every .toc would hold up the window
+        var (toc, sources) = await Task.Run(() =>
+        {
+            var toc = AddonFiles.InstalledAddons(_addOnsDir);
+            return (toc, AddonUpdateService.Sources(_game, toc));
+        });
+        _toc = toc;
+        _sources.AddRange(sources);
+        Render();
+        if (HasGame)
+            await CheckAsync([.. _sources]);
+    }
 
     /// <summary>Stops any check and deletes the downloads, for when the tab moves on.</summary>
     public void Close()

@@ -173,7 +173,7 @@ public sealed partial class GameDetailControl
         };
         view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
         AddonsHost.Child = view;
-        _ = view.CheckAllAsync();
+        _ = view.LoadAsync();
     }
 
     /// <summary>Drops the Addons tab's list, so it's built afresh the next time the tab is opened.</summary>
