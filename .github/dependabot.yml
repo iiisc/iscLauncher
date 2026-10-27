@@ -1,0 +1,29 @@
+# Everything the build uses is pinned to an exact version; this proposes newer ones once a month, one pull request per
+# kind. The MinGit the app downloads isn't a package, so the Update MinGit workflow covers it instead.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: nuget
+    directories: ['/', '/Tests']
+    schedule:
+      interval: monthly
+    groups:
+      nuget:
+        patterns: ['*']
+
+  # The SDK in global.json
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      # A new major version means a new target framework too, which is a change of its own
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
