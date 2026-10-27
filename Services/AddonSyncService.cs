@@ -58,7 +58,7 @@ public class AddonSyncService
     {
         progress?.Report("Checking prerequisites...");
         if (!await _git.IsGitInstalledAsync(ct))
-            throw new AppException("Git wasn't found. The release download includes it; otherwise install Git from git-scm.com.");
+            throw new AppException("Sync needs Git, which this PC doesn't have yet.");
         if (string.IsNullOrWhiteSpace(game.SyncRepoUrl))
             throw new AppException("No sync repo URL configured.");
         if (!File.Exists(game.ExecutablePath))

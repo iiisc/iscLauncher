@@ -40,6 +40,8 @@ Each game syncs with its own private repo on GitHub. Don't have a GitHub account
 2. Click **Push** to upload this PC's addons and settings.
 3. On your other PC, add the same game, click **Set Up Sync**, pick the repo and click **Pull**.
 
+Sync uses Git. If the PC doesn't have it, the first push or pull asks to download MinGit (about 38 MB) from the Git for Windows project on GitHub. It's kept in `%LOCALAPPDATA%\IscLauncher\Git` for iscLauncher alone; nothing is installed in Windows.
+
 After that you rarely need the buttons. The app offers to pull when you launch a game another PC has pushed to, and to push when the game closes. **Rollback** puts every PC back to an earlier push.
 
 ## Updating addons
@@ -65,7 +67,7 @@ iscLauncher only talks to GitHub, and only to the repos you give it: it can't se
 
 ## Uninstall
 
-Delete the app's folder, `%APPDATA%\IscLauncher` and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
+Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` (Git, if the app downloaded it) and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
 
 ## Building from source
 

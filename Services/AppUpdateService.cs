@@ -104,7 +104,7 @@ public class AppUpdateService
         });
     }
 
-    private static async Task DownloadAsync(string url, string destPath, IProgress<double>? progress, CancellationToken ct)
+    internal static async Task DownloadAsync(string url, string destPath, IProgress<double>? progress, CancellationToken ct)
     {
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

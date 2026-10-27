@@ -37,7 +37,9 @@ public sealed partial class GameDetailControl
                 return;
             SyncRepoUrlTextBox.Text = url;
             if (await SaveAsync())
-                ShowStatus("Sync is set up. Push to upload this PC's addons and settings to a new repo, or pull to bring the repo's onto this PC.", true);
+                ShowStatus("Sync is set up. Push to upload this PC's addons and settings to a new repo, or pull to bring the repo's onto this PC." +
+                    (await _services.Git.IsGitInstalledAsync(CancellationToken.None) ? ""
+                        : $" Sync uses Git, which this PC doesn't have, so the first push or pull asks to download it ({GitService.MinGitDownloadMB} MB)."), true);
         }
         catch (Exception ex) { ShowStatus($"Couldn't set up sync: {ex.Message}", false); }
         finally { SetUpSyncButton.IsEnabled = true; }
@@ -56,7 +58,7 @@ public sealed partial class GameDetailControl
     private Task PullAsync(GameEntry game) =>
         RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await _services.Sync.OpenAsync(game, p, ct);
+            if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
             var preview = await _services.Sync.PreviewPullAsync(session, ct);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Pull {game.Name} from Repo", "Pull",
                 "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
@@ -68,7 +70,7 @@ public sealed partial class GameDetailControl
     private Task PushAsync(GameEntry game) =>
         RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await _services.Sync.OpenAsync(game, p, ct);
+            if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
             var previewTask = _services.Sync.PreviewPushAsync(session, ct);
             var warningTask = _services.Sync.DescribeUnpulledChangesAsync(session, ct);
             await Task.WhenAll(previewTask, warningTask);
@@ -83,7 +85,7 @@ public sealed partial class GameDetailControl
         if (_game is not { } game) return;
         await RunSyncAsync("Checking repo...", async (p, ct) =>
         {
-            var session = await _services.Sync.OpenAsync(game, p, ct);
+            if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
             var commit = await RollbackDialog.ShowAsync(XamlRoot, () => _services.Sync.GetCommitLogAsync(session, ct));
             if (commit == null) return null;
 
@@ -94,6 +96,24 @@ public sealed partial class GameDetailControl
             if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
             return await _services.Sync.RollbackAsync(session, commit, choice.Addons, choice.Options, p, ct);
         });
+    }
+
+    /// <summary>Opens the game's repo, first downloading Git if the PC has none and the user agrees. Null if they don't.</summary>
+    private async Task<SyncSession?> OpenSyncAsync(GameEntry game, IProgress<string> progress, CancellationToken ct)
+    {
+        if (!await _services.Git.IsGitInstalledAsync(ct))
+        {
+            if (await DialogHelper.AskAsync(XamlRoot, "Download Git?",
+                    "Sync keeps your addons and settings in your GitHub repo using Git, a free tool for keeping versions of files. " +
+                    $"This PC doesn't have it, so iscLauncher needs to download it once: {GitService.MinGitName} from the Git for Windows " +
+                    $"project on GitHub, about {GitService.MinGitDownloadMB} MB.\n\n" +
+                    $"It's kept in {GitService.DownloadedGitDir} for iscLauncher alone. Nothing is installed in Windows, and deleting " +
+                    "that folder removes it.",
+                    "Download Git") != ContentDialogResult.Primary)
+                return null;
+            await _services.Git.DownloadGitAsync(new Progress<double>(p => progress.Report($"Downloading Git... {(int)(p * 100)}%")), ct);
+        }
+        return await _services.Sync.OpenAsync(game, progress, ct);
     }
 
     private async void OnCopyAddonsClick(object sender, RoutedEventArgs e)

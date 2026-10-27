@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -23,9 +24,20 @@ public class GitService
 {
     private static readonly string SyncCacheRoot = Path.Combine(GameRepository.AppDataFolder, "SyncCache");
 
-    // Releases ship a portable Git next to the app, so nothing has to be installed. An installed Git goes first: its
-    // credential manager can still sign in to repos that the app's GitHub login doesn't cover.
-    private static readonly string BundledGit = Path.Combine(AppContext.BaseDirectory, "git", "cmd", "git.exe");
+    /// <summary>Where the Git that the app downloads for a PC without one is kept.</summary>
+    public static readonly string DownloadedGitDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IscLauncher", "Git");
+
+    // Git for Windows' portable build, made for apps to carry. Pinned and checked, since the app runs it.
+    private const string MinGitUrl = "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/MinGit-2.56.0.2-64-bit.zip";
+    private const string MinGitSha256 = "da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be";
+    public const string MinGitName = "MinGit 2.56";
+    public const int MinGitDownloadMB = 38;
+
+    // An installed Git goes first: its credential manager can still sign in to repos the app's GitHub login doesn't
+    // cover. Releases up to v1.1.11 shipped Git next to the app, and updating leaves it there.
+    private static readonly string[] Candidates =
+        ["git", Path.Combine(DownloadedGitDir, "cmd", "git.exe"), Path.Combine(AppContext.BaseDirectory, "git", "cmd", "git.exe")];
 
     private readonly Func<string?> _gitHubToken;
 
@@ -44,7 +56,7 @@ public class GitService
     {
         if (_git != null)
             return true;
-        foreach (var candidate in new[] { "git", BundledGit })
+        foreach (var candidate in Candidates)
         {
             if ((await RunGitAsync(["--version"], ct, git: candidate)).Success)
             {
@@ -53,6 +65,37 @@ public class GitService
             }
         }
         return false;
+    }
+
+    /// <summary>Downloads <see cref="MinGitName"/> into <see cref="DownloadedGitDir"/>, for a PC that has no Git.</summary>
+    public async Task DownloadGitAsync(IProgress<double> progress, CancellationToken ct)
+    {
+        var zip = Path.Combine(Path.GetTempPath(), "iscLauncher-MinGit.zip");
+        try
+        {
+            await AppUpdateService.DownloadAsync(MinGitUrl, zip, progress, ct);
+            await InstallZipAsync(zip, MinGitSha256, DownloadedGitDir, ct);
+        }
+        finally
+        {
+            try { File.Delete(zip); } catch (IOException) { }
+        }
+        if (!await IsGitInstalledAsync(ct))
+            throw new AppException("Git was downloaded but won't start. Try again, or install Git from git-scm.com.");
+    }
+
+    /// <summary>Unpacks a checked download into <paramref name="targetDir"/>, replacing what's there.</summary>
+    internal static async Task InstallZipAsync(string zip, string sha256, string targetDir, CancellationToken ct)
+    {
+        await AppUpdateService.VerifyAsync(zip, sha256, ct);
+        var partial = targetDir + ".partial";
+        if (Directory.Exists(partial))
+            Directory.Delete(partial, true);
+        await Task.Run(() => ZipFile.ExtractToDirectory(zip, partial), ct);
+        // Moved into place only once whole, so a cancelled or failed unpack never passes for an installed Git
+        if (Directory.Exists(targetDir))
+            Directory.Delete(targetDir, true);
+        Directory.Move(partial, targetDir);
     }
 
     /// <summary>
@@ -222,7 +265,7 @@ public class GitService
             psi.Environment["GIT_CONFIG_VALUE_0"] = "AUTHORIZATION: basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"x-access-token:{token}"));
         }
         // The portable Git has no credential manager, so without a token it would wait on a login prompt nobody can see
-        if (git == BundledGit || quiet)
+        if (git != "git" || quiet)
             psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         if (quiet)
             psi.Environment["GCM_INTERACTIVE"] = "never";

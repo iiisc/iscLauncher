@@ -8,6 +8,7 @@ public sealed record AppServices(
     GameRepository Library,
     CredentialService Credentials,
     GameLauncherService Launcher,
+    GitService Git,
     AddonSyncService Sync,
     AddonUpdateService AddonUpdates,
     GitHubService GitHub,
@@ -19,11 +20,13 @@ public sealed record AppServices(
         var library = new GameRepository();
         var credentials = new CredentialService();
         var gitHub = new GitHubService(credentials);
+        var git = new GitService(() => gitHub.Token);
         return new AppServices(
             library,
             credentials,
             new GameLauncherService(credentials),
-            new AddonSyncService(new GitService(() => gitHub.Token), library),
+            git,
+            new AddonSyncService(git, library),
             new AddonUpdateService(gitHub),
             gitHub,
             new AppUpdateService(),
