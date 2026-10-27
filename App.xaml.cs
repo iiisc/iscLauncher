@@ -16,7 +16,6 @@ public partial class App : Application
 
     public App()
     {
-        Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
         InitializeComponent();
         UnhandledException += OnUnhandledException;
     }

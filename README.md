@@ -74,10 +74,10 @@ Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` (
 Requires the .NET 10 SDK.
 
 ```
-dotnet build -c Debug -p:Platform=x64
+dotnet build
 ```
 
-To release, run the **Release** workflow from the Actions tab. It publishes the next patch version; to bump the minor or major version, push a tag such as `v1.2.0`.
+To release, run the **Release** workflow from the Actions tab. It runs the tests, then publishes the next patch version, or the version you type in, such as `1.2.0`.
 
 ## License
 

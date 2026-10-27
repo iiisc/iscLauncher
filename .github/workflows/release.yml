@@ -1,11 +1,11 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-  # Releases the next patch version; push a tag yourself for a minor or major bump
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, such as 1.2.0. Leave empty for the next patch version.'
+        required: false
 
 permissions: {}
 
@@ -14,20 +14,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   build-and-release:
+    needs: checks
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
       contents: write
-    env:
-      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # A manual release builds master as it is now, so re-running a failed one picks up fixes pushed since.
-          # (Re-runs still use the workflow file of the original run; only the code is current.)
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
           # The release notes list the commits since the previous release, so the history and tags are needed
           fetch-depth: 0
           # The build runs code from NuGet packages, so the write token isn't left in the git config; only the tag push gets it
@@ -36,8 +37,12 @@ jobs:
       - name: Determine version
         id: version
         shell: pwsh
+        # From the environment, so whatever is typed into the box can't become part of the script
+        env:
+          REQUESTED: ${{ inputs.version }}
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          $ver = "$env:REQUESTED".Trim().TrimStart('v')
+          if (-not $ver) {
             $latest = git tag -l 'v*' |
               Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
               ForEach-Object { [version]($_ -replace '^v', '') } |
@@ -45,10 +50,8 @@ jobs:
               Select-Object -First 1
             if (-not $latest) { $latest = [version]'0.0.0' }
             $ver = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
-          } else {
-            # The trigger only fires for v<major>.<minor>.<patch> tags
-            $ver = "${{ github.ref_name }}".TrimStart('v')
           }
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') { Write-Error "'$ver' isn't a version like 1.2.0."; exit 1 }
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
           echo "COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
           echo "TAG=v$ver" >> $env:GITHUB_OUTPUT
@@ -65,45 +68,10 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Test
-        run: dotnet test Tests/iscLauncher.Tests.csproj -c Release
-
-      # Unpackaged comes from the project file. A folder rather than one exe: a single-file build unpacks itself into
-      # %TEMP% for every new version and starts several times slower.
-      - name: Publish x64
-        run: >
-          dotnet publish iscLauncher.csproj
-          -c Release
-          -r win-x64
-          -p:SelfContained=true
-          -p:PublishReadyToRun=true
-          -p:DebugType=none
-          -p:DebugSymbols=false
-          -p:Version=${{ steps.version.outputs.VERSION }}
-          -o publish
-
-      # Runs only when a signing certificate is stored in the repo's secrets
-      - name: Sign
-        if: env.HAS_SIGNING_CERT == 'true'
-        shell: pwsh
-        # Read from the environment so the secrets never become part of the script text
-        env:
-          CERT: ${{ secrets.SIGNING_CERTIFICATE }}
-          CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $certPath = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CERT))
-          try {
-            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-              Where-Object FullName -match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
-            $files = (Get-ChildItem publish -Include *.exe, *.dll -Recurse).FullName
-            & $signtool sign /f $certPath /p $env:CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $files
-            if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
-          }
-          finally {
-            Remove-Item $certPath -Force -ErrorAction SilentlyContinue
-          }
+      # Everything else about the build is in the project file. A folder rather than one exe: a single-file build
+      # unpacks itself into %TEMP% for every new version and starts several times slower.
+      - name: Publish
+        run: dotnet publish iscLauncher.csproj -c Release -p:Version=${{ steps.version.outputs.VERSION }} -o publish
 
       - name: Create release zip
         shell: pwsh
@@ -126,7 +94,6 @@ jobs:
       # Tagged only now, after the build succeeded, so a failed run doesn't use up a version number. Pushed with git
       # because GitHub refused to let the release action create the tag through its API with this token.
       - name: Push tag
-        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         env:
           TOKEN: ${{ github.token }}

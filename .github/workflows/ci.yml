@@ -4,12 +4,15 @@ on:
   push:
     branches: [master]
   pull_request:
+  # The release runs these same checks before it builds
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Called by the release, github.workflow is "Release", so its checks don't cancel a push's or the other way round
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,7 +38,7 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Build
-        run: dotnet build iscLauncher.csproj -c Release -p:Platform=x64
+        run: dotnet build iscLauncher.csproj -c Release
 
       # The sync tests drive real git repos; the runner image has Git installed
       - name: Test
