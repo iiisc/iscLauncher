@@ -85,8 +85,9 @@ public sealed partial class GameListControl : UserControl
         }
     }
 
+    // The menu sits on the list's container for each card, which doesn't carry the game as its DataContext
     private void OnGameMenuOpening(object? sender, object e) =>
-        _menuGame = ((sender as MenuFlyout)?.Target as FrameworkElement)?.DataContext as GameEntry;
+        _menuGame = (sender as MenuFlyout)?.Target is { } card ? GameListView.ItemFromContainer(card) as GameEntry : null;
 
     private void OnRemoveMenuClick(object sender, RoutedEventArgs e)
     {
