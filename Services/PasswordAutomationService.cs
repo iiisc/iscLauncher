@@ -11,7 +11,8 @@ namespace iscLauncher.Services;
 
 public class PasswordAutomationService
 {
-    private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(15);
+    // A modern official client takes about 17 seconds to show its window, most of it spent picking a graphics card
+    private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan StabilizationDelay = TimeSpan.FromMilliseconds(1500);
     private const uint ResponsivenessProbeTimeoutMs = 1000;
