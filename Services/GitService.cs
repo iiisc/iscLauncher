@@ -30,8 +30,8 @@ public class GitService
 
     // Git for Windows' portable build, made for apps to carry. Pinned and checked, since the app runs it; the Update
     // MinGit workflow proposes a new pin when there's a newer one.
-    private const string MinGitUrl = "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/MinGit-2.56.0.2-64-bit.zip";
-    private const string MinGitSha256 = "da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be";
+    private const string MinGitUrl = "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/MinGit-2.56.0.4-64-bit.zip";
+    private const string MinGitSha256 = "e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877";
     public const string MinGitName = "MinGit 2.56";
     public const int MinGitDownloadMB = 38;
 
