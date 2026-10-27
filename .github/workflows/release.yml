@@ -71,13 +71,15 @@ jobs:
       # Everything else about the build is in the project file. A folder rather than one exe: a single-file build
       # unpacks itself into %TEMP% for every new version and starts several times slower.
       - name: Publish
-        run: dotnet publish iscLauncher.csproj -c Release -p:Version=${{ steps.version.outputs.VERSION }} -o publish
+        run: dotnet publish iscLauncher.csproj -c Release -p:Version=${{ steps.version.outputs.VERSION }} -o publish/iscLauncher
 
+      # The app sits in an iscLauncher folder inside the zip, so unzipping it anywhere can't spill its files into a
+      # folder that holds other things
       - name: Create release zip
         shell: pwsh
         run: |
           $tag = "${{ steps.version.outputs.TAG }}"
-          Compress-Archive -Path publish\* -DestinationPath "iscLauncher-$tag-win-x64.zip"
+          Compress-Archive -Path publish\iscLauncher -DestinationPath "iscLauncher-$tag-win-x64.zip"
 
       # GitHub builds its notes from pull requests, but changes here go straight to master, so the draft lists the
       # commits since the previous release, to be rewritten for users before publishing.

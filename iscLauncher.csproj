@@ -37,10 +37,12 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="1.8.260204000" />
   </ItemGroup>
 
-  <!-- Unused, and older versions' updaters install the first exe they find at the top of the release, so the app must be the only one -->
-  <Target Name="LeaveOutOtherExes" AfterTargets="ComputeResolvedFilesToPublishList">
+  <Target Name="LeaveOutUnusedFiles" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
+      <!-- Unused by the app -->
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'createdump.exe' Or '%(Filename)%(Extension)' == 'RestartAgent.exe'" />
+      <!-- WinUI's own text in 85 other languages, a folder each. The app is in English, and Windows falls back to en-us. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.mui' And !$([System.String]::Copy('%(RelativePath)').StartsWith('en-us'))" />
     </ItemGroup>
   </Target>
 </Project>

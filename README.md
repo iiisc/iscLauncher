@@ -20,7 +20,7 @@ Every change is previewed first, lets you pick what to apply, and backs up anyth
 
 ## Install
 
-Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest), extract it anywhere and run `iscLauncher.exe`. It needs 64-bit Windows 10 1809 or later, and nothing else.
+Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest) and extract it where you keep programs. It unpacks into an `iscLauncher` folder; run `iscLauncher.exe` in it. It needs 64-bit Windows 10 1809 or later, and nothing else.
 
 If SmartScreen warns on first launch, choose **More info → Run anyway**. **Options → Add to Start Menu** makes it easy to find again. When a new version is out, a dot appears on the ⚙ Options button, where you can install it.
 

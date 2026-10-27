@@ -104,7 +104,7 @@ public class AppUpdateService
             await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, releaseDir), ct).ConfigureAwait(false);
             var currentExe = Environment.ProcessPath ?? throw new InvalidOperationException("the app couldn't find its own exe.");
             // Not cancellable: it's quick, and stopping halfway would need the same undoing as a failure
-            await Task.Run(() => SwapIn(releaseDir, currentExe), CancellationToken.None).ConfigureAwait(false);
+            await Task.Run(() => SwapIn(Path.Combine(releaseDir, "iscLauncher"), currentExe), CancellationToken.None).ConfigureAwait(false);
             return currentExe;
         }
         finally
