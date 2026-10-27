@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Models;
@@ -17,11 +18,6 @@ public class GameRepository
     public static readonly string AppDataFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "IscLauncher");
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
 
     private readonly string _filePath;
 
@@ -43,7 +39,7 @@ public class GameRepository
         GameLibrary library;
         try
         {
-            library = JsonSerializer.Deserialize<GameLibrary>(json, JsonOptions) ?? new GameLibrary();
+            library = JsonSerializer.Deserialize(json, GameLibraryJson.Default.GameLibrary) ?? new GameLibrary();
         }
         catch (JsonException ex)
         {
@@ -77,7 +73,7 @@ public class GameRepository
         try
         {
             // Serialised once the lock is held, so the newest state is what lands on disk
-            var json = JsonSerializer.Serialize(new GameLibrary { Games = [.. Games] }, JsonOptions);
+            var json = JsonSerializer.Serialize(new GameLibrary { Games = [.. Games] }, GameLibraryJson.Default.GameLibrary);
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             // Write-then-rename so a crash mid-write can't leave a truncated games.json
             var tempPath = _filePath + ".tmp";
@@ -89,4 +85,11 @@ public class GameRepository
             _saveLock.Release();
         }
     }
+}
+
+// Written at build time rather than worked out by reflection, which trimming the release would break
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(GameLibrary))]
+internal partial class GameLibraryJson : JsonSerializerContext
+{
 }

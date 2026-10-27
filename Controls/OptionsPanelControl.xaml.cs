@@ -198,12 +198,7 @@ public sealed partial class OptionsPanelControl : UserControl
         try
         {
             var shortcutPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "iscLauncher.lnk");
-            // .NET has no API for .lnk files; Windows' scripting shell is the simplest way to write one
-            dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
-            var shortcut = shell.CreateShortcut(shortcutPath);
-            shortcut.TargetPath = Environment.ProcessPath;
-            shortcut.WorkingDirectory = AppContext.BaseDirectory;
-            shortcut.Save();
+            Shortcut.Create(shortcutPath, Environment.ProcessPath!, AppContext.BaseDirectory);
             ShowStatus("iscLauncher is in the Start menu.", true);
         }
         catch (Exception ex) { ShowStatus($"Couldn't add the Start menu shortcut: {ex.Message}", false); }

@@ -3,11 +3,13 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- For the source-generated COM code in Shortcut.cs -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- The app is a self-contained WinUI exe, which a test project can't reference cleanly, so the UI-free code under test is compiled in -->
   <ItemGroup>
-    <Compile Include="..\Services\AddonFiles*.cs;..\Services\AddonSyncService.cs;..\Services\AddonUpdateService.cs;..\Services\AppException.cs;..\Services\CredentialService.cs;..\Services\GitHubService.cs;..\Services\AppUpdateService.cs;..\Services\GameRepository.cs;..\Services\GitService.cs;..\Services\RealmlistService.cs;..\Models\GameEntry.cs;..\Models\GameLibrary.cs;..\Helpers\FormHelpers.cs" LinkBase="App" />
+    <Compile Include="..\Services\AddonFiles*.cs;..\Services\AddonSyncService.cs;..\Services\AddonUpdateService.cs;..\Services\AppException.cs;..\Services\CredentialService.cs;..\Services\GitHubService.cs;..\Services\AppUpdateService.cs;..\Services\GameRepository.cs;..\Services\GitService.cs;..\Services\RealmlistService.cs;..\Models\GameEntry.cs;..\Models\GameLibrary.cs;..\Helpers\FormHelpers.cs;..\Helpers\Shortcut.cs" LinkBase="App" />
   </ItemGroup>
 
   <ItemGroup>
