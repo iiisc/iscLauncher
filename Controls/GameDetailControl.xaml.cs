@@ -7,6 +7,7 @@ using iscLauncher.Helpers;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 
@@ -35,7 +36,6 @@ public sealed partial class GameDetailControl : UserControl
 
         foreach (var box in new[] { NameTextBox, ExecutableTextBox, RealmlistTextBox, AccountTextBox, RealmTextBox, SyncRepoUrlTextBox })
             box.TextChanged += (_, _) => UpdateSaveButtons();
-        PasswordBox.PasswordChanged += (_, _) => UpdateSaveButtons();
         StartupDelayNumberBox.ValueChanged += (_, _) => UpdateSaveButtons();
         OfferPushCheckBox.Checked += (_, _) => UpdateSaveButtons();
         OfferPushCheckBox.Unchecked += (_, _) => UpdateSaveButtons();
@@ -64,7 +64,6 @@ public sealed partial class GameDetailControl : UserControl
         RealmTextBox.Text = game.RealmName ?? string.Empty;
         StartupDelayNumberBox.Value = game.StartupDelaySeconds;
         PasswordBox.Password = string.Empty;
-        ShowPasswordCheckBox.IsChecked = false;
         PasswordBox.PlaceholderText = _services.Credentials.GetCredential(game.CredentialTarget) != null
             ? "A password is saved. Type a new one to replace it."
             : "No password saved";
@@ -221,8 +220,26 @@ public sealed partial class GameDetailControl : UserControl
         ConnectionSection.Visibility = official ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void OnShowPasswordChanged(object sender, RoutedEventArgs e) =>
-        PasswordBox.PasswordRevealMode = ShowPasswordCheckBox.IsChecked == true ? PasswordRevealMode.Visible : PasswordRevealMode.Hidden;
+    private void OnPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateSaveButtons();
+        // Emptying the box, which opening a game does too, hides it again so a password is never left showing
+        if (PasswordBox.Password.Length == 0)
+            SetPasswordRevealed(false);
+        RevealPasswordButton.Visibility = PasswordBox.Password.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnRevealPasswordClick(object sender, RoutedEventArgs e) =>
+        SetPasswordRevealed(PasswordBox.PasswordRevealMode != PasswordRevealMode.Visible);
+
+    private void SetPasswordRevealed(bool revealed)
+    {
+        PasswordBox.PasswordRevealMode = revealed ? PasswordRevealMode.Visible : PasswordRevealMode.Hidden;
+        RevealPasswordIcon.Glyph = revealed ? "\uED1A" : "\uE7B3";
+        var label = revealed ? "Hide password" : "Show password";
+        ToolTipService.SetToolTip(RevealPasswordButton, label);
+        AutomationProperties.SetName(RevealPasswordButton, label);
+    }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

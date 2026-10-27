@@ -73,10 +73,17 @@
 
                         <StackPanel Spacing="8">
                             <TextBlock Text="LOGIN" Style="{StaticResource SectionHeaderStyle}"/>
-                            <!-- WinUI's own reveal eye is drawn over the start of the password, so it's shown from the checkbox instead -->
-                            <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}" PasswordRevealMode="Hidden"/>
-                            <CheckBox x:Name="ShowPasswordCheckBox" Content="Show password" FontSize="12"
-                                      Checked="OnShowPasswordChanged" Unchecked="OnShowPasswordChanged"/>
+                            <!-- WinUI's own reveal eye is drawn over the start of the password, so the box has its own, with room kept for it on the right -->
+                            <Grid>
+                                <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}" Padding="12,10,40,10"
+                                             PasswordRevealMode="Hidden" PasswordChanged="OnPasswordChanged"/>
+                                <Button x:Name="RevealPasswordButton" Click="OnRevealPasswordClick"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="32" Height="32" Margin="0,0,4,4" Padding="0"
+                                        Background="Transparent" BorderThickness="0" Visibility="Collapsed"
+                                        ToolTipService.ToolTip="Show password" AutomationProperties.Name="Show password">
+                                    <FontIcon x:Name="RevealPasswordIcon" Glyph="&#xE7B3;" FontSize="14"/>
+                                </Button>
+                            </Grid>
                             <NumberBox x:Name="StartupDelayNumberBox"
                                        Header="Startup delay (seconds)"
                                        Style="{StaticResource InputBaseStyle}"
