@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using iscLauncher.Helpers;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -54,9 +56,22 @@ public partial class App : Application
             return;
         }
 
+        _ = Task.Run(DeleteUnpackedCopies);
         _window = new MainWindow();
         main.Activated += (_, _) => _window.DispatcherQueue.TryEnqueue(BringToFront);
         _window.Activate();
+    }
+
+    // Up to v1.1.11 the app was one exe, which unpacked about 265 MB here for every new version and never cleaned up
+    private static void DeleteUnpackedCopies()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), ".net", "iscLauncher");
+        try
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private void BringToFront()
