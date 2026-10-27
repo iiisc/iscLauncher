@@ -123,6 +123,21 @@
                                     <TextBlock Text="Add to Start Menu"/>
                                 </Button>
                             </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="Report a Problem" Style="{StaticResource FieldLabelStyle}"/>
+                                    <TextBlock Text="Opens a bug report on GitHub with this version filled in. Lines from the log help."
+                                               Style="{StaticResource HintTextStyle}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Click="OnReportProblemClick" Style="{StaticResource SecondaryButtonStyle}"
+                                        AutomationProperties.Name="Report a problem">
+                                    <TextBlock Text="Report a Problem"/>
+                                </Button>
+                            </Grid>
                         </StackPanel>
                     </Border>
                 </StackPanel>

@@ -64,6 +64,7 @@ iscLauncher only talks to GitHub, and only to the repos you give it: it can't se
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
 | Push or pull fails | Check that you're signed in under **Options**, and that the repo is one you've given iscLauncher |
 | "GitHub turned down this PC's sign-in" | Sign in again under **Options** |
+| Anything else | **Options → Report a Problem** opens a bug report with your version filled in |
 
 ## Uninstall
 
@@ -77,7 +78,7 @@ Requires the .NET 10 SDK.
 dotnet build
 ```
 
-To release, run the **Release** workflow from the Actions tab. It runs the tests, then publishes the next patch version, or the version you type in, such as `1.2.0`.
+To release, run the **Release** workflow from the Actions tab. It runs the tests, then makes a draft release of the next patch version, or the version you type in, such as `1.2.0`. Rewrite its notes for users (the app shows them before updating) and publish it.
 
 ## License
 

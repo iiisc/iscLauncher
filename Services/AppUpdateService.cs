@@ -18,6 +18,7 @@ public class AppUpdateService
 {
     private const string Owner = "iiisc";
     private const string Repo = "iscLauncher";
+    public const string RepoUrl = $"https://github.com/{Owner}/{Repo}";
 
     private static readonly HttpClient _http = new();
 

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using iscLauncher.Dialogs;
@@ -180,6 +181,16 @@ public sealed partial class OptionsPanelControl : UserControl
     {
         if (!Shell.Open(Log.FilePath))
             ShowStatus("Could not open the log.", false);
+    }
+
+    private void OnReportProblemClick(object sender, RoutedEventArgs e)
+    {
+        // GitHub's issue forms fill in the fields named in the link; these are the ids in bug_report.yml
+        var url = $"{AppUpdateService.RepoUrl}/issues/new?template=bug_report.yml" +
+                  $"&version={Uri.EscapeDataString("v" + AppUpdateService.CurrentVersion)}" +
+                  $"&os={Uri.EscapeDataString(RuntimeInformation.OSDescription)}";
+        if (!Shell.Open(url))
+            ShowStatus("Could not open browser.", false);
     }
 
     private void OnAddToStartMenuClick(object sender, RoutedEventArgs e)

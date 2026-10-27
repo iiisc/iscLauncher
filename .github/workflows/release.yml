@@ -79,8 +79,8 @@ jobs:
           $tag = "${{ steps.version.outputs.TAG }}"
           Compress-Archive -Path publish\* -DestinationPath "iscLauncher-$tag-win-x64.zip"
 
-      # GitHub builds its notes from pull requests, but changes here go straight to master, so the notes list the
-      # commits since the previous release instead. The app shows them before updating.
+      # GitHub builds its notes from pull requests, but changes here go straight to master, so the draft lists the
+      # commits since the previous release, to be rewritten for users before publishing.
       - name: Write release notes
         shell: pwsh
         env:
@@ -101,8 +101,10 @@ jobs:
           git tag ${{ steps.version.outputs.TAG }} ${{ steps.version.outputs.COMMIT }}
           git push "https://x-access-token:$env:TOKEN@github.com/${{ github.repository }}.git" ${{ steps.version.outputs.TAG }}
 
-      # gh comes with the runner, so the one step that can write to the repo runs no third-party code
-      - name: Create GitHub Release
+      # A draft, because the app shows the notes before updating and commit messages aren't written for users. The
+      # app's update check only sees published releases, so nobody is offered it until it's published.
+      # gh comes with the runner, so the one step that can write to the repo runs no third-party code.
+      - name: Create draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,3 +115,4 @@ jobs:
           --title ${{ steps.version.outputs.TAG }}
           --notes-file notes.md
           --verify-tag
+          --draft

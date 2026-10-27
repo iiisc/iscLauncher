@@ -26,17 +26,29 @@ body:
       placeholder: What did you expect to happen?
     validations:
       required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: >
+        The lines from around the problem, from Options → Open Log. The log holds no passwords or sign-ins, but it does
+        name your games, repos and folders, so take out anything you'd rather not share.
+      render: text
+    validations:
+      required: false
+  # Options → Report a Problem fills these two in
   - type: input
     id: version
     attributes:
       label: iscLauncher version
-      placeholder: e.g. v1.0.0
+      description: Shown under Options.
+      placeholder: e.g. v1.1.12
     validations:
       required: true
   - type: input
     id: os
     attributes:
       label: Windows version
-      placeholder: e.g. Windows 11 23H2
+      placeholder: e.g. Windows 11 24H2
     validations:
       required: false
