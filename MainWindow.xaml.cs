@@ -189,6 +189,10 @@ public sealed partial class MainWindow : Window
     // Marks the games whose addons have a newer version on GitHub. Quiet, like the check above.
     private async Task CheckForAddonUpdatesAsync()
     {
+        // Signed out, GitHub allows 60 requests an hour, which checking every addon at each start soon uses up, leaving
+        // none for the Addons tab. The tab checks for itself when it's opened.
+        if (_services.GitHub.UsableToken == null)
+            return;
         foreach (var game in _services.Library.Games.Where(g => File.Exists(g.ExecutablePath)).ToList())
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
