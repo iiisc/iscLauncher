@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,20 +16,55 @@ public class PasswordAutomationService
     private const uint ResponsivenessProbeTimeoutMs = 1000;
 
     /// <summary>Types the password into the game's login screen and presses Enter. Throws <see cref="AppException"/> saying why it couldn't.</summary>
-    public async Task AutomatePasswordEntryAsync(
-        int processId,
-        string password,
-        CancellationToken cancellationToken = default)
+    public async Task AutomatePasswordEntryAsync(Process game, string password, CancellationToken cancellationToken = default)
     {
         // The poll loop makes blocking Win32 calls (SendMessageTimeout can stall up to 1s
         // while the game loads), so keep it off the caller's UI thread.
-        var windowHandle = await Task.Run(
-            () => WaitForGameWindowAsync(processId, cancellationToken), cancellationToken);
+        var windowHandle = await Task.Run(() => WaitForGameWindowAsync(game, cancellationToken), cancellationToken);
 
         if (windowHandle == IntPtr.Zero)
             throw new AppException($"No game window appeared within {WindowTimeout.TotalSeconds:0} seconds.");
 
         await TypePasswordAndSubmitAsync(windowHandle, password);
+    }
+
+    /// <summary>
+    /// The game's main window once it has been processing messages for a moment, so its login screen is drawn. Holding
+    /// the game's Process keeps its id from passing to another program, which could otherwise be typed into.
+    /// </summary>
+    private static async Task<IntPtr> WaitForGameWindowAsync(Process game, CancellationToken cancellationToken)
+    {
+        var waiting = Stopwatch.StartNew();
+        var window = IntPtr.Zero;
+        Stopwatch? respondingSince = null;
+        while (waiting.Elapsed < WindowTimeout)
+        {
+            game.Refresh();
+            if (game.HasExited)
+                throw new AppException("The game closed before its login screen appeared.");
+
+            // A splash screen's window gives way to the real one, which starts the wait over
+            if (game.MainWindowHandle != window)
+            {
+                window = game.MainWindowHandle;
+                respondingSince = null;
+            }
+            if (window != IntPtr.Zero && IsWindowResponding(window))
+            {
+                respondingSince ??= Stopwatch.StartNew();
+                if (respondingSince.Elapsed >= StabilizationDelay)
+                    return window;
+            }
+            else
+            {
+                respondingSince = null;
+            }
+
+            await Task.Delay(PollInterval, cancellationToken);
+        }
+
+        // A window that never settled is still a better bet than giving up
+        return window;
     }
 
     private static async Task TypePasswordAndSubmitAsync(IntPtr windowHandle, string password)
@@ -69,147 +102,6 @@ public class PasswordAutomationService
         catch (Exception ex) when (ex is not AppException)
         {
             throw new AppException($"SendKeys failed: {ex.Message}");
-        }
-    }
-
-    private static async Task<IntPtr> WaitForGameWindowAsync(int processId, CancellationToken cancellationToken)
-    {
-        var sw = Stopwatch.StartNew();
-        var currentPid = (uint)Environment.ProcessId;
-        IntPtr bestWindow = IntPtr.Zero;
-        Stopwatch? respondingSince = null;
-
-        // PID → creation time, see ValidateProcessIdentity
-        var knownProcesses = new Dictionary<uint, long> { [(uint)processId] = GetProcessCreationTime((uint)processId) };
-
-        while (sw.Elapsed < WindowTimeout)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // If the window we picked earlier is no longer visible (e.g. a
-            // splash screen that closed), forget it so we can latch onto the
-            // real login window that replaces it.
-            if (bestWindow != IntPtr.Zero && !IsWindowVisible(bestWindow))
-            {
-                bestWindow = IntPtr.Zero;
-                respondingSince = null;
-            }
-
-            if (bestWindow == IntPtr.Zero)
-            {
-                ExpandProcessTree(knownProcesses);
-
-                bestWindow = EnumerateVisibleWindows().FirstOrDefault(hWnd =>
-                {
-                    GetWindowThreadProcessId(hWnd, out uint windowPid);
-                    return windowPid != currentPid
-                        && ValidateProcessIdentity(knownProcesses, windowPid)
-                        && GetWindowTitle(hWnd).Length > 0;
-                });
-            }
-
-            // Verify the window is processing messages and wait for a
-            // stabilization period so the game's login UI has time to
-            // fully render before we start typing.
-            if (bestWindow != IntPtr.Zero && IsWindowResponding(bestWindow))
-            {
-                respondingSince ??= Stopwatch.StartNew();
-                if (respondingSince.Elapsed >= StabilizationDelay)
-                    return bestWindow;
-            }
-            else
-            {
-                respondingSince = null;
-            }
-
-            await Task.Delay(PollInterval, cancellationToken);
-        }
-
-        // A window that never settled is still a better bet than giving up
-        return bestWindow;
-    }
-
-    /// <summary>
-    /// Adds the launched process's descendants to <paramref name="knownProcesses"/>, since a launcher may start the
-    /// real game. Following the tree, rather than matching by name, can't pick up another running copy of the game.
-    /// </summary>
-    private static void ExpandProcessTree(Dictionary<uint, long> knownProcesses)
-    {
-        IntPtr snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if (snapshot == INVALID_HANDLE_VALUE)
-            return;
-
-        try
-        {
-            var entry = new PROCESSENTRY32();
-
-            // Multiple passes handle nested children (launcher → updater → game).
-            bool added;
-            do
-            {
-                added = false;
-                entry.dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>();
-                if (!Process32First(snapshot, ref entry))
-                    break;
-                do
-                {
-                    if (knownProcesses.ContainsKey(entry.th32ParentProcessID)
-                        && !knownProcesses.ContainsKey(entry.th32ProcessID))
-                    {
-                        long creation = GetProcessCreationTime(entry.th32ProcessID);
-                        knownProcesses[entry.th32ProcessID] = creation;
-                        added = true;
-                    }
-                } while (Process32Next(snapshot, ref entry));
-            } while (added);
-        }
-        finally
-        {
-            CloseHandle(snapshot);
-        }
-    }
-
-    /// <summary>
-    /// Checks that a tracked PID still refers to the same process we originally
-    /// discovered. Returns false (and removes the entry) if the PID has been
-    /// reused by an unrelated process — preventing the password from being
-    /// typed into the wrong application.
-    /// </summary>
-    private static bool ValidateProcessIdentity(Dictionary<uint, long> knownProcesses, uint pid)
-    {
-        if (!knownProcesses.TryGetValue(pid, out long expectedCreation))
-            return false;
-
-        // Creation time of 0 means we couldn't query it initially (e.g. elevated
-        // process). Accept it — the PID-tree check still applies.
-        if (expectedCreation == 0)
-            return true;
-
-        // A current creation time of 0 means OpenProcess failed: the process exited,
-        // so a window still reporting this PID belongs to a reused PID.
-        if (GetProcessCreationTime(pid) == expectedCreation)
-            return true;
-
-        knownProcesses.Remove(pid);
-        return false;
-    }
-
-    /// <summary>The process's creation time as a FILETIME, or 0 if it can't be opened (exited, or elevated).</summary>
-    private static long GetProcessCreationTime(uint pid)
-    {
-        IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (hProcess == IntPtr.Zero)
-            return 0;
-
-        try
-        {
-            return GetProcessTimes(hProcess, out long creation, out _, out _, out _)
-                ? creation
-                : 0;
-        }
-        finally
-        {
-            CloseHandle(hProcess);
         }
     }
 
@@ -326,18 +218,6 @@ public class PasswordAutomationService
         }}
     };
 
-    private static List<IntPtr> EnumerateVisibleWindows()
-    {
-        var windows = new List<IntPtr>();
-        EnumWindows((hWnd, _) =>
-        {
-            if (IsWindowVisible(hWnd))
-                windows.Add(hWnd);
-            return true;
-        }, IntPtr.Zero);
-        return windows;
-    }
-
     /// <summary>
     /// Probes whether a window is processing messages by sending a no-op
     /// message with a timeout. Returns false if the window is hung or still
@@ -351,25 +231,7 @@ public class PasswordAutomationService
         return result != IntPtr.Zero;
     }
 
-    private static string GetWindowTitle(IntPtr hWnd)
-    {
-        var sb = new StringBuilder(256);
-        GetWindowText(hWnd, sb, sb.Capacity);
-        return sb.ToString();
-    }
-
     #region Win32 P/Invoke
-
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -388,47 +250,6 @@ public class PasswordAutomationService
 
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
-
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "Process32FirstW")]
-    private static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "Process32NextW")]
-    private static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool GetProcessTimes(
-        IntPtr hProcess, out long lpCreationTime, out long lpExitTime,
-        out long lpKernelTime, out long lpUserTime);
-
-    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-
-    private const uint TH32CS_SNAPPROCESS = 0x00000002;
-    private static readonly IntPtr INVALID_HANDLE_VALUE = new(-1);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct PROCESSENTRY32
-    {
-        public uint dwSize;
-        public uint cntUsage;
-        public uint th32ProcessID;
-        public IntPtr th32DefaultHeapID;
-        public uint th32ModuleID;
-        public uint cntThreads;
-        public uint th32ParentProcessID;
-        public int pcPriClassBase;
-        public uint dwFlags;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szExeFile;
-    }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessageTimeoutW(

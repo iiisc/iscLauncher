@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Text.Json.Serialization;
 
 namespace iscLauncher.Models;
@@ -84,6 +85,10 @@ public class GameEntry : INotifyPropertyChanged
 
     // Screen readers announce a list item by its ToString
     public override string ToString() => Name;
+
+    /// <summary>The folder the game's exe is in, which holds its Interface and WTF folders.</summary>
+    [JsonIgnore]
+    public string GameDir => Path.GetDirectoryName(ExecutablePath) ?? "";
 
     [JsonIgnore]
     public string CredentialTarget => $"iscLauncher_{Id}";

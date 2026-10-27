@@ -36,9 +36,9 @@ public static partial class AddonFiles
             ct.ThrowIfCancellationRequested();
             var target = Path.Combine(targetAccountRoot, Path.GetRelativePath(sourceAccountRoot, entry));
             if (Directory.Exists(entry))
-                CopyDirectory(entry, target, skipBackups: true, ct);
+                CopyDirectory(entry, target, ct);
             else
-                CopyFile(entry, target, skipBackups: true);
+                CopyFile(entry, target);
         }
     }
 
@@ -54,7 +54,7 @@ public static partial class AddonFiles
             .Where(f => !IsUnsynced(f.Name))
             .ToDictionary(f => Path.GetRelativePath(accountRoot, f.FullName), StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Copies the SavedVariables files of the named addons between two account folders or two character folders.</summary>
+    /// <summary>Copies the SavedVariables files of the named addons between two account folders.</summary>
     public static void CopySavedVariables(string sourceDir, string targetDir, IEnumerable<string> addons)
     {
         foreach (var name in addons)
@@ -74,47 +74,13 @@ public static partial class AddonFiles
     }
 
     /// <summary>
-    /// Character folders under <paramref name="root"/>\WTF\Account, with a display label. Older clients nest them as
-    /// Account\Realm\Name; newer ones as Account\&lt;number&gt;\Name-Suffix, where the folder name alone identifies the character.
+    /// How many characters have settings under <paramref name="root"/>\WTF\Account. Older clients nest them as
+    /// Account\Realm\Name, newer ones as Account\&lt;number&gt;\Name-Suffix.
     /// </summary>
-    public static List<(string Dir, string Label)> Characters(string root)
-    {
-        var characters = new List<(string Dir, string Label)>();
-        foreach (var account in AccountDirs(WtfAccountDir(root)))
-        {
-            foreach (var group in Directory.GetDirectories(account).Where(d => !IsSavedVariables(d)))
-            {
-                var groupName = Path.GetFileName(group);
-                foreach (var character in Directory.GetDirectories(group))
-                {
-                    var name = Path.GetFileName(character);
-                    characters.Add((character, groupName.All(char.IsDigit) ? name : $"{name} ({groupName})"));
-                }
-            }
-        }
-        return characters;
-    }
-
-    public static int CharacterCount(string root) => Characters(root).Count;
-
-    /// <summary>Addons with per-character data in a character folder. Blizzard's own UI data stays with the character.</summary>
-    public static List<string> CharacterAddonData(string characterDir)
-    {
-        var dir = Path.Combine(characterDir, SavedVariables);
-        if (!Directory.Exists(dir))
-            return [];
-
-        return NonBlizzard(Directory.GetFiles(dir, "*.lua").Select(f => Path.GetFileNameWithoutExtension(f)));
-    }
-
-    /// <summary>Gives a character another's enabled-addon list (AddOns.txt) and/or its per-character data for the named addons.</summary>
-    public static void CopyCharacterSetup(string sourceCharacterDir, string targetCharacterDir, bool enabledAddons, IEnumerable<string> addonData)
-    {
-        var addOnsTxt = Path.Combine(sourceCharacterDir, "AddOns.txt");
-        if (enabledAddons && File.Exists(addOnsTxt))
-            CopyFile(addOnsTxt, Path.Combine(targetCharacterDir, "AddOns.txt"));
-        CopySavedVariables(sourceCharacterDir, targetCharacterDir, addonData);
-    }
+    public static int CharacterCount(string root) =>
+        AccountDirs(WtfAccountDir(root))
+            .SelectMany(account => Directory.GetDirectories(account).Where(d => !IsSavedVariables(d)))
+            .Sum(group => Directory.GetDirectories(group).Length);
 
     /// <summary>
     /// The WTF\Account entries in the chosen categories. Account-wide SavedVariables are addon settings; everything else

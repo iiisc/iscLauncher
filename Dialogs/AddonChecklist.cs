@@ -45,15 +45,6 @@ public sealed class AddonChecklist
 
     public List<AddonDiff> Selected => _rows.Where(r => r.Box.IsChecked == true).SelectMany(r => r.Family).ToList();
 
-    public bool IsEnabled
-    {
-        set
-        {
-            foreach (var (box, _) in _rows)
-                box.IsEnabled = value;
-        }
-    }
-
     private void AddGroup(List<AddonDiff> diffs, AddonChange change, string label, string brushKey)
     {
         var addons = diffs.Where(d => d.Change == change).ToList();

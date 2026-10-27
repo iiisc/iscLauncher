@@ -34,11 +34,8 @@ public static partial class AddonFiles
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase) { ".lua", ".toc", ".xml", ".txt", ".md" };
 
     private static readonly HashSet<string> BackupExtensions = new(StringComparer.OrdinalIgnoreCase) { ".old", ".bak" };
-    // Left by Windows, macOS and backups. The repo's .gitignore keeps them out, so comparisons skip them too.
+    // Left by Windows, macOS and backups. They're never copied, so comparisons skip them too.
     private static readonly HashSet<string> UnsyncedNames = new(StringComparer.OrdinalIgnoreCase) { "Thumbs.db", ".DS_Store", "desktop.ini" };
-
-    /// <summary>The .gitignore a sync repo starts with.</summary>
-    public static string GitIgnore => string.Join("\n", BackupExtensions.Select(e => "*" + e).Concat(UnsyncedNames)) + "\n";
 
     private static bool IsUnsynced(string name) => UnsyncedNames.Contains(name) || BackupExtensions.Contains(Path.GetExtension(name));
     private static readonly Regex TocField = new(@"^##\s*(Interface|Version)\s*:\s*(.*)$", RegexOptions.IgnoreCase);
@@ -47,7 +44,7 @@ public static partial class AddonFiles
 
     public static string GameAddOnsDir(string gameDir) => Path.Combine(gameDir, "Interface", "AddOns");
 
-    public static string GameAddOnsDir(GameEntry game) => GameAddOnsDir(AddonSyncService.GameDir(game));
+    public static string GameAddOnsDir(GameEntry game) => GameAddOnsDir(game.GameDir);
 
     /// <summary>Installed addon folder names. Blizzard_ folders ship with the client, so they're never compared or moved.</summary>
     public static List<string> AddonNames(string addOnsDir)
@@ -112,7 +109,7 @@ public static partial class AddonFiles
             if (Directory.Exists(target))
                 ForceDeleteDirectory(target);
             if (addon.Change != AddonChange.Removed)
-                CopyDirectory(Path.Combine(sourceDir, addon.Name), target, skipBackups: false, ct);
+                CopyDirectory(Path.Combine(sourceDir, addon.Name), target, ct);
         }
     }
 
@@ -308,21 +305,21 @@ public static partial class AddonFiles
         }
     }
 
-    private static void CopyDirectory(string sourceDir, string targetDir, bool skipBackups, CancellationToken ct)
+    private static void CopyDirectory(string sourceDir, string targetDir, CancellationToken ct)
     {
         Directory.CreateDirectory(targetDir);
         foreach (var file in Directory.GetFiles(sourceDir))
         {
             ct.ThrowIfCancellationRequested();
-            CopyFile(file, Path.Combine(targetDir, Path.GetFileName(file)), skipBackups);
+            CopyFile(file, Path.Combine(targetDir, Path.GetFileName(file)));
         }
         foreach (var dir in Directory.GetDirectories(sourceDir))
-            CopyDirectory(dir, Path.Combine(targetDir, Path.GetFileName(dir)), skipBackups, ct);
+            CopyDirectory(dir, Path.Combine(targetDir, Path.GetFileName(dir)), ct);
     }
 
-    private static void CopyFile(string source, string target, bool skipBackups = false)
+    private static void CopyFile(string source, string target)
     {
-        if (skipBackups && BackupExtensions.Contains(Path.GetExtension(source)))
+        if (IsUnsynced(Path.GetFileName(source)))
             return;
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         if (File.Exists(target))

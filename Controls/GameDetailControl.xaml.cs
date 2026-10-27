@@ -15,7 +15,6 @@ namespace iscLauncher.Controls;
 public sealed partial class GameDetailControl : UserControl
 {
     public event EventHandler<GameEntry>? GameSaved;
-    public event EventHandler<GameEntry>? DeleteConfirmed;
     public event EventHandler? EscapeRequested;
 
     private AppServices _services = null!;
@@ -224,14 +223,6 @@ public sealed partial class GameDetailControl : UserControl
 
     private void OnShowPasswordChanged(object sender, RoutedEventArgs e) =>
         PasswordBox.PasswordRevealMode = ShowPasswordCheckBox.IsChecked == true ? PasswordRevealMode.Visible : PasswordRevealMode.Hidden;
-
-    public async Task ConfirmRemoveAsync(GameEntry game)
-    {
-        if (await DialogHelper.AskAsync(XamlRoot, "Remove Game",
-            $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.",
-            "Remove") == ContentDialogResult.Primary)
-            DeleteConfirmed?.Invoke(this, game);
-    }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

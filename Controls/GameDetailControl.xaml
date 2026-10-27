@@ -58,7 +58,7 @@
                         </StackPanel>
 
                         <TextBlock x:Name="OfficialNote"
-                                   Text="Official Blizzard install. With a password saved under Automation, Launch starts the game and logs in to the account it remembers. Without one, Open in Battle.net takes you to it there, where you press Play."
+                                   Text="Official Blizzard install. With a password saved below, Launch starts the game and logs in to the account it remembers. Without one, Open in Battle.net takes you to it there, where you press Play."
                                    Style="{StaticResource HintTextStyle}"
                                    Visibility="Collapsed"/>
 
@@ -70,26 +70,13 @@
                             <TextBox x:Name="AccountTextBox" Header="Account name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., myaccount"/>
                             <TextBox x:Name="RealmTextBox" Header="Realm name" Style="{StaticResource InputStyle}" PlaceholderText="e.g., ChromieCraft"/>
                         </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </PivotItem>
 
-            <PivotItem x:Name="AutomationTab" AutomationProperties.Name="Automation">
-                <PivotItem.Header>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xE8D7;" FontSize="12"/>
-                        <TextBlock Text="Automation" FontSize="12"/>
-                    </StackPanel>
-                </PivotItem.Header>
-                <ScrollViewer Padding="32,14,32,14">
-                    <StackPanel Spacing="14">
-                        <StackPanel Spacing="4">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LOGIN" Style="{StaticResource SectionHeaderStyle}"/>
                             <!-- WinUI's own reveal eye is drawn over the start of the password, so it's shown from the checkbox instead -->
                             <PasswordBox x:Name="PasswordBox" Header="Password" Style="{StaticResource InputStyle}" PasswordRevealMode="Hidden"/>
                             <CheckBox x:Name="ShowPasswordCheckBox" Content="Show password" FontSize="12"
                                       Checked="OnShowPasswordChanged" Unchecked="OnShowPasswordChanged"/>
-                        </StackPanel>
-                        <StackPanel Spacing="4">
                             <NumberBox x:Name="StartupDelayNumberBox"
                                        Header="Startup delay (seconds)"
                                        Style="{StaticResource InputBaseStyle}"
@@ -174,16 +161,6 @@
                                    Style="{StaticResource HintTextStyle}"
                                    Visibility="Collapsed"/>
 
-                        <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
-                            <ProgressRing x:Name="SyncProgressRing" IsActive="False" Width="24" Height="24"/>
-                            <Button Style="{StaticResource SecondaryButtonStyle}" Click="OnCancelSyncClick" AutomationProperties.Name="Cancel sync">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                                    <TextBlock Text="Cancel"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-
                         <StackPanel x:Name="BackupsSection" Spacing="8" Margin="0,20,0,0">
                             <TextBlock Text="BACKUPS" Style="{StaticResource SectionHeaderStyle}"/>
                             <TextBlock Text="Addons and settings are backed up before every pull, copy, rollback and update. The last 3 are kept."
@@ -196,26 +173,6 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-
-                        <StackPanel x:Name="CopyAddonsSection" Spacing="8" Margin="0,20,0,0">
-                            <TextBlock Text="SHARE ADDONS" Style="{StaticResource SectionHeaderStyle}"/>
-                            <TextBlock Text="Copy addons and their settings into another game, or give your other characters the same addon setup as one character."
-                                       Style="{StaticResource HintTextStyle}"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Button x:Name="CopyAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyAddonsClick" AutomationProperties.Name="Copy Addons">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
-                                        <TextBlock Text="Copy Addons"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button x:Name="CopyCharacterSetupButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyCharacterSetupClick" AutomationProperties.Name="Copy Character Setup">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE77B;" FontSize="14"/>
-                                        <TextBlock Text="Copy Character Setup"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
-                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </PivotItem>
@@ -227,7 +184,23 @@
                         <TextBlock Text="Addons" FontSize="12"/>
                     </StackPanel>
                 </PivotItem.Header>
-                <Border x:Name="AddonsHost" Padding="32,14,32,14"/>
+                <Grid Padding="32,14,32,14" RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Border x:Name="AddonsHost"/>
+                    <StackPanel x:Name="CopyAddonsSection" Grid.Row="1" Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="CopyAddonsButton" Style="{StaticResource SecondaryButtonStyle}" Click="OnCopyAddonsClick" AutomationProperties.Name="Copy Addons">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
+                                <TextBlock Text="Copy Addons"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="Copy addons and their settings into another game." Style="{StaticResource HintTextStyle}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
             </PivotItem>
         </Pivot>
 
@@ -263,6 +236,17 @@
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE74E;" FontSize="16"/>
                             <TextBlock x:Name="SaveButtonText" Text="Save Changes"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Here rather than on the Sync tab, since launching and the Addons tab start syncs too -->
+                <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
+                    <ProgressRing x:Name="SyncProgressRing" IsActive="False" Width="24" Height="24"/>
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Click="OnCancelSyncClick" AutomationProperties.Name="Cancel sync">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                            <TextBlock Text="Cancel"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

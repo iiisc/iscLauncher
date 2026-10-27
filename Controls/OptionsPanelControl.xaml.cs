@@ -30,19 +30,17 @@ public sealed partial class OptionsPanelControl : UserControl
         _status = new StatusNotifier(StatusBar, StatusText);
     }
 
-    public void Initialize(AppServices services) => _services = services;
+    public void Initialize(AppServices services)
+    {
+        _services = services;
+        VersionText.Text = $"v{Services.AppUpdateService.CurrentVersion}";
+    }
 
+    // An update found or downloading stays as it is, so leaving Options and coming back doesn't lose or cancel it
     public void Activate()
     {
-        VersionText.Text = $"v{Services.AppUpdateService.CurrentVersion}";
-        _status.Hide();
-        UpdateAvailableText.Visibility = Visibility.Collapsed;
-        ReleaseNotesPanel.Visibility = Visibility.Collapsed;
-        UpdateProgressBar.Visibility = Visibility.Collapsed;
-        CheckUpdatesIcon.Glyph = "\uE72C";
-        CheckUpdatesText.Text = "Check for Updates";
-        _pendingUpdate = null;
-        _updateCts?.Cancel();
+        if (UpdateProgressBar.Visibility == Visibility.Collapsed)
+            _status.Hide();
         _ = ShowGitHubAccountAsync();
     }
 
@@ -136,12 +134,14 @@ public sealed partial class OptionsPanelControl : UserControl
                 var progress = new Progress<double>(p =>
                 {
                     UpdateProgressBar.Value = p;
-                    StatusText.Text = $"Downloading update... {(int)(p * 100)}%";
+                    StatusText.Text = p < 1 ? $"Downloading update... {(int)(p * 100)}%" : "Installing update...";
                 });
                 var exe = await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
+                StatusText.Text = "Restarting...";
                 // Still registered as the running copy, this one would be handed the new version's start and it would close
                 AppInstance.GetCurrent().UnregisterKey();
-                Process.Start(exe);
+                // Antivirus checks a new exe before it can start, which can take seconds; the window stays responsive meanwhile
+                await Task.Run(() => Process.Start(exe));
                 Application.Current.Exit();
             }
             catch (Exception ex)

@@ -24,18 +24,15 @@ public static class SyncPreviewDialog
         string? warning, AddonPreview preview, bool toRepo)
     {
         var checklist = new AddonChecklist(preview, toRepo ? ToRepo : ToThisPc);
-        var addonsBox = Option("Addons", true);
         var addonSettingsBox = Option("Addon settings — saved settings for all addons, shared by every character", true);
         var characterBox = Option("Character settings — layouts, macros, keybinds and per-character addon data" +
             (preview.Characters > 0 ? $" ({preview.Characters.Plural("character")})" : ""), false);
-        addonsBox.Click += (_, _) => checklist.IsEnabled = addonsBox.IsChecked == true;
 
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(BodyText(intro));
         if (warning != null)
             panel.Children.Add(WarningText(warning));
         panel.Children.Add(SectionLabel("WHAT TO SYNC"));
-        panel.Children.Add(addonsBox);
         panel.Children.Add(addonSettingsBox);
         panel.Children.Add(characterBox);
         panel.Children.Add(SectionLabel("ADDONS"));
@@ -50,7 +47,7 @@ public static class SyncPreviewDialog
             return null;
 
         return new SyncChoice(
-            addonsBox.IsChecked == true ? checklist.Selected : [],
+            checklist.Selected,
             new SyncOptions(addonSettingsBox.IsChecked == true, characterBox.IsChecked == true));
     }
 }

@@ -9,8 +9,6 @@ using iscLauncher.Models;
 
 namespace iscLauncher.Services;
 
-public record CharacterFolder(GameEntry Game, string Dir, string Label);
-
 public record BackupInfo(string Path, DateTime Created, List<string> Addons, bool HasSettings);
 
 /// <summary>A GitHub repo checked for addon updates.</summary>
@@ -27,7 +25,7 @@ public record AddonUpdate(string Repo, string? Latest, string? Release, string? 
 /// <summary>A game's sync repo, checked out as an exact copy of its remote branch.</summary>
 public record SyncSession(GameEntry Game, string CachePath, string? HeadCommit)
 {
-    public string GameDir => AddonSyncService.GameDir(Game);
+    public string GameDir => Game.GameDir;
     public string GameAddOns => AddonFiles.GameAddOnsDir(GameDir);
     public string RepoAddOns => Path.Combine(CachePath, "AddOns");
     public string GameWtfAccount => AddonFiles.WtfAccountDir(GameDir);
@@ -114,12 +112,8 @@ public class AddonSyncService
         return await PreviewPullAsync(s, ct);
     }
 
-    /// <summary>The repo's newest commit if this PC hasn't pulled or pushed it yet, or null if it's caught up.</summary>
-    public async Task<GitCommitEntry?> FindUnpulledChangeAsync(SyncSession s, CancellationToken ct) =>
-        s.Game.HasRemoteChanges ? (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault() : null;
-
     public async Task<string?> DescribeUnpulledChangesAsync(SyncSession s, CancellationToken ct) =>
-        await FindUnpulledChangeAsync(s, ct) is { } latest
+        s.Game.HasRemoteChanges && (await _git.LogAsync(s.CachePath, 1, ct)).FirstOrDefault() is { } latest
             ? $"⚠ The repo has changes this PC hasn't pulled. Latest: \"{latest.Message}\" ({latest.DisplayDate}). " +
               "Pushing replaces them for everything you select. Pull first to keep them."
             : null;
@@ -145,10 +139,6 @@ public class AddonSyncService
             AddonFiles.ApplyAddons(s.GameAddOns, s.RepoAddOns, addons, ct);
             AddonFiles.CopyWtf(s.GameWtfAccount, s.RepoWtfAccount, options, mirror: true, ct);
         }, ct);
-
-        var gitignorePath = Path.Combine(s.CachePath, ".gitignore");
-        if (!File.Exists(gitignorePath))
-            await File.WriteAllTextAsync(gitignorePath, AddonFiles.GitIgnore, ct);
 
         var repoAddons = AddonFiles.AddonNames(s.RepoAddOns);
         var characters = AddonFiles.CharacterCount(s.CachePath);
@@ -233,7 +223,7 @@ public class AddonSyncService
         Task.Run(() =>
         {
             ChangeGameFiles(game, backup.Addons, backup.HasSettings, null,
-                () => AddonFiles.RestoreBackup(backup.Path, GameDir(game), CancellationToken.None), ct);
+                () => AddonFiles.RestoreBackup(backup.Path, game.GameDir, CancellationToken.None), ct);
             return $"Restored the backup from {backup.Created:g}. What it replaced was backed up first.";
         }, ct);
 
@@ -244,24 +234,6 @@ public class AddonSyncService
             if (Directory.Exists(dir))
                 AddonFiles.ForceDeleteDirectory(dir);
     }
-
-    public List<CharacterFolder> ListCharacters(GameEntry game) =>
-        AddonFiles.Characters(GameDir(game)).Select(c => new CharacterFolder(game, c.Dir, c.Label)).ToList();
-
-    public Task<string> CopyCharacterSetupAsync(CharacterFolder source, IReadOnlyList<CharacterFolder> targets, bool enabledAddons, bool addonData, CancellationToken ct) =>
-        Task.Run(() =>
-        {
-            var data = addonData ? AddonFiles.CharacterAddonData(source.Dir) : [];
-            foreach (var game in targets.Select(t => t.Game).Distinct())
-            {
-                ChangeGameFiles(game, [], includeWtf: true, null, () =>
-                {
-                    foreach (var target in targets.Where(t => t.Game == game))
-                        AddonFiles.CopyCharacterSetup(source.Dir, target.Dir, enabledAddons, data);
-                }, ct);
-            }
-            return $"Gave {targets.Count.Plural("character")} {source.Label}'s addon setup.";
-        }, ct);
 
     /// <summary>Commits whatever changed in the cache and pushes it. Returns the new head (unchanged if there was nothing to commit).</summary>
     private async Task<string?> CommitAndPushAsync(SyncSession s, string message, IProgress<string>? progress, CancellationToken ct)
@@ -301,8 +273,6 @@ public class AddonSyncService
         await _gameRepository.SaveAsync();
     }
 
-    internal static string GameDir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath) ?? "";
-
     /// <summary>
     /// The one way a game's addons and settings get changed: check nothing they touch is open elsewhere, back them up,
     /// then <paramref name="apply"/>. Once files start changing, finishing beats stopping halfway, so that part
@@ -312,7 +282,7 @@ public class AddonSyncService
         Action apply, CancellationToken ct)
     {
         var names = addonNames.ToList();
-        var gameDir = GameDir(game);
+        var gameDir = game.GameDir;
         progress?.Report("Backing up...");
         AddonFiles.ThrowIfInUse(gameDir, names, includeWtf);
         AddonFiles.Backup(BackupDir(game), gameDir, names, includeWtf, ct);
@@ -335,14 +305,14 @@ public class AddonSyncService
     /// <summary>Copies account-wide SavedVariables for the named addons. Returns why it couldn't, or null on success.</summary>
     private static string? CopyAddonSettings(GameEntry source, GameEntry target, IEnumerable<string> addons)
     {
-        var from = AddonFiles.FindAccountDir(GameDir(source), source.AccountName.NullIfBlank());
+        var from = AddonFiles.FindAccountDir(source.GameDir, source.AccountName.NullIfBlank());
         if (from == null)
             return $"couldn't tell which account folder in {source.Name} to copy from (set its account name)";
 
         // A client that has never been logged into has no account folder yet; WoW names it after the account in upper case
         var targetAccount = target.AccountName.NullIfBlank();
-        var to = AddonFiles.FindAccountDir(GameDir(target), targetAccount)
-            ?? (targetAccount == null ? null : Path.Combine(AddonFiles.WtfAccountDir(GameDir(target)), targetAccount.ToUpperInvariant()));
+        var to = AddonFiles.FindAccountDir(target.GameDir, targetAccount)
+            ?? (targetAccount == null ? null : Path.Combine(AddonFiles.WtfAccountDir(target.GameDir), targetAccount.ToUpperInvariant()));
         if (to == null)
             return $"couldn't tell which account folder in {target.Name} to copy into (set its account name)";
 

@@ -9,6 +9,7 @@ using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using WinRT.Interop;
 
 namespace iscLauncher;
@@ -16,7 +17,6 @@ namespace iscLauncher;
 public sealed partial class MainWindow : Window
 {
     private readonly AppServices _services;
-    private UpdateCheckResult? _startupUpdate;
     private GameEntry? _gameBeforeOptions;
 
     public MainWindow()
@@ -36,12 +36,11 @@ public sealed partial class MainWindow : Window
         GameList.LaunchRequested  += OnLaunchRequested;
         GameList.AddGameRequested += OnAddGameRequested;
         GameList.OptionsRequested += OnOptionsRequested;
-        GameList.RemoveRequested  += async (_, game) => await GameDetail.ConfirmRemoveAsync(game);
+        GameList.RemoveRequested  += OnRemoveRequested;
         GameList.Reordered        += async (_, _) => await _services.Library.SaveAsync();
 
         GameDetail.GameSaved      += OnGameSaved;
         GameDetail.EscapeRequested += OnDetailEscapeRequested;
-        GameDetail.DeleteConfirmed += OnDeleteConfirmed;
 
         OptionsPanel.CloseRequested += OnOptionsCloseRequested;
 
@@ -83,8 +82,6 @@ public sealed partial class MainWindow : Window
         _gameBeforeOptions = GameList.SelectedGame;
         ShowPanel(OptionsPanel);
         OptionsPanel.Activate();
-        if (_startupUpdate != null)
-            OptionsPanel.ShowAvailableUpdate(_startupUpdate);
     }
 
     /// <summary>Asks to discard unsaved edits, then stops any sync tied to the current game.</summary>
@@ -110,8 +107,13 @@ public sealed partial class MainWindow : Window
     private async void OnLaunchRequested(object? sender, GameEntry game) =>
         await GameDetail.LaunchAsync(game);
 
-    private async void OnDeleteConfirmed(object? sender, GameEntry game)
+    private async void OnRemoveRequested(object? sender, GameEntry game)
     {
+        if (await DialogHelper.AskAsync(Content.XamlRoot, "Remove Game",
+                $"Remove '{game.Name}' from the library? This also deletes its stored password, its local copy of the sync repo and its backups. The game itself isn't touched.",
+                "Remove") != ContentDialogResult.Primary)
+            return;
+
         // Removing another game from its card's menu leaves the one on screen, and any sync it's running, alone
         var shown = GameDetail.CurrentGame == game;
         if (shown) GameDetail.CancelSync();
@@ -209,7 +211,7 @@ public sealed partial class MainWindow : Window
             var result = await _services.Updates.CheckForUpdateAsync();
             if (result.UpdateAvailable && result.DownloadUrl != null)
             {
-                _startupUpdate = result;
+                OptionsPanel.ShowAvailableUpdate(result);
                 GameList.ShowUpdateAvailable(result.LatestVersion);
             }
         }

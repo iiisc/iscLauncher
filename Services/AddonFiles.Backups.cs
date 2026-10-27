@@ -103,7 +103,7 @@ public static partial class AddonFiles
     {
         var addons = zip.Entries.Select(e => e.FullName.Split('/')).Where(p => p.Length > 2 && p[0] == ZipAddOns).Select(p => p[1])
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        return (addons, zip.Entries.Any(e => BackupSettingsPath(e.FullName) != null));
+        return (addons, zip.Entries.Any(e => IsSettingsEntry(e.FullName)));
     }
 
     /// <summary>
@@ -123,8 +123,9 @@ public static partial class AddonFiles
         foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0))
         {
             ct.ThrowIfCancellationRequested();
-            var relative = BackupSettingsPath(entry.FullName)
-                ?? (entry.FullName.StartsWith(ZipAddOns + "/") ? Path.Combine("Interface", entry.FullName) : null);
+            var relative = IsSettingsEntry(entry.FullName) ? entry.FullName
+                : entry.FullName.StartsWith(ZipAddOns + "/") ? Path.Combine("Interface", entry.FullName)
+                : null;
             if (relative != null)
                 ExtractInside(entry, gameDir, relative);
         }
@@ -140,7 +141,7 @@ public static partial class AddonFiles
         entry.ExtractToFile(target, overwrite: true);
     }
 
-    private static string? BackupSettingsPath(string entry) => entry.StartsWith(ZipSettings + "/") ? entry : null;
+    private static bool IsSettingsEntry(string entry) => entry.StartsWith(ZipSettings + "/");
 
     private static void AddToZip(ZipArchive zip, string dir, string prefix, CancellationToken ct)
     {

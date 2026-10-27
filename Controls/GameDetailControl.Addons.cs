@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
@@ -63,7 +62,7 @@ public sealed partial class GameDetailControl
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Pull {game.Name} from Repo", "Pull",
                 "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
-            if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
+            if (choice == null || !await ConfirmGameClosedAsync(game)) return null;
             return await _services.Sync.PullAsync(session, choice.Addons, choice.Options, p, ct);
         });
 
@@ -93,7 +92,7 @@ public sealed partial class GameDetailControl
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Roll Back to {commit.Hash}", "Roll Back",
                 $"The repo goes back to “{commit.Message}” for every PC. Choose what to apply to this PC; anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
-            if (choice == null || !await ConfirmGamesClosedAsync([game])) return null;
+            if (choice == null || !await ConfirmGameClosedAsync(game)) return null;
             return await _services.Sync.RollbackAsync(session, commit, choice.Addons, choice.Options, p, ct);
         });
     }
@@ -125,23 +124,9 @@ public sealed partial class GameDetailControl
 
         var choice = await CopyAddonsDialog.ShowAsync(XamlRoot, game, targets,
             (target, ct) => _services.Sync.PreviewCopyAsync(game, target, ct));
-        if (choice == null || !await ConfirmGamesClosedAsync([choice.Target])) return;
+        if (choice == null || !await ConfirmGameClosedAsync(choice.Target)) return;
         await RunSyncAsync($"Copying addons to {choice.Target.Name}...", async (_, ct) =>
             await _services.Sync.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
-    }
-
-    private async void OnCopyCharacterSetupClick(object sender, RoutedEventArgs e)
-    {
-        if (_game is not { } game) return;
-        var sources = _services.Sync.ListCharacters(game);
-        if (sources.Count == 0)
-        { ShowStatus("No characters found for this game yet. Log in once so the game creates its settings folders.", false); return; }
-
-        var targets = sources.Concat(_services.Library.Games.Where(g => g.Id != game.Id).SelectMany(_services.Sync.ListCharacters)).ToList();
-        var choice = await CharacterSetupDialog.ShowAsync(XamlRoot, sources, targets);
-        if (choice == null || !await ConfirmGamesClosedAsync(choice.Targets.Select(t => t.Game).Distinct())) return;
-        await RunSyncAsync("Copying character setup...", async (_, ct) =>
-            await _services.Sync.CopyCharacterSetupAsync(choice.Source, choice.Targets, choice.EnabledAddons, choice.AddonData, ct));
     }
 
     // Listing a game's addons checks its GitHub repos, which means downloading them, so that waits until the tab is opened
@@ -191,20 +176,19 @@ public sealed partial class GameDetailControl
         { ShowStatus($"There are no backups of {game.Name} yet.", false); return; }
 
         var backup = await RestoreBackupDialog.ShowAsync(XamlRoot, game.Name, backups);
-        if (backup == null || !await ConfirmGamesClosedAsync([game]))
+        if (backup == null || !await ConfirmGameClosedAsync(game))
             return;
 
         await RunSyncAsync("Restoring the backup...", async (_, ct) => await _services.Sync.RestoreBackupAsync(game, backup, ct));
     }
 
     // WoW writes addon settings and AddOns.txt back when you log out, which would undo files changed while it runs
-    private async Task<bool> ConfirmGamesClosedAsync(IEnumerable<GameEntry> games)
+    private async Task<bool> ConfirmGameClosedAsync(GameEntry game)
     {
-        var running = games.Where(_services.Launcher.IsRunning).Select(g => g.Name).ToList();
-        if (running.Count == 0) return true;
+        if (!_services.Launcher.IsRunning(game)) return true;
 
         return await DialogHelper.AskAsync(XamlRoot, "Game Is Running",
-            $"{string.Join(", ", running)} {(running.Count == 1 ? "is" : "are")} running. WoW saves addon settings when you log out, " +
+            $"{game.Name} is running. WoW saves addon settings when you log out, " +
             "which may overwrite what you're about to change. Close the game first, or continue anyway?",
             "Continue Anyway") == ContentDialogResult.Primary;
     }
@@ -273,7 +257,6 @@ public sealed partial class GameDetailControl
         UploadAddonsButton.IsEnabled = !busy;
         RollbackButton.IsEnabled = !busy;
         CopyAddonsButton.IsEnabled = !busy;
-        CopyCharacterSetupButton.IsEnabled = !busy;
         RestoreBackupButton.IsEnabled = !busy;
         if (InstalledView is { } view) view.IsBusy = busy;
         LaunchButton.IsEnabled = !busy;

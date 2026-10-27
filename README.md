@@ -11,10 +11,10 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 ## What it does
 
 - **Private servers:** sets the realmlist and realm before every launch, and logs you in with a password kept in Windows Credential Manager.
-- **Official installs:** add any version (Classic Era, beta, ...) and open it in Battle.net, where you press Play.
+- **Official installs:** add any version (Classic Era, beta, ...). With a password saved it launches and logs in directly; without one it opens in Battle.net, where you press Play.
 - **Sync between PCs:** push your addons and settings from one PC, pull them on another, through a private GitHub repo.
 - **Update addons** that are on GitHub, and see every addon you have installed.
-- **Copy addons** between games, or give your other characters the same addon setup as one character.
+- **Copy addons** and their settings between games.
 
 Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
@@ -27,10 +27,10 @@ If SmartScreen warns on first launch, choose **More info → Run anyway**. **Opt
 ## Getting started
 
 1. Click **+ Add Game**. Official versions on this PC are listed under **Found on this PC**; otherwise pick the game's `.exe`.
-2. For a private server, fill in the realmlist, account and realm, and set your password under **Automation**.
+2. For a private server, fill in the realmlist, account and realm. Set your password under **Login**.
 3. Click **Save Changes**, then **Launch**.
 
-If the password gets typed before the login screen is ready, raise **Startup Delay** under **Automation**.
+If the password gets typed before the login screen is ready, raise **Startup delay** under **Login**.
 
 ## Syncing between PCs
 
@@ -60,7 +60,7 @@ iscLauncher only talks to GitHub, and only to the repos you give it: it can't se
 
 | Problem | Fix |
 |---------|-----|
-| Password typed too early, or not at all | Raise **Startup Delay** under **Automation** |
+| Password typed too early, or not at all | Raise **Startup delay** under **Login** |
 | Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
 | Push or pull fails | Check that you're signed in under **Options**, and that the repo is one you've given iscLauncher |
 | "GitHub turned down this PC's sign-in" | Sign in again under **Options** |

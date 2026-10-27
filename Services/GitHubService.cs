@@ -44,7 +44,7 @@ public class GitHubService
 
     public string? Token => _credentials.GetCredential(TokenTarget);
 
-    /// <summary>The saved sign-in, unless GitHub turned it down or it's outdated.</summary>
+    /// <summary>The saved sign-in, unless GitHub turned it down.</summary>
     public string? UsableToken => SignInProblem == null ? Token : null;
 
     /// <summary>

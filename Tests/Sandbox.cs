@@ -42,7 +42,7 @@ public sealed class Sandbox : IDisposable
         return game;
     }
 
-    public static string Dir(GameEntry game) => Path.GetDirectoryName(game.ExecutablePath)!;
+    public static string Dir(GameEntry game) => game.GameDir;
 
     public static void Write(string path, string text)
     {

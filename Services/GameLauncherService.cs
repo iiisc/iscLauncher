@@ -16,7 +16,8 @@ public class GameLauncherService
     private readonly CredentialService _credentialService;
     private readonly PasswordAutomationService _automationService;
     private readonly RealmlistService _realmlistService;
-    private CancellationTokenSource? _clipboardClearCts;
+    // Set while a copied password is waiting to be cleared from the clipboard
+    private CancellationTokenSource? _clipboardClear;
 
     public GameLauncherService(CredentialService credentialService)
     {
@@ -30,8 +31,11 @@ public class GameLauncherService
     /// </summary>
     public void CancelPendingClipboardClear()
     {
-        if (CancelClipboardTimer())
-            try { Clipboard.Clear(); } catch { }
+        if (_clipboardClear == null)
+            return;
+        _clipboardClear.Cancel();
+        _clipboardClear = null;
+        try { Clipboard.Clear(); } catch { }
     }
 
     /// <summary>Types the password into a running game. Returns what happened; throws <see cref="AppException"/> if it couldn't start.</summary>
@@ -41,7 +45,8 @@ public class GameLauncherService
             throw new AppException($"{game.Name} isn't running.");
 
         var password = PasswordFor(game);
-        return await TypeOrCopyPasswordAsync(processId, password, "Password sent to running game.", "");
+        using var process = Process.GetProcessById(processId);
+        return await TypeOrCopyPasswordAsync(process, password, "Password sent to running game.", "");
     }
 
     /// <summary>
@@ -78,10 +83,7 @@ public class GameLauncherService
 
         // An official client reads neither, and remembers the account's email itself
         if (!BattleNetInstall.IsOfficial(game.ExecutablePath))
-        {
-            await _realmlistService.UpdateRealmlistAsync(game.ExecutablePath, game.RealmlistAddress);
-            await _realmlistService.UpdateConfigAsync(game.ExecutablePath, game.AccountName, game.RealmName, game.RealmlistAddress);
-        }
+            await _realmlistService.ApplyAsync(game);
         var password = _credentialService.GetCredential(game.CredentialTarget);
 
         Process process;
@@ -91,7 +93,7 @@ public class GameLauncherService
             {
                 FileName = game.ExecutablePath,
                 UseShellExecute = true,
-                WorkingDirectory = Path.GetDirectoryName(game.ExecutablePath)
+                WorkingDirectory = game.GameDir
             }) ?? throw new AppException("Failed to start process");
         }
         catch (Exception ex) when (ex is not AppException)
@@ -99,14 +101,17 @@ public class GameLauncherService
             throw new AppException($"Failed to launch game: {ex.Message}");
         }
 
-        if (string.IsNullOrEmpty(password))
-            return "Game launched. No password is saved, so log in yourself.";
+        using (process)
+        {
+            if (string.IsNullOrEmpty(password))
+                return "Game launched. No password is saved, so log in yourself.";
 
-        // Some games show their window well before the login screen accepts input
-        if (game.StartupDelaySeconds > 0)
-            await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
+            // Some games show their window well before the login screen accepts input
+            if (game.StartupDelaySeconds > 0)
+                await Task.Delay(TimeSpan.FromSeconds(game.StartupDelaySeconds));
 
-        return await TypeOrCopyPasswordAsync(process.Id, password, "Game launched and password entered automatically.", "Game launched. ");
+            return await TypeOrCopyPasswordAsync(process, password, "Game launched and password entered automatically.", "Game launched. ");
+        }
     }
 
     private string PasswordFor(GameEntry game) =>
@@ -115,11 +120,11 @@ public class GameLauncherService
             : throw new AppException("Password not found in Credential Manager");
 
     // Typing can fail for reasons outside the app's control; the clipboard is the fallback, so that still counts as success
-    private async Task<string> TypeOrCopyPasswordAsync(int processId, string password, string typedMessage, string prefix)
+    private async Task<string> TypeOrCopyPasswordAsync(Process game, string password, string typedMessage, string prefix)
     {
         try
         {
-            await _automationService.AutomatePasswordEntryAsync(processId, password);
+            await _automationService.AutomatePasswordEntryAsync(game, password);
             return typedMessage;
         }
         catch (AppException ex)
@@ -214,45 +219,32 @@ public class GameLauncherService
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);
 
+    // Like everything that copies the password, these run on the UI thread, which the clipboard needs
     private void CopyPasswordToClipboard(string password)
     {
-        CancelClipboardTimer();
+        _clipboardClear?.Cancel();
 
         var dataPackage = new DataPackage();
         dataPackage.SetText(password);
         // The timed clear below can't reach Win+V history or other devices, so keep it out of both
         Clipboard.SetContentWithOptions(dataPackage, new ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false });
 
-        var cts = new CancellationTokenSource();
-        _clipboardClearCts = cts;
-        _ = ClearClipboardAfterDelayAsync(password, cts);
+        _clipboardClear = new CancellationTokenSource();
+        _ = ClearClipboardAfterDelayAsync(password, _clipboardClear.Token);
     }
 
-    /// <summary>Stops the pending clear. Returns true if one was pending, meaning our password may still be on the clipboard.</summary>
-    private bool CancelClipboardTimer()
-    {
-        var cts = Interlocked.Exchange(ref _clipboardClearCts, null);
-        if (cts == null)
-            return false;
-        cts.Cancel();
-        cts.Dispose();
-        return true;
-    }
-
-    private async Task ClearClipboardAfterDelayAsync(string password, CancellationTokenSource cts)
+    private async Task ClearClipboardAfterDelayAsync(string password, CancellationToken ct)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), cts.Token);
+            await Task.Delay(TimeSpan.FromSeconds(30), ct);
         }
+        // A newer copy or the app closing took over
         catch (OperationCanceledException)
         {
             return;
         }
-
-        if (Interlocked.CompareExchange(ref _clipboardClearCts, null, cts) != cts)
-            return;
-        cts.Dispose();
+        _clipboardClear = null;
 
         try
         {

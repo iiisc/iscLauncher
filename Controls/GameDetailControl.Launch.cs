@@ -81,13 +81,11 @@ public sealed partial class GameDetailControl
         if (!game.HasSyncRepo || _services.Launcher.IsRunning(game))
             return true;
 
-        GitCommitEntry? change;
         // Being offline shouldn't hold up playing, so the check gives up quickly; Cancel skips it
         var ct = StartSync($"Checking {game.Name}'s repo for changes from your other PCs...", TimeSpan.FromSeconds(10));
         try
         {
-            var session = await _services.Sync.OpenAsync(game, null, ct);
-            change = await _services.Sync.FindUnpulledChangeAsync(session, ct);
+            await _services.Sync.RefreshRemoteHeadAsync(game, ct);
         }
         // No network, no git or a cancelled check: launch as if there were nothing to pull
         catch (Exception ex)
@@ -97,11 +95,11 @@ public sealed partial class GameDetailControl
         }
         finally { SetSyncBusy(false); }
 
-        if (change == null)
+        if (!game.HasRemoteChanges)
             return true;
 
         switch (await DialogHelper.AskAsync(XamlRoot, "Changes From Another PC",
-            $"The repo has a push this PC hasn't pulled: “{change.Message}” ({change.DisplayDate}). Pull it before playing?",
+            "Another PC has pushed changes this PC hasn't pulled. Pull them before playing?",
             "Pull First", "Launch Anyway"))
         {
             case ContentDialogResult.Primary:

@@ -40,7 +40,7 @@ public sealed class AddonFilesTests : IDisposable
     {
         var game = ModernGame();
         Assert.EndsWith("123#1", AddonFiles.FindAccountDir(game, null));
-        Assert.Equal(["Blue-Isc", "Dunder-Isc"], AddonFiles.Characters(game).Select(c => c.Label).Order());
+        Assert.Equal(2, AddonFiles.CharacterCount(game));
     }
 
     [Fact]
@@ -63,23 +63,6 @@ public sealed class AddonFilesTests : IDisposable
     }
 
     [Fact]
-    public void CharacterSetupCopiesAddonDataButNotBlizzardsOwn()
-    {
-        var characters = AddonFiles.Characters(ModernGame());
-        var dunder = characters.Single(c => c.Label == "Dunder-Isc").Dir;
-        var blue = characters.Single(c => c.Label == "Blue-Isc").Dir;
-        Write(Path.Combine(dunder, @"SavedVariables\WhatsTraining.lua"), "dunder data");
-        Write(Path.Combine(dunder, @"SavedVariables\Blizzard_RaidUI.lua"), "dunder blizzard");
-
-        var data = AddonFiles.CharacterAddonData(dunder);
-        Assert.Equal(["WhatsTraining"], data);
-        AddonFiles.CopyCharacterSetup(dunder, blue, enabledAddons: true, data);
-        Assert.Equal("WhatsTraining: enabled", File.ReadAllText(Path.Combine(blue, "AddOns.txt")));
-        Assert.Equal("dunder data", File.ReadAllText(Path.Combine(blue, @"SavedVariables\WhatsTraining.lua")));
-        Assert.False(File.Exists(Path.Combine(blue, @"SavedVariables\Blizzard_RaidUI.lua")));
-    }
-
-    [Fact]
     public void ApplyingReplacesAReadOnlyAddonFolder()
     {
         var source = Path.Combine(_root, "source");
@@ -95,7 +78,7 @@ public sealed class AddonFilesTests : IDisposable
         Assert.Contains("2.0", File.ReadAllText(Path.Combine(folder, "Foo.toc")));
     }
 
-    // The repo's .gitignore keeps these out, so a game copy that has them is still the same addon
+    // A sync never copies these, so a game copy that has them is still the same addon
     [Fact]
     public void FilesSyncLeavesOutDontMakeAnAddonDiffer()
     {
