@@ -56,16 +56,6 @@ Your library and a log live in `%APPDATA%\IscLauncher` (**Options → Open Folde
 
 iscLauncher only talks to GitHub, and only to the repos you give it: it can't see your other projects, or change any repo's settings. Change its repos under **Options → Choose which repos it can use**. Game passwords never leave your PC.
 
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| Password typed too early, or not at all | Raise **Startup delay** under **Login** |
-| Login fails for a game that runs as administrator | Run iscLauncher as administrator too |
-| Push or pull fails | Check that you're signed in under **Options**, and that the repo is one you've given iscLauncher |
-| "GitHub turned down this PC's sign-in" | Sign in again under **Options** |
-| Anything else | **Options → Report a Problem** opens a bug report with your version filled in |
-
 ## Uninstall
 
 Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
