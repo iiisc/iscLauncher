@@ -1,3 +1,5 @@
+<div align="center">
+
 # iscLauncher
 
 A Windows launcher for World of Warcraft that keeps your addons and settings in sync across PCs and game versions.
@@ -6,71 +8,55 @@ A Windows launcher for World of Warcraft that keeps your addons and settings in 
 [![Downloads](https://img.shields.io/github/downloads/iiisc/iscLauncher/total?style=flat-square&color=3D7A5C&label=Downloads)](https://github.com/iiisc/iscLauncher/releases/latest)
 ![Windows 10 1809+](https://img.shields.io/badge/Windows%2010%201809+-0078D6?style=flat-square&logo=windows&logoColor=white)
 
-![iscLauncher](Assets/iscLauncherScreenshot.png)
+<img src="Assets/iscLauncherScreenshot.png" alt="iscLauncher" width="820">
 
-## What it does
+</div>
 
-- **Private servers:** sets the realmlist and realm before every launch, and logs you in with a password kept in Windows Credential Manager.
-- **Official installs:** add any version (Classic Era, beta, ...). With a password saved it launches and logs in directly; without one it opens in Battle.net, where you press Play.
-- **Sync between PCs:** push your addons and settings from one PC, pull them on another, through a private GitHub repo.
-- **Update addons** that are on GitHub, and see every addon you have installed.
+## Features
+
+- **Private servers:** sets the realmlist and realm before every launch and logs you in, with the password kept in Windows Credential Manager.
+- **Official installs:** any version (Classic Era, beta, ...). With a saved password it logs in directly; without one it opens Battle.net, where you press Play.
+- **Sync between PCs:** push addons and settings from one PC and pull them on another, through a private GitHub repo.
+- **Addon updates** for addons hosted on GitHub, plus a list of everything installed.
 - **Copy addons** and their settings between games.
 
 Every change is previewed first, lets you pick what to apply, and backs up anything it replaces.
 
 ## Install
 
-Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest) and extract it where you keep programs. It unpacks into an `iscLauncher` folder; run `iscLauncher.exe` in it. It needs 64-bit Windows 10 1809 or later, and nothing else.
-
-If SmartScreen warns on first launch, choose **More info → Run anyway**. **Options → Add to Start Menu** makes it easy to find again. When a new version is out, a dot appears on the ⚙ Options button, where you can install it.
+Download the `.zip` from the [latest release](https://github.com/iiisc/iscLauncher/releases/latest), extract it, and run `iscLauncher.exe`. If SmartScreen warns on first launch, choose **More info → Run anyway**.
 
 ## Getting started
 
-1. Click **+ Add Game**. Official versions on this PC are listed under **Found on this PC**; otherwise pick the game's `.exe`.
-2. For a private server, fill in the realmlist, account and realm. Set your password under **Login**.
+1. Click **+ Add Game** and pick an install under **Found on this PC**, or browse to the game's `.exe`.
+2. For a private server, fill in the realmlist, account, realm and password.
 3. Click **Save Changes**, then **Launch**.
 
-If the password gets typed before the login screen is ready, raise **Startup delay** under **Login**.
+To sync, open the game's **Sync** tab and click **Set Up Sync** on each PC. Then **Push** on one and **Pull** on the other. After that the app offers to pull before you play and to push when the game closes.
 
-## Syncing between PCs
+## Privacy
 
-Each game syncs with its own private repo on GitHub. Don't have a GitHub account? You can make a free one while you set up.
+iscLauncher only talks to GitHub, and only to the repos you give it. It can't see your other projects or change any repo's settings. Game passwords never leave your PC.
 
-1. Open the game's **Sync** tab and click **Set Up Sync**. The app walks you through signing in, making the repo and giving iscLauncher access to it.
-2. Click **Push** to upload this PC's addons and settings.
-3. On your other PC, add the same game, click **Set Up Sync**, pick the repo and click **Pull**.
+<details>
+<summary><b>Uninstall</b></summary>
+<br>
 
-Sync uses Git. If the PC doesn't have it, the first push or pull asks to download MinGit (about 40 MB) from the Git for Windows project on GitHub. It's kept in `%LOCALAPPDATA%\IscLauncher\Git` for iscLauncher alone; nothing is installed in Windows.
+1. Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` and the Start menu shortcut if you added one.
+2. Remove the `iscLauncher_` entries under **Credential Manager → Windows Credentials**.
+3. On GitHub, uninstall iscLauncher under **Settings → Applications → Installed GitHub Apps**.
 
-After that you rarely need the buttons. The app offers to pull when you launch a game another PC has pushed to, and to push when the game closes. **Rollback** puts every PC back to an earlier push.
+</details>
 
-## Updating addons
+<details>
+<summary><b>Building from source</b></summary>
+<br>
 
-The **Addons** tab lists every addon and checks the ones on GitHub for updates. Tick the ones you want and click **Update Selected**, or **Update All**. Games with updates waiting show **Addon updates** in the list.
+Requires the .NET 10 SDK. Run `dotnet build`.
 
-Addons that name their GitHub project in their `.toc` are connected by themselves. For the others, click **Connect** and pick a match from GitHub, or paste a link.
+`dotnet publish -c Release` builds the native release and also needs Visual Studio's **Desktop development with C++** workload. If it fails with "'vswhere.exe' is not recognized", add `C:\Program Files (x86)\Microsoft Visual Studio\Installer` to your PATH.
 
-## Your data
-
-Your library and a log live in `%APPDATA%\IscLauncher` (**Options → Open Folder**). What belongs to this PC alone is in `%LOCALAPPDATA%\IscLauncher`: each synced game's copy of its repo, backups (the last 3 per game, restored with **Sync → Restore a Backup**) and Git, if the app downloaded it. Passwords and your GitHub sign-in are in Windows Credential Manager under `iscLauncher_...`.
-
-iscLauncher only talks to GitHub, and only to the repos you give it: it can't see your other projects, or change any repo's settings. Change its repos under **Options → Choose which repos it can use**. Game passwords never leave your PC.
-
-## Uninstall
-
-Delete the app's folder, `%APPDATA%\IscLauncher`, `%LOCALAPPDATA%\IscLauncher` and the Start menu shortcut if you added one, remove the `iscLauncher_` entries from **Credential Manager → Windows Credentials**, and uninstall iscLauncher on GitHub under **Settings → Applications → Installed GitHub Apps**.
-
-## Building from source
-
-Requires the .NET 10 SDK.
-
-```
-dotnet build
-```
-
-`dotnet publish -c Release` builds the release itself, compiled to native code, which also needs Visual Studio's **Desktop development with C++** workload. If it fails with "'vswhere.exe' is not recognized", add `C:\Program Files (x86)\Microsoft Visual Studio\Installer` to your PATH.
-
-To release, run the **Release** workflow from the Actions tab. It runs the tests, then makes a draft release of the next patch version, or the version you type in, such as `1.2.0`. Rewrite its notes for users (the app shows them before updating) and publish it.
+</details>
 
 ## License
 
