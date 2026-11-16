@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using iscLauncher.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using static iscLauncher.Helpers.DialogHelper;
@@ -29,6 +30,7 @@ public static class SetUpSyncDialog
         var refresh = StyledButton("Refresh");
         refresh.VerticalAlignment = VerticalAlignment.Bottom;
         var note = WarningText("");
+        var looking = new ProgressView();
         var picker = new Grid { ColumnSpacing = 8 };
         picker.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         picker.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -36,7 +38,7 @@ public static class SetUpSyncDialog
         picker.Children.Add(repoBox);
         picker.Children.Add(refresh);
         var newRepo = Link("Set Up a New Repo Instead");
-        var pick = Panel(10, pickText, picker, note, newRepo);
+        var pick = Panel(10, pickText, picker, looking, note, newRepo);
 
         var description = Uri.EscapeDataString("WoW addons and settings, synced by iscLauncher");
         var make = Panel(10,
@@ -53,7 +55,7 @@ public static class SetUpSyncDialog
             BodyText("iscLauncher can only use the repos you give it, so your other projects on GitHub stay out of its reach."),
             giveSteps,
             Link("Open iscLauncher on GitHub", installUrl),
-            Dim("Waiting for the repo to show up here..."));
+            new ProgressView("Waiting for the repo to show up here..."));
 
         var dialog = CreateThemedDialog(xamlRoot, "Set Up Sync");
         // One width for every step, so the dialog doesn't jump around as the text changes
@@ -84,7 +86,10 @@ public static class SetUpSyncDialog
             loading = true;
             refresh.IsEnabled = false;
             if (!quietly)
-                note.Text = "Looking up your repos on GitHub...";
+            {
+                note.Text = "";
+                looking.Start("Looking up your repos on GitHub...");
+            }
             var picked = repoBox.SelectedItem as string;
             var failed = false;
             try
@@ -115,6 +120,7 @@ public static class SetUpSyncDialog
             }
             if (!quietly && !failed && repos.Count == 0 && view == pick)
                 Show(make);
+            looking.Finish();
             refresh.IsEnabled = true;
             loading = false;
         }

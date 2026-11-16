@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using iscLauncher.Controls;
 using iscLauncher.Models;
 using iscLauncher.Services;
 using Microsoft.UI.Xaml;
@@ -56,7 +57,7 @@ public static class CopyAddonsDialog
             var cts = previewCts = new CancellationTokenSource();
             checklist = null;
             dialog.IsPrimaryButtonEnabled = false;
-            listHost.Child = new ProgressRing { IsActive = true, Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Left };
+            listHost.Child = new ProgressView($"Comparing the addons with {target.Name}...");
 
             AddonPreview preview;
             try

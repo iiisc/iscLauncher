@@ -52,7 +52,7 @@ public class AddonSyncService
         _gameRepository = gameRepository;
     }
 
-    public async Task<SyncSession> OpenAsync(GameEntry game, IProgress<string>? progress, CancellationToken ct)
+    public async Task<SyncSession> OpenAsync(GameEntry game, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
         progress?.Report("Checking prerequisites...");
         if (!await _git.IsGitInstalledAsync(ct))
@@ -62,7 +62,7 @@ public class AddonSyncService
         if (!File.Exists(game.ExecutablePath))
             throw new AppException("Game executable not found.");
 
-        progress?.Report("Fetching from repo...");
+        progress?.Report("Fetching from the repo...");
         var cachePath = _git.GetLocalCachePath(game);
         var mirror = await _git.MirrorAsync(game.SyncRepoUrl.Trim(), SyncBranch, cachePath, progress, ct);
         if (!mirror.Success)
@@ -104,11 +104,12 @@ public class AddonSyncService
             with { Characters = AddonFiles.CharacterCount(s.GameDir) }, ct);
 
     /// <summary>Puts the cache's files back to <paramref name="commit"/> and previews applying them. The next session discards this unless <see cref="RollbackAsync"/> commits it.</summary>
-    public async Task<AddonPreview> PreviewRollbackAsync(SyncSession s, string commit, CancellationToken ct)
+    public async Task<AddonPreview> PreviewRollbackAsync(SyncSession s, string commit, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
-        var result = await _git.RestoreTreeAsync(s.CachePath, commit, ct);
+        var result = await _git.RestoreTreeAsync(s.CachePath, commit, progress, ct);
         if (!result.Success)
             throw new AppException($"Couldn't load that version: {result.Output.Trim()}");
+        progress?.Report("Comparing with this PC...");
         return await PreviewPullAsync(s, ct);
     }
 
@@ -118,7 +119,7 @@ public class AddonSyncService
               "Pushing replaces them for everything you select. Pull first to keep them."
             : null;
 
-    public async Task<string> PullAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
+    public async Task<string> PullAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
         var settings = options.AddonSettings || options.CharacterSettings;
         await Task.Run(() => ChangeGameFiles(s.Game, addons.Select(a => a.Name), settings, progress, () =>
@@ -131,9 +132,9 @@ public class AddonSyncService
         return $"Pulled. {Describe(addons, options)}";
     }
 
-    public async Task<string> PushAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
+    public async Task<string> PushAsync(SyncSession s, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
-        progress?.Report("Copying to repo...");
+        progress?.Report("Copying to the repo...");
         await Task.Run(() =>
         {
             AddonFiles.ApplyAddons(s.GameAddOns, s.RepoAddOns, addons, ct);
@@ -158,7 +159,7 @@ public class AddonSyncService
         await _git.LogAsync(s.CachePath, 20, ct);
 
     /// <summary>Commits the files restored by <see cref="PreviewRollbackAsync"/> for everyone, then applies the chosen parts to this PC.</summary>
-    public async Task<string> RollbackAsync(SyncSession s, GitCommitEntry target, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<string>? progress, CancellationToken ct)
+    public async Task<string> RollbackAsync(SyncSession s, GitCommitEntry target, IReadOnlyList<AddonDiff> addons, SyncOptions options, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
         var pcName = Environment.MachineName;
         var subject = $"rollback: {s.Game.Name} — restore to {target.Hash}: {target.Message} [{pcName}]";
@@ -236,7 +237,7 @@ public class AddonSyncService
     }
 
     /// <summary>Commits whatever changed in the cache and pushes it. Returns the new head (unchanged if there was nothing to commit).</summary>
-    private async Task<string?> CommitAndPushAsync(SyncSession s, string message, IProgress<string>? progress, CancellationToken ct)
+    private async Task<string?> CommitAndPushAsync(SyncSession s, string message, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
         progress?.Report("Committing...");
         var add = await _git.AddAllAsync(s.CachePath, ct);
@@ -250,7 +251,7 @@ public class AddonSyncService
             throw new AppException($"Git commit failed: {commit.Output.Trim()}");
 
         progress?.Report("Pushing...");
-        var push = await _git.PushAsync(s.CachePath, SyncBranch, ct);
+        var push = await _git.PushAsync(s.CachePath, SyncBranch, progress, ct);
         if (!push.Success)
             throw new AppException("Push failed. Check that you have write access to the repo, or try again if someone " +
                 $"else pushed in the meantime. {push.Output.Trim()}");
@@ -278,7 +279,7 @@ public class AddonSyncService
     /// then <paramref name="apply"/>. Once files start changing, finishing beats stopping halfway, so that part
     /// ignores Cancel; if it fails anyway, the message says how to get back what was there.
     /// </summary>
-    private static void ChangeGameFiles(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, IProgress<string>? progress,
+    private static void ChangeGameFiles(GameEntry game, IEnumerable<string> addonNames, bool includeWtf, IProgress<ProgressReport>? progress,
         Action apply, CancellationToken ct)
     {
         var names = addonNames.ToList();

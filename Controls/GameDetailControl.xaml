@@ -2,7 +2,8 @@
 <UserControl
     x:Class="iscLauncher.Controls.GameDetailControl"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:iscLauncher.Controls">
 
     <Grid KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.KeyboardAccelerators>
@@ -10,6 +11,7 @@
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -162,6 +164,7 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+                        <local:ProgressView x:Name="SyncProgress"/>
                         <CheckBox x:Name="OfferPushCheckBox" Content="Offer to push when I close the game, if anything changed" FontSize="12"/>
                         <TextBlock x:Name="NoRepoHint"
                                    Text="Click Set Up Sync to sync this game's addons and settings between your PCs, or paste a repo URL and save."
@@ -179,6 +182,7 @@
                                     <TextBlock Text="Restore a Backup"/>
                                 </StackPanel>
                             </Button>
+                            <local:ProgressView x:Name="BackupProgress"/>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
@@ -195,6 +199,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Border x:Name="AddonsHost"/>
                     <StackPanel x:Name="CopyAddonsSection" Grid.Row="1" Orientation="Horizontal" Spacing="12">
@@ -207,12 +212,16 @@
                         <TextBlock Text="Copy addons and their settings into another game." Style="{StaticResource HintTextStyle}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
+                    <local:ProgressView x:Name="CopyProgress" Grid.Row="2"/>
                 </Grid>
             </PivotItem>
         </Pivot>
 
-        <!-- Action bar; status messages sit beside the buttons so they never push the page around -->
-        <Grid Grid.Row="1" Background="{StaticResource BgBrush}" Padding="32,16" ColumnSpacing="16">
+        <!-- Work started from the Launch button: the pull check before launching, launching, the push offered after playing -->
+        <local:ProgressView x:Name="LaunchProgress" Grid.Row="1" Background="{StaticResource BgBrush}" Padding="32,12,32,0"/>
+
+        <!-- Action bar; results sit beside the buttons so they never push the page around -->
+        <Grid Grid.Row="2" Background="{StaticResource BgBrush}" Padding="32,16" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -243,17 +252,6 @@
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE74E;" FontSize="16"/>
                             <TextBlock x:Name="SaveButtonText" Text="Save Changes"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-
-                <!-- Here rather than on the Sync tab, since launching and the Addons tab start syncs too -->
-                <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Spacing="10" Visibility="Collapsed">
-                    <ProgressRing x:Name="SyncProgressRing" IsActive="False" Width="24" Height="24"/>
-                    <Button Style="{StaticResource SecondaryButtonStyle}" Click="OnCancelSyncClick" AutomationProperties.Name="Cancel sync">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                            <TextBlock Text="Cancel"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

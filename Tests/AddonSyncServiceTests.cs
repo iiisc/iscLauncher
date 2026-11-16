@@ -17,6 +17,36 @@ public sealed class AddonSyncServiceTests : System.IDisposable
 
     public void Dispose() => _sandbox.Dispose();
 
+    // Progress<T> reports on the thread pool, possibly after the call returns; this records before it does
+    private sealed class Recorder : System.IProgress<ProgressReport>
+    {
+        public readonly System.Collections.Concurrent.ConcurrentQueue<ProgressReport> Reports = new();
+        public void Report(ProgressReport value) => Reports.Enqueue(value);
+    }
+
+    [Fact]
+    public async Task UploadsAndDownloadsShowHowFarAlongTheyAre()
+    {
+        var remote = _sandbox.NewRemote();
+        var pcA = _sandbox.AddGame("pcA", remote);
+        var pcB = _sandbox.AddGame("pcB", remote);
+        Addon(Dir(pcA), "Questie", "7.1");
+
+        var push = new Recorder();
+        var session = await Sync.OpenAsync(pcA, push, _ct);
+        await Sync.PushAsync(session, (await Sync.PreviewPushAsync(session, _ct)).Diffs, new SyncOptions(false, false), push, _ct);
+        Assert.Contains(push.Reports, p => p.Text.StartsWith("Uploading... 100%") && p.Fraction == 1);
+
+        // The files must come down in a step that shows progress, not silently inside checkout, which is kept from fetching
+        var pull = new Recorder();
+        System.Environment.SetEnvironmentVariable("GIT_NO_LAZY_FETCH", "1");
+        try { session = await Sync.OpenAsync(pcB, pull, _ct); }
+        finally { System.Environment.SetEnvironmentVariable("GIT_NO_LAZY_FETCH", null); }
+        Assert.Equal("true", Git(session.CachePath, "config", "remote.origin.promisor"));
+        Assert.Contains(pull.Reports, p => p.Text.StartsWith("Downloading... 100%") && p.Fraction == 1);
+        Assert.True(File.Exists(Path.Combine(session.RepoAddOns, @"Questie\Questie.lua")));
+    }
+
     [Fact]
     public async Task TwoPcsSyncThroughTheRepoAndCanRollBack()
     {
@@ -97,7 +127,7 @@ public sealed class AddonSyncServiceTests : System.IDisposable
 
         // Rolling back to the first push is a new commit whose tree matches it exactly
         var first = (await Sync.GetCommitLogAsync(session, _ct)).Last();
-        preview = await Sync.PreviewRollbackAsync(session, first.Hash, _ct);
+        preview = await Sync.PreviewRollbackAsync(session, first.Hash, null, _ct);
         Assert.Contains(preview.Diffs, d => d.Name == "Details" && d.Change == AddonChange.New);
         Assert.Contains(preview.Diffs, d => d.Name == "Questie" && d.Change == AddonChange.Changed);
         await Sync.RollbackAsync(session, first, preview.Diffs, new SyncOptions(false, false), null, _ct);

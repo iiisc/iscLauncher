@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using iscLauncher.Controls;
 using iscLauncher.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
@@ -18,20 +19,11 @@ public static class RollbackDialog
         XamlRoot xamlRoot,
         Func<Task<List<GitCommitEntry>>> loadCommitsAsync)
     {
-        var loadingRing = new ProgressRing
-        {
-            IsActive = true,
-            Width = 32,
-            Height = 32,
-            Foreground = Res<Brush>("GoldBrush")
-        };
         var loadingPanel = new StackPanel
         {
-            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = 12,
             MinHeight = 150,
-            Children = { loadingRing, CenteredMessage("Loading commit history…", "TextMutedBrush") }
+            Children = { new ProgressView("Loading the repo's history...") }
         };
 
         var contentPanel = new StackPanel { Spacing = 12 };
@@ -47,7 +39,6 @@ public static class RollbackDialog
 
         void ShowMessage(string text, string brushKey)
         {
-            loadingRing.IsActive = false;
             loadingPanel.Children.Clear();
             loadingPanel.Children.Add(CenteredMessage(text, brushKey));
         }

@@ -33,9 +33,13 @@ public sealed partial class InstalledAddonsView : UserControl
     private readonly List<AddonSource> _sources = [];
     private readonly Dictionary<string, AddonUpdate> _results = new(IgnoreCase);
     private readonly HashSet<string> _checking = new(IgnoreCase);
+    // Repos checked in the current round, done or not; checks started while others run join the round
+    private int _checkTotal;
     private readonly HashSet<string> _ticked = new(IgnoreCase);
     private readonly StackPanel _list = new();
     private readonly TextBlock _summary = BodyText("");
+    private readonly ProgressView _progress = new("Reading the game's addons...");
+    private readonly ProgressView _installProgress = new();
     private readonly TextBlock _message = WarningText("");
     private readonly CancellationTokenSource _cts = new();
     private readonly Button _updateSelected = StyledButton("Update Selected", "PrimaryButtonStyle");
@@ -43,8 +47,8 @@ public sealed partial class InstalledAddonsView : UserControl
     private bool _busy;
     private Task _installing = Task.CompletedTask;
 
-    /// <summary>Installs the updates the user picked, then <see cref="RescanAsync"/>; set by the host.</summary>
-    public required Func<List<AddonUpdate>, Task> InstallAsync { get; init; }
+    /// <summary>Installs the updates the user picked, then <see cref="RescanAsync"/>, showing progress by the update buttons; set by the host.</summary>
+    public required Func<List<AddonUpdate>, ProgressView, Task> InstallAsync { get; init; }
 
     /// <summary>The game's sources changed: connected, removed, or found to hold other addons. The host saves them.</summary>
     public event EventHandler? SourcesChanged;
@@ -54,7 +58,7 @@ public sealed partial class InstalledAddonsView : UserControl
         _game = game;
         _service = service;
         _addOnsDir = AddonFiles.GameAddOnsDir(game);
-        _summary.Text = "Reading the game's addons...";
+        _summary.Visibility = Visibility.Collapsed;
         _message.Visibility = Visibility.Collapsed;
 
         _updateSelected.Click += (_, _) => Install(Available.Where(u => _ticked.Contains(u.Repo)).ToList());
@@ -66,8 +70,10 @@ public sealed partial class InstalledAddonsView : UserControl
         buttons.Children.Add(_updateAll);
         var header = new StackPanel { Spacing = 10 };
         header.Children.Add(_summary);
+        header.Children.Add(_progress);
         header.Children.Add(_message);
         header.Children.Add(buttons);
+        header.Children.Add(_installProgress);
 
         var layout = new Grid { RowSpacing = 10 };
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -105,7 +111,7 @@ public sealed partial class InstalledAddonsView : UserControl
         _installing.ContinueWith(_ => AddonUpdateService.Discard(_downloadDir), TaskScheduler.Default);
     }
 
-    private async void Install(List<AddonUpdate> picked) => await (_installing = InstallAsync(picked));
+    private async void Install(List<AddonUpdate> picked) => await (_installing = InstallAsync(picked, _installProgress));
 
     /// <summary>Lists the game's addons again and compares them with the downloads, after something changed them.</summary>
     public async Task RescanAsync()
@@ -142,7 +148,7 @@ public sealed partial class InstalledAddonsView : UserControl
     {
         if (sources.Count == 0)
             return;
-        _checking.UnionWith(sources.Select(s => s.Repo));
+        _checkTotal += sources.Count(s => _checking.Add(s.Repo));
         Render();
         try
         {
@@ -241,11 +247,22 @@ public sealed partial class InstalledAddonsView : UserControl
             _list.Children.Add(Dim("No addons are installed in this game."));
 
         var updates = Available.Count();
-        var status = _checking.Count > 0 ? "Checking for updates..."
-            : updates > 0 ? $"{updates.Plural("update")} available."
-            : _sources.Count > 0 ? "No updates found."
-            : "Connect an addon to its GitHub project to get its updates.";
-        _summary.Text = $"{(_sources.Count + families.Count).Plural("addon")}, {_sources.Count} connected to GitHub. {status}";
+        var status = _checking.Count > 0 ? ""
+            : updates > 0 ? $" {updates.Plural("update")} available."
+            : _sources.Count > 0 ? " No updates found."
+            : " Connect an addon to its GitHub project to get its updates.";
+        _summary.Text = $"{(_sources.Count + families.Count).Plural("addon")}, {_sources.Count} connected to GitHub.{status}";
+        _summary.Visibility = Visibility.Visible;
+        if (_checking.Count > 0)
+        {
+            var done = _checkTotal - _checking.Count;
+            _progress.Start(new($"Checking for updates... {done} of {_checkTotal}", (double)done / _checkTotal));
+        }
+        else
+        {
+            _checkTotal = 0;
+            _progress.Finish();
+        }
         if (_checking.Count == 0 && HasGame)
             _game.HasAddonUpdates = updates > 0;
         UpdateButtons();
@@ -363,7 +380,7 @@ public sealed partial class InstalledAddonsView : UserControl
         var connect = StyledButton("Connect", "PrimaryButtonStyle");
 
         var matches = new StackPanel { Spacing = 4 };
-        matches.Children.Add(Dim("Looking on GitHub..."));
+        matches.Children.Add(new ProgressView("Looking on GitHub..."));
 
         var panel = new StackPanel { Spacing = 8, MaxWidth = 380 };
         panel.Children.Add(BodyText($"Pick {family[0]}'s project on GitHub, or paste its link."));

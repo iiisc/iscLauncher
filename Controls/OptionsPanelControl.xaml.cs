@@ -39,8 +39,7 @@ public sealed partial class OptionsPanelControl : UserControl
     // An update found or downloading stays as it is, so leaving Options and coming back doesn't lose or cancel it
     public void Activate()
     {
-        if (UpdateProgressBar.Visibility == Visibility.Collapsed)
-            _status.Hide();
+        _status.Hide();
         _ = ShowGitHubAccountAsync();
     }
 
@@ -94,11 +93,12 @@ public sealed partial class OptionsPanelControl : UserControl
 
     private async void OnCheckUpdatesClick(object sender, RoutedEventArgs e)
     {
+        CheckUpdatesButton.IsEnabled = false;
+        _status.Hide();
+        UpdateProgress.Start(_pendingUpdate == null ? "Checking for updates..." : "Downloading the update...");
         if (_pendingUpdate == null)
         {
-            CheckUpdatesButton.IsEnabled = false;
             UpdateAvailableText.Visibility = Visibility.Collapsed;
-            ShowInfo("Checking for updates...");
             try
             {
                 _updateCts?.Cancel(); _updateCts?.Dispose();
@@ -119,25 +119,20 @@ public sealed partial class OptionsPanelControl : UserControl
             }
             catch (OperationCanceledException) { _status.Hide(); }
             catch (Exception ex) { ShowStatus($"Update check failed: {ex.Message}", false); }
-            finally { CheckUpdatesButton.IsEnabled = true; }
+            finally
+            {
+                CheckUpdatesButton.IsEnabled = true;
+                UpdateProgress.Finish();
+            }
         }
         else
         {
-            CheckUpdatesButton.IsEnabled = false;
-            UpdateProgressBar.Value = 0;
-            UpdateProgressBar.Visibility = Visibility.Visible;
-            ShowInfo("Downloading update...");
             try
             {
                 _updateCts?.Cancel(); _updateCts?.Dispose();
                 _updateCts = new CancellationTokenSource();
-                var progress = new Progress<double>(p =>
-                {
-                    UpdateProgressBar.Value = p;
-                    StatusText.Text = p < 1 ? $"Downloading update... {(int)(p * 100)}%" : "Installing update...";
-                });
-                var exe = await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, progress, _updateCts.Token);
-                StatusText.Text = "Restarting...";
+                var exe = await _services.Updates.DownloadAndApplyAsync(_pendingUpdate, UpdateProgress.Reporter, _updateCts.Token);
+                UpdateProgress.Report("Restarting...");
                 // Still registered as the running copy, this one would be handed the new version's start and it would close
                 AppInstance.GetCurrent().UnregisterKey();
                 // Antivirus checks a new exe before it can start, which can take seconds; the window stays responsive meanwhile
@@ -147,7 +142,7 @@ public sealed partial class OptionsPanelControl : UserControl
             catch (Exception ex)
             {
                 ShowStatus($"Update failed: {ex.Message}", false);
-                UpdateProgressBar.Visibility = Visibility.Collapsed;
+                UpdateProgress.Finish();
                 CheckUpdatesButton.IsEnabled = true;
             }
         }
@@ -201,6 +196,4 @@ public sealed partial class OptionsPanelControl : UserControl
     }
 
     private void ShowStatus(string message, bool isSuccess) => _status.Show(message, isSuccess);
-
-    private void ShowInfo(string message) => _status.ShowInfo(message);
 }

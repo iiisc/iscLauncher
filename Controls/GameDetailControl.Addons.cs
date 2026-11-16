@@ -46,18 +46,19 @@ public sealed partial class GameDetailControl
 
     private async void OnSyncAddonsClick(object sender, RoutedEventArgs e)
     {
-        if (_game is { } game) await PullAsync(game);
+        if (_game is { } game) await PullAsync(game, SyncProgress);
     }
 
     private async void OnUploadAddonsClick(object sender, RoutedEventArgs e)
     {
-        if (_game is { } game) await PushAsync(game);
+        if (_game is { } game) await PushAsync(game, SyncProgress);
     }
 
-    private Task PullAsync(GameEntry game) =>
-        RunSyncAsync("Checking repo...", async (p, ct) =>
+    private Task PullAsync(GameEntry game, ProgressView progress) =>
+        RunSyncAsync("Checking the repo...", progress, async (p, ct) =>
         {
             if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
+            p.Report("Comparing with this PC...");
             var preview = await _services.Sync.PreviewPullAsync(session, ct);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Pull {game.Name} from Repo", "Pull",
                 "Choose what to bring onto this PC. Anything replaced or removed is backed up first.",
@@ -66,10 +67,11 @@ public sealed partial class GameDetailControl
             return await _services.Sync.PullAsync(session, choice.Addons, choice.Options, p, ct);
         });
 
-    private Task PushAsync(GameEntry game) =>
-        RunSyncAsync("Checking repo...", async (p, ct) =>
+    private Task PushAsync(GameEntry game, ProgressView progress) =>
+        RunSyncAsync("Checking the repo...", progress, async (p, ct) =>
         {
             if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
+            p.Report("Comparing with this PC...");
             var previewTask = _services.Sync.PreviewPushAsync(session, ct);
             var warningTask = _services.Sync.DescribeUnpulledChangesAsync(session, ct);
             await Task.WhenAll(previewTask, warningTask);
@@ -82,13 +84,13 @@ public sealed partial class GameDetailControl
     private async void OnRollbackClick(object sender, RoutedEventArgs e)
     {
         if (_game is not { } game) return;
-        await RunSyncAsync("Checking repo...", async (p, ct) =>
+        await RunSyncAsync("Checking the repo...", SyncProgress, async (p, ct) =>
         {
             if (await OpenSyncAsync(game, p, ct) is not { } session) return null;
             var commit = await RollbackDialog.ShowAsync(XamlRoot, () => _services.Sync.GetCommitLogAsync(session, ct));
             if (commit == null) return null;
 
-            var preview = await _services.Sync.PreviewRollbackAsync(session, commit.Hash, ct);
+            var preview = await _services.Sync.PreviewRollbackAsync(session, commit.Hash, p, ct);
             var choice = await SyncPreviewDialog.ShowAsync(XamlRoot, $"⚔ Roll Back to {commit.Hash}", "Roll Back",
                 $"The repo goes back to “{commit.Message}” for every PC. Choose what to apply to this PC; anything replaced or removed is backed up first.",
                 null, preview, toRepo: false);
@@ -98,7 +100,7 @@ public sealed partial class GameDetailControl
     }
 
     /// <summary>Opens the game's repo, first downloading Git if the PC has none and the user agrees. Null if they don't.</summary>
-    private async Task<SyncSession?> OpenSyncAsync(GameEntry game, IProgress<string> progress, CancellationToken ct)
+    private async Task<SyncSession?> OpenSyncAsync(GameEntry game, IProgress<ProgressReport> progress, CancellationToken ct)
     {
         if (!await _services.Git.IsGitInstalledAsync(ct))
         {
@@ -110,7 +112,7 @@ public sealed partial class GameDetailControl
                     "that folder removes it.",
                     "Download Git") != ContentDialogResult.Primary)
                 return null;
-            await _services.Git.DownloadGitAsync(new Progress<double>(p => progress.Report($"Downloading Git... {(int)(p * 100)}%")), ct);
+            await _services.Git.DownloadGitAsync(progress, ct);
         }
         return await _services.Sync.OpenAsync(game, progress, ct);
     }
@@ -125,7 +127,7 @@ public sealed partial class GameDetailControl
         var choice = await CopyAddonsDialog.ShowAsync(XamlRoot, game, targets,
             (target, ct) => _services.Sync.PreviewCopyAsync(game, target, ct));
         if (choice == null || !await ConfirmGameClosedAsync(choice.Target)) return;
-        await RunSyncAsync($"Copying addons to {choice.Target.Name}...", async (_, ct) =>
+        await RunSyncAsync($"Copying addons to {choice.Target.Name}...", CopyProgress, async (_, ct) =>
             await _services.Sync.CopyToGameAsync(game, choice.Target, choice.Addons, choice.CopySettings, ct));
     }
 
@@ -145,15 +147,15 @@ public sealed partial class GameDetailControl
         var view = new InstalledAddonsView(game, _services.AddonUpdates)
         {
             IsBusy = _syncBusy,
-            InstallAsync = async picked =>
+            InstallAsync = async (picked, progress) =>
             {
                 // Pushing is how the update reaches the other PCs, so it's offered while it's on the user's mind
-                if (await RunSyncAsync("Updating addons...", async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct))
+                if (await RunSyncAsync("Updating addons...", progress, async (_, ct) => await _services.Sync.InstallUpdatesAsync(game, picked, ct))
                     && game.HasSyncRepo
                     && await DialogHelper.AskAsync(XamlRoot, "Push the Update?",
                         $"Push {game.Name}'s updated addons now, so your other PCs get them when they pull?", "Push Now", closeText: "Later")
                         == ContentDialogResult.Primary)
-                    await PushAsync(game);
+                    await PushAsync(game, progress);
             }
         };
         view.SourcesChanged += async (_, _) => await _services.Library.SaveAsync();
@@ -179,7 +181,7 @@ public sealed partial class GameDetailControl
         if (backup == null || !await ConfirmGameClosedAsync(game))
             return;
 
-        await RunSyncAsync("Restoring the backup...", async (_, ct) => await _services.Sync.RestoreBackupAsync(game, backup, ct));
+        await RunSyncAsync("Restoring the backup...", BackupProgress, async (_, ct) => await _services.Sync.RestoreBackupAsync(game, backup, ct));
     }
 
     // WoW writes addon settings and AddOns.txt back when you log out, which would undo files changed while it runs
@@ -197,13 +199,13 @@ public sealed partial class GameDetailControl
     /// Runs an addon operation with the busy UI. The operation returns a success message, or null if the user backed out.
     /// Returns whether it succeeded.
     /// </summary>
-    private async Task<bool> RunSyncAsync(string startMessage,
-        Func<IProgress<string>, CancellationToken, Task<string?>> operation)
+    private async Task<bool> RunSyncAsync(string startMessage, ProgressView progress,
+        Func<IProgress<ProgressReport>, CancellationToken, Task<string?>> operation)
     {
-        var ct = StartSync(startMessage);
+        var ct = StartSync(startMessage, progress);
         try
         {
-            var message = await operation(new Progress<string>(ShowInfo), ct);
+            var message = await operation(progress.Reporter, ct);
             if (message != null) ShowStatus(message, true);
             else _status.Hide();
             if (_game != null) UpdateSyncStatus(_game);
@@ -228,16 +230,16 @@ public sealed partial class GameDetailControl
     }
 
     /// <summary>Takes over from any sync still running and marks the page busy; the caller ends with SetSyncBusy(false).</summary>
-    private CancellationToken StartSync(string message, TimeSpan? timeout = null)
+    private CancellationToken StartSync(string message, ProgressView progress, TimeSpan? timeout = null)
     {
         _syncCts?.Cancel(); _syncCts?.Dispose();
         _syncCts = timeout is { } t ? new CancellationTokenSource(t) : new CancellationTokenSource();
         SetSyncBusy(true);
-        ShowInfo(message);
+        _status.Hide();
+        _syncProgress = progress;
+        progress.Start(message, CancelSync);
         return _syncCts.Token;
     }
-
-    private void OnCancelSyncClick(object sender, RoutedEventArgs e) => _syncCts?.Cancel();
 
     public void CancelSync() => _syncCts?.Cancel();
 
@@ -260,8 +262,11 @@ public sealed partial class GameDetailControl
         RestoreBackupButton.IsEnabled = !busy;
         if (InstalledView is { } view) view.IsBusy = busy;
         LaunchButton.IsEnabled = !busy;
-        SyncProgressRing.IsActive = busy;
-        BusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        if (!busy)
+        {
+            _syncProgress?.Finish();
+            _syncProgress = null;
+        }
     }
 
     // The repo's head is checked in the background at startup and after every sync, so this can change while the game is shown

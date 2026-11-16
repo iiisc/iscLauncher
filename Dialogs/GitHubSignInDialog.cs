@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using iscLauncher.Controls;
 using iscLauncher.Helpers;
 using iscLauncher.Services;
 using Microsoft.UI.Text;
@@ -32,7 +33,14 @@ public static class GitHubSignInDialog
             HorizontalAlignment = HorizontalAlignment.Center,
             IsTextSelectionEnabled = true
         };
-        var waiting = Dim("Waiting for you to approve iscLauncher on GitHub...");
+        var waiting = new ProgressView("Waiting for you to approve iscLauncher on GitHub...");
+        var error = WarningText("");
+        error.Visibility = Visibility.Collapsed;
+        void ShowError(string message)
+        {
+            error.Text = message;
+            error.Visibility = Visibility.Visible;
+        }
 
         var panel = new StackPanel { Spacing = 14 };
         if (step != null)
@@ -40,6 +48,7 @@ public static class GitHubSignInDialog
         panel.Children.Add(BodyText($"Open {signIn.VerificationUri}, sign in if GitHub asks, and enter this code:"));
         panel.Children.Add(code);
         panel.Children.Add(waiting);
+        panel.Children.Add(error);
         panel.Children.Add(Dim("No GitHub account? Create a free one from GitHub's sign-in page. " +
             "GitHub may not bring you back to the code page afterwards, so click the button below again."));
 
@@ -54,7 +63,7 @@ public static class GitHubSignInDialog
             package.SetText(signIn.UserCode);
             Clipboard.SetContent(package);
             if (!Shell.Open(signIn.VerificationUri))
-                waiting.Text = $"Couldn't open the browser. Go to {signIn.VerificationUri} yourself.";
+                ShowError($"Couldn't open the browser. Go to {signIn.VerificationUri} yourself.");
         };
 
         string? login = null;
@@ -67,12 +76,16 @@ public static class GitHubSignInDialog
                 {
                     signIn = await gitHub.StartSignInAsync(cts.Token);
                     code.Text = signIn.UserCode;
-                    waiting.Text = "The code expired, so here's a new one. Still waiting for you to approve iscLauncher on GitHub...";
+                    waiting.Report("The code expired, so here's a new one. Still waiting for you to approve iscLauncher on GitHub...");
                 }
                 dialog.Hide();
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { waiting.Text = ex.Message; }
+            catch (Exception ex)
+            {
+                waiting.Finish();
+                ShowError(ex.Message);
+            }
         }
 
         var approval = WaitForApprovalAsync();

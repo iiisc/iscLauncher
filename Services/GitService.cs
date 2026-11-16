@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -39,8 +40,18 @@ public class GitService
 
     private readonly Func<string?> _gitHubToken;
 
-    // Of git's output only the transfer percentage means anything to the user
-    private static readonly Regex ProgressLine = new(@"^Receiving objects:\s+(\d+)%");
+    // e.g. "Writing objects:  45% (3091/6870), 312.40 MiB | 3.21 MiB/s"; the size and speed only appear once data moves.
+    // Lines starting "remote: " are the server's own progress, which isn't shown.
+    private static readonly Regex ProgressLine =
+        new(@"^(?<remote>remote: )?(?<phase>\w+ \w+):\s+(?<percent>\d+)% \(\d+/\d+\)(?:, (?<amount>[\d.]+ \w+)(?: \| (?<speed>[\d.]+ \w+/s))?)?");
+
+    // Of git's phases only these take long enough to be worth showing
+    private static readonly Dictionary<string, string> ProgressPhases = new()
+    {
+        ["Receiving objects"] = "Downloading",
+        ["Compressing objects"] = "Preparing the upload",
+        ["Writing objects"] = "Uploading",
+    };
 
     // Only a successful lookup is kept, so installing Git mid-session is picked up on the next check
     private string? _git;
@@ -66,12 +77,13 @@ public class GitService
     }
 
     /// <summary>Downloads <see cref="MinGitName"/> into <see cref="DownloadedGitDir"/>, for a PC that has no Git.</summary>
-    public async Task DownloadGitAsync(IProgress<double> progress, CancellationToken ct)
+    public async Task DownloadGitAsync(IProgress<ProgressReport> progress, CancellationToken ct)
     {
         var zip = Path.Combine(Path.GetTempPath(), "iscLauncher-MinGit.zip");
         try
         {
-            await AppUpdateService.DownloadAsync(MinGitUrl, zip, progress, ct);
+            await AppUpdateService.DownloadAsync(MinGitUrl, zip, "Downloading Git", progress, ct);
+            progress.Report("Installing Git...");
             await InstallZipAsync(zip, MinGitSha256, DownloadedGitDir, ct);
         }
         finally
@@ -101,7 +113,7 @@ public class GitService
     /// left by an earlier failed or cancelled operation. A branch the remote doesn't have yet becomes an empty unborn
     /// branch, so the first push creates it.
     /// </summary>
-    public async Task<GitResult> MirrorAsync(string repoUrl, string branch, string repoDir, IProgress<string>? progress, CancellationToken ct)
+    public async Task<GitResult> MirrorAsync(string repoUrl, string branch, string repoDir, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
         if (!await IsMirrorOfAsync(repoDir, repoUrl, ct))
         {
@@ -127,7 +139,13 @@ public class GitService
 
         var remoteBranch = $"refs/remotes/origin/{branch}";
         if ((await RunGitAsync(["-C", repoDir, "rev-parse", "--verify", "-q", remoteBranch], ct)).Success)
+        {
+            var download = await DownloadFilesAsync(repoDir, remoteBranch, progress, ct);
+            if (!download.Success)
+                return download;
+            progress?.Report("Unpacking the files...");
             return await RunStepsAsync(repoDir, ct, ["checkout", "-q", "-f", "-B", branch, remoteBranch], ["clean", "-fdxq"]);
+        }
 
         return await RunStepsAsync(repoDir, ct,
             ["symbolic-ref", "HEAD", $"refs/heads/{branch}"],
@@ -152,8 +170,34 @@ public class GitService
     }
 
     /// <summary>Replaces the working tree and index with exactly the files of <paramref name="commit"/>, including deletions.</summary>
-    public async Task<GitResult> RestoreTreeAsync(string repoDir, string commit, CancellationToken ct) =>
-        await RunGitAsync(["-C", repoDir, "read-tree", "-u", "--reset", commit], ct);
+    public async Task<GitResult> RestoreTreeAsync(string repoDir, string commit, IProgress<ProgressReport>? progress, CancellationToken ct)
+    {
+        var download = await DownloadFilesAsync(repoDir, commit, progress, ct);
+        return download.Success ? await RunGitAsync(["-C", repoDir, "read-tree", "-u", "--reset", commit], ct) : download;
+    }
+
+    /// <summary>
+    /// Downloads the files of <paramref name="commit"/> this PC doesn't have yet. Left to checkout, git would fetch them
+    /// itself, but silently, so the bulk of a pull would show no progress.
+    /// </summary>
+    private async Task<GitResult> DownloadFilesAsync(string repoDir, string commit, IProgress<ProgressReport>? progress, CancellationToken ct)
+    {
+        var list = await RunGitAsync(["-C", repoDir, "rev-list", "--objects", "--no-walk", "--missing=print", commit], ct);
+        if (!list.Success)
+            return list;
+        var missing = list.Output.Split('\n').Where(l => l.StartsWith('?')).Select(l => l[1..].Trim()).ToList();
+        if (missing.Count == 0)
+            return list;
+        // GitHub takes a few seconds to pack thousands of files before the first byte arrives
+        progress?.Report($"Waiting for GitHub to prepare {missing.Count:N0} files...");
+
+        // The same request git makes on its own: a negotiation would make the server assume this PC has every file of
+        // the commits it names, which a copy that skips history doesn't
+        return await RunGitAsync(
+            ["-C", repoDir, "-c", "fetch.negotiationAlgorithm=noop", "fetch", "--progress", "--no-tags", "--no-write-fetch-head",
+             "--filter=blob:none", "--stdin", "origin"],
+            ct, progress, input: string.Join("\n", missing));
+    }
 
     public async Task<GitResult> AddAllAsync(string repoDir, CancellationToken ct) =>
         await RunGitAsync(["-C", repoDir, "add", "-A"], ct);
@@ -174,8 +218,8 @@ public class GitService
         }
     }
 
-    public async Task<GitResult> PushAsync(string repoDir, string branch, CancellationToken ct) =>
-        await RunGitAsync(["-C", repoDir, "push", "origin", $"HEAD:refs/heads/{branch}"], ct);
+    public async Task<GitResult> PushAsync(string repoDir, string branch, IProgress<ProgressReport>? progress, CancellationToken ct) =>
+        await RunGitAsync(["-C", repoDir, "push", "--progress", "origin", $"HEAD:refs/heads/{branch}"], ct, progress);
 
     public async Task<bool> IsStatusCleanAsync(string repoDir, CancellationToken ct)
     {
@@ -231,12 +275,15 @@ public class GitService
     }
 
     /// <param name="quiet">For background checks: fail rather than show a login prompt.</param>
-    private async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<string>? progress = null, string? git = null, bool quiet = false)
+    /// <param name="input">Written to git's standard input.</param>
+    private async Task<GitResult> RunGitAsync(string[] arguments, CancellationToken ct, IProgress<ProgressReport>? progress = null, string? git = null,
+        bool quiet = false, string? input = null)
     {
         git ??= _git ?? "git";
         var psi = new ProcessStartInfo
         {
             FileName = git,
+            RedirectStandardInput = input != null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -271,14 +318,25 @@ public class GitService
             {
                 if (string.IsNullOrWhiteSpace(args.Data))
                     return;
+                // Left out of the output, or a failed push's error would carry hundreds of percentage lines
+                if (ProgressLine.Match(args.Data) is { Success: true } line)
+                {
+                    if (progress != null && !line.Groups["remote"].Success && ProgressPhases.TryGetValue(line.Groups["phase"].Value, out var phase))
+                        progress.Report(ProgressReport.Transfer(phase, int.Parse(line.Groups["percent"].Value),
+                            GitUnits(line.Groups["amount"]), GitUnits(line.Groups["speed"])));
+                    return;
+                }
                 lock (stderr)
                     stderr.AppendLine(args.Data);
-                if (progress != null && ProgressLine.Match(args.Data) is { Success: true } line)
-                    progress.Report($"Downloading from the repo... {line.Groups[1].Value}%");
             };
 
             process.Start();
             process.BeginErrorReadLine();
+            if (input != null)
+            {
+                await process.StandardInput.WriteAsync(input.AsMemory(), ct);
+                process.StandardInput.Close();
+            }
             var stdout = await process.StandardOutput.ReadToEndAsync(ct);
             // Also waits for the last stderr line to be handled
             await process.WaitForExitAsync(ct);
@@ -298,4 +356,7 @@ public class GitService
             return new GitResult(false, ex.Message);
         }
     }
+
+    // "312.40 MiB" → "312.40 MB", as ProgressReport.Size writes it
+    private static string? GitUnits(Group group) => group.Success ? group.Value.Replace("iB", "B") : null;
 }

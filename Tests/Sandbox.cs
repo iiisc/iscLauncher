@@ -27,6 +27,9 @@ public sealed class Sandbox : IDisposable
     {
         var remote = Path.Combine(Root, "remote.git");
         Git(Root, "init", "-q", "--bare", "-b", "main", remote);
+        // Like GitHub, so the caches really skip history and download files on demand
+        Git(remote, "config", "uploadpack.allowFilter", "true");
+        Git(remote, "config", "uploadpack.allowAnySHA1InWant", "true");
         return remote;
     }
 

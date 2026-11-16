@@ -25,6 +25,7 @@ public sealed partial class GameDetailControl : UserControl
     private bool _isNew;
     private CancellationTokenSource? _syncCts;
     private bool _syncBusy;
+    private ProgressView? _syncProgress;
     private readonly StatusNotifier _status;
 
     public GameEntry? CurrentGame => _game;

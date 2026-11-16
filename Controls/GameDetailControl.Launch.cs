@@ -59,7 +59,8 @@ public sealed partial class GameDetailControl
 
     private async Task<bool> RunLauncherAsync(string startMessage, Func<Task<string>> action)
     {
-        ShowInfo(startMessage);
+        _status.Hide();
+        LaunchProgress.Start(startMessage);
         try
         {
             ShowStatus(await action(), true);
@@ -69,6 +70,12 @@ public sealed partial class GameDetailControl
         {
             ShowStatus(ex.Message, false);
             return false;
+        }
+        finally
+        {
+            // A sync started from Launch meanwhile reports there now
+            if (_syncProgress != LaunchProgress)
+                LaunchProgress.Finish();
         }
     }
 
@@ -82,7 +89,7 @@ public sealed partial class GameDetailControl
             return true;
 
         // Being offline shouldn't hold up playing, so the check gives up quickly; Cancel skips it
-        var ct = StartSync($"Checking {game.Name}'s repo for changes from your other PCs...", TimeSpan.FromSeconds(10));
+        var ct = StartSync($"Checking {game.Name}'s repo for changes from your other PCs...", LaunchProgress, TimeSpan.FromSeconds(10));
         try
         {
             await _services.Sync.RefreshRemoteHeadAsync(game, ct);
@@ -103,7 +110,7 @@ public sealed partial class GameDetailControl
             "Pull First", "Launch Anyway"))
         {
             case ContentDialogResult.Primary:
-                await PullAsync(game);
+                await PullAsync(game, LaunchProgress);
                 return true;
             case ContentDialogResult.Secondary:
                 return true;
@@ -142,7 +149,7 @@ public sealed partial class GameDetailControl
         }
         catch (Exception) { ShowInfo(reminder); return; }
         if (answer == ContentDialogResult.Primary)
-            await PushAsync(game);
+            await PushAsync(game, LaunchProgress);
     }
 
     // A game Battle.net logged in has no password to send

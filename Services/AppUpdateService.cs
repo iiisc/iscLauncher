@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -84,7 +85,7 @@ public class AppUpdateService
     /// Downloads and checks the release, then puts it in place of the running app. Returns the exe to start before this
     /// one exits. If it fails, the app is left as it was.
     /// </summary>
-    public async Task<string> DownloadAndApplyAsync(UpdateCheckResult update, IProgress<double>? progress = null, CancellationToken ct = default)
+    public async Task<string> DownloadAndApplyAsync(UpdateCheckResult update, IProgress<ProgressReport>? progress = null, CancellationToken ct = default)
     {
         // The update replaces the app itself, so a download that can't be verified isn't installed
         if (update.Sha256 == null)
@@ -97,7 +98,8 @@ public class AppUpdateService
                 Directory.Delete(tempDir, true);
             Directory.CreateDirectory(tempDir);
             var zipPath = Path.Combine(tempDir, update.AssetName!);
-            await DownloadAsync(update.DownloadUrl!, zipPath, progress, ct).ConfigureAwait(false);
+            await DownloadAsync(update.DownloadUrl!, zipPath, "Downloading the update", progress, ct).ConfigureAwait(false);
+            progress?.Report("Installing the update...");
             await VerifyAsync(zipPath, update.Sha256, ct).ConfigureAwait(false);
 
             var releaseDir = Path.Combine(tempDir, "release");
@@ -167,8 +169,10 @@ public class AppUpdateService
         }
     }
 
-    internal static async Task DownloadAsync(string url, string destPath, IProgress<double>? progress, CancellationToken ct)
+    /// <param name="action">What the progress text calls the download, such as "Downloading Git".</param>
+    internal static async Task DownloadAsync(string url, string destPath, string action, IProgress<ProgressReport>? progress, CancellationToken ct)
     {
+        progress?.Report($"{action}...");
         using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -179,6 +183,7 @@ public class AppUpdateService
         var buffer = new byte[81920];
         long bytesRead = 0;
         int lastReportedPct = -1;
+        var clock = Stopwatch.StartNew();
         int read;
         while ((read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
         {
@@ -190,7 +195,8 @@ public class AppUpdateService
                 if (pct != lastReportedPct)
                 {
                     lastReportedPct = pct;
-                    progress?.Report((double)bytesRead / totalBytes);
+                    var speed = bytesRead / Math.Max(clock.Elapsed.TotalSeconds, 0.001);
+                    progress?.Report(ProgressReport.Transfer(action, pct, ProgressReport.Size(bytesRead), ProgressReport.Size(speed) + "/s"));
                 }
             }
         }
